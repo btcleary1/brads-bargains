@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #050814;
+  --card: #0B1120;
+}
+
+* { box-sizing: border-box; padding: 0; margin: 0; }
+html { overflow-x: clip; -webkit-text-size-adjust: 100%; }
+body {
+  overflow-x: clip;
+  background: var(--bg);
+  color: #F9FAFB;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #374151; }
+
+@media (hover: none) and (pointer: coarse) {
+  button, a { -webkit-tap-highlight-color: rgba(59,130,246,0.15); }
+}
+
+button { cursor: pointer; min-height: 44px; }
+
+.glass-card {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.deal-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.deal-card:hover {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+  transform: translateY(-1px);
+}
+
+.status-watching  { background: #EFF6FF; color: #1D4ED8; }
+.status-purchased { background: #FFF7ED; color: #C2410C; }
+.status-listed    { background: #F0FDF4; color: #15803D; }
+.status-sold      { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
+
+.badge-deal { background: #DCFCE7; color: #15803D; }
+.badge-hot  { background: #FEE2E2; color: #DC2626; }
+
+@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fade-in  { animation: fadeIn  0.3s ease forwards; }
+.animate-slide-up { animation: slideUp 0.35s ease forwards; }
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
