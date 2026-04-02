@@ -45,6 +45,11 @@ export default function SettingsPage() {
     try {
       const optRes = await fetch('/api/auth/webauthn/register-options', { method: 'POST' });
       const options = await optRes.json();
+      if (!optRes.ok) {
+        setAuthMessage({ type: 'error', text: options.error || 'Failed to start registration.' });
+        setAuthLoading(false);
+        return;
+      }
       const attestation = await startRegistration({ optionsJSON: options });
       const verRes = await fetch('/api/auth/webauthn/register-verify', {
         method: 'POST',
