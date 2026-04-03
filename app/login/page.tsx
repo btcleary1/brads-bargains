@@ -27,7 +27,9 @@ export default function LoginPage() {
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Sign in with Face ID');
     else if (/Mac/.test(ua) && /Safari/.test(ua)) setBiometricLabel('Sign in with Touch ID');
     else if (/Win/.test(ua) || /CrOS/.test(ua)) setBiometricLabel('Sign in with Windows Hello');
-  }, []);
+    // Redirect already-logged-in users
+    fetch('/api/auth/me').then(r => { if (r.ok) router.replace('/deals'); }).catch(() => {});
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,10 +211,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-xs mt-5" style={{ color: '#6B7280' }}>
-            No account?{' '}
-            <Link href="/register" className="font-medium" style={{ color: '#60A5FA' }}>Create one free</Link>
-          </p>
+          <div className="flex items-center justify-between mt-5">
+            <Link href="/forgot-password" className="text-xs" style={{ color: '#60A5FA' }}>Forgot password?</Link>
+            <p className="text-xs" style={{ color: '#6B7280' }}>
+              No account?{' '}
+              <Link href="/register" className="font-medium" style={{ color: '#60A5FA' }}>Create one free</Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>

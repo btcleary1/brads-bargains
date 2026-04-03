@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, Package, AlertCircle } from 'lucide-react';
 
@@ -134,12 +135,17 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
 }
 
 export default function DealsPage() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notify, setNotify] = useState(false);
   const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
+  }, [router]);
 
   const search = async (e?: React.FormEvent) => {
     e?.preventDefault();

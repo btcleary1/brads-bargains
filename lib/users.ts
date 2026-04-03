@@ -1,8 +1,8 @@
 import { put, list, del } from '@vercel/blob';
 import { createHash, randomBytes } from 'crypto';
 
-const PREFIX = 'health-app/users/';
-const INDEX_PATH = 'health-app/users-index.json';
+const PREFIX = 'deal-wiz/users/';
+const INDEX_PATH = 'deal-wiz/users-index.json';
 
 export interface User {
   userId: string;
@@ -136,6 +136,18 @@ export async function updateUserRole(userId: string, role: 'admin' | 'user'): Pr
   const user = await getUserById(userId);
   if (!user) return;
   const updated = { ...user, role };
+  await put(`${PREFIX}${userId}.json`, JSON.stringify(updated), {
+    access: 'private',
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: 'application/json',
+  });
+}
+
+export async function updatePassword(userId: string, newPassword: string): Promise<void> {
+  const user = await getUserById(userId);
+  if (!user) throw new Error('User not found.');
+  const updated = { ...user, passwordHash: hashPassword(newPassword) };
   await put(`${PREFIX}${userId}.json`, JSON.stringify(updated), {
     access: 'private',
     addRandomSuffix: false,

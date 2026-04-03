@@ -1,7 +1,7 @@
 import { put, list, del } from '@vercel/blob';
 import { randomBytes } from 'crypto';
 
-const PREFIX = 'health-app/reset-tokens/';
+const PREFIX = 'deal-wiz/reset-tokens/';
 const TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 interface ResetToken {

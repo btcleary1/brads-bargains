@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import {
   BarChart2, Loader2, ShoppingCart, Tag, TrendingUp, DollarSign,
@@ -284,16 +285,18 @@ function DealCard({
 }
 
 export default function TrackerPage() {
+  const router = useRouter();
   const [deals, setDeals] = useState<TrackerDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<DealStatus | 'all'>('all');
 
   useEffect(() => {
+    fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
     fetch('/api/tracker')
       .then(r => r.json())
       .then(d => setDeals(d.deals ?? []))
       .finally(() => setLoading(false));
-  }, []);
+  }, [router]);
 
   const filtered = filter === 'all' ? deals : deals.filter(d => d.status === filter);
 

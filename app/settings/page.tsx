@@ -26,12 +26,13 @@ export default function SettingsPage() {
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
 
   useEffect(() => {
+    fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
     setSupportsWebAuthn(browserSupportsWebAuthn());
     const ua = navigator.userAgent;
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Face ID');
     else if (/Mac/.test(ua) || /CrOS/.test(ua) || /Win/.test(ua)) setBiometricLabel('Fingerprint / Touch ID');
     fetchStatus();
-  }, []);
+  }, [router]);
 
   const fetchStatus = async () => {
     const res = await fetch('/api/auth/webauthn/status');
@@ -89,7 +90,7 @@ export default function SettingsPage() {
     if (cpNew !== cpConfirm) { setCpMessage({ type: 'error', text: 'New passwords do not match.' }); return; }
     setCpLoading(true);
     setCpMessage(null);
-    const res = await fetch('/api/auth/change-passphrase', {
+    const res = await fetch('/api/auth/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ currentPassword: cpCurrent, newPassword: cpNew }),
