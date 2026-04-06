@@ -1,15 +1,12 @@
-import { put, list } from '@vercel/blob';
+import { put, head } from '@vercel/blob';
 
 const PREFIX = 'deal-wiz';
 
 async function readBlob<T>(path: string): Promise<T | null> {
   try {
-    const { blobs } = await list({ prefix: path });
-    if (blobs.length === 0) return null;
-    const sorted = [...blobs].sort((a, b) =>
-      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-    );
-    const res = await fetch(sorted[0].url, {
+    const blob = await head(path);
+    if (!blob) return null;
+    const res = await fetch(blob.downloadUrl, {
       headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
       cache: 'no-store',
     });

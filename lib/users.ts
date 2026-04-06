@@ -1,4 +1,4 @@
-import { put, list, del } from '@vercel/blob';
+import { put, head, del } from '@vercel/blob';
 import { createHash, randomBytes } from 'crypto';
 
 const PREFIX = 'deal-wiz/users/';
@@ -16,23 +16,22 @@ export interface User {
 export type PublicUser = Omit<User, 'passwordHash'>;
 
 export function hashPassword(password: string): string {
-  const salt = process.env.SESSION_SECRET ?? 'health-app-salt';
+  const salt = process.env.SESSION_SECRET ?? 'deal-wiz-salt';
   return createHash('sha256').update(salt + password).digest('hex');
 }
 
 function blobFetch(url: string): Promise<Response> {
   return fetch(url, {
     headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+    cache: 'no-store',
   });
 }
 
-// --- Index helpers (fast email lookups without listing all blobs) ---
-
 async function readIndex(): Promise<{ email: string; userId: string }[]> {
   try {
-    const { blobs } = await list({ prefix: INDEX_PATH });
-    if (blobs.length === 0) return [];
-    const res = await blobFetch(blobs[0].url);
+    const blob = await head(INDEX_PATH);
+    if (!blob) return [];
+    const res = await blobFetch(blob.downloadUrl);
     if (!res.ok) return [];
     return await res.json();
   } catch {
@@ -49,8 +48,6 @@ async function writeIndex(index: { email: string; userId: string }[]): Promise<v
   });
 }
 
-// --- User CRUD ---
-
 export async function getUserByEmail(email: string): Promise<User | null> {
   const index = await readIndex();
   const entry = index.find(e => e.email.toLowerCase() === email.toLowerCase());
@@ -61,9 +58,9 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 export async function getUserById(userId: string): Promise<User | null> {
   try {
     const path = `${PREFIX}${userId}.json`;
-    const { blobs } = await list({ prefix: path });
-    if (blobs.length === 0) return null;
-    const res = await blobFetch(blobs[0].url);
+    const blob = await head(path);
+    if (!blob) return null;
+    const res = await blobFetch(blob.downloadUrl);
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -102,7 +99,6 @@ export async function createUser(
     createdAt: new Date().toISOString(),
   };
 
-  // Save user record
   await put(`${PREFIX}${userId}.json`, JSON.stringify(user), {
     access: 'private',
     addRandomSuffix: false,
@@ -110,7 +106,6 @@ export async function createUser(
     contentType: 'application/json',
   });
 
-  // Update index
   const index = await readIndex();
   index.push({ email: user.email, userId });
   await writeIndex(index);
@@ -122,12 +117,10 @@ export async function deleteUser(userId: string): Promise<void> {
   const user = await getUserById(userId);
   if (!user) return;
 
-  // Remove user record blob
   const path = `${PREFIX}${userId}.json`;
-  const { blobs } = await list({ prefix: path });
-  if (blobs.length > 0) await del(blobs.map(b => b.url));
+  const blob = await head(path);
+  if (blob) await del(blob.url);
 
-  // Update index
   const index = await readIndex();
   await writeIndex(index.filter(e => e.userId !== userId));
 }

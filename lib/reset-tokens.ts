@@ -1,4 +1,4 @@
-import { put, list, del } from '@vercel/blob';
+import { put, head, del } from '@vercel/blob';
 import { randomBytes } from 'crypto';
 
 const PREFIX = 'deal-wiz/reset-tokens/';
@@ -32,15 +32,15 @@ export async function createResetCode(email: string): Promise<string> {
 
 export async function verifyResetCode(email: string, code: string): Promise<boolean> {
   const key = Buffer.from(email.toLowerCase()).toString('hex');
-  const { blobs } = await list({ prefix: `${PREFIX}${key}.json` });
-  if (blobs.length === 0) return false;
-  const res = await blobFetch(blobs[0].url);
+  const path = `${PREFIX}${key}.json`;
+  const blob = await head(path);
+  if (!blob) return false;
+  const res = await blobFetch(blob.downloadUrl);
   if (!res.ok) return false;
   const record: ResetToken = await res.json();
   if (record.email !== email.toLowerCase()) return false;
   if (record.code !== code) return false;
   if (Date.now() > record.expiresAt) return false;
-  // Delete token after successful verification
-  await del(blobs.map(b => b.url));
+  await del(blob.url);
   return true;
 }

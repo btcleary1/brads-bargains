@@ -1,4 +1,4 @@
-import { put, list, del } from '@vercel/blob';
+import { put, head, del } from '@vercel/blob';
 
 export interface StoredCredential {
   id: string;
@@ -8,80 +8,93 @@ export interface StoredCredential {
   transports?: string[]; // e.g. ['internal'] for platform (Face ID / Touch ID)
 }
 
-// Credentials are encoded in the blob pathname — no content reads needed.
-// Path: webauthn/{userId}/c/{encoded}
-function prefixFor(userId: string) {
-  return `webauthn/${userId}/c/`;
+function credPath(userId: string): string {
+  return `deal-wiz/webauthn/${userId}/credentials.json`;
 }
 
-// Legacy prefix for single-user migration
-const LEGACY_PREFIX = 'webauthn/c/';
+const CRED_INDEX_PATH = 'deal-wiz/webauthn/cred-index.json';
 
-function encodeToPath(cred: StoredCredential): string {
-  const json = JSON.stringify(cred);
-  return Buffer.from(json).toString('base64')
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+function blobFetch(url: string) {
+  return fetch(url, {
+    headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+    cache: 'no-store',
+  });
 }
 
-function decodeFromPath(encoded: string): StoredCredential | null {
+async function readCredIndex(): Promise<Record<string, string>> {
   try {
-    const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
-    return JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+    const blob = await head(CRED_INDEX_PATH);
+    if (!blob) return {};
+    const res = await blobFetch(blob.downloadUrl);
+    if (!res.ok) return {};
+    return await res.json();
   } catch {
-    return null;
+    return {};
   }
+}
+
+async function writeCredIndex(index: Record<string, string>): Promise<void> {
+  await put(CRED_INDEX_PATH, JSON.stringify(index), {
+    access: 'private',
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: 'application/json',
+  });
 }
 
 export async function getCredentialsForUser(userId: string): Promise<StoredCredential[]> {
   try {
-    const { blobs } = await list({ prefix: prefixFor(userId) });
-    return blobs
-      .map(b => decodeFromPath(b.pathname.slice(prefixFor(userId).length)))
-      .filter((c): c is StoredCredential => c !== null);
+    const blob = await head(credPath(userId));
+    if (!blob) return [];
+    const res = await blobFetch(blob.downloadUrl);
+    if (!res.ok) return [];
+    return await res.json();
   } catch {
     return [];
   }
 }
 
-/** Find which user owns a given credential ID (needed for WebAuthn login before session exists) */
 export async function findCredentialById(credId: string): Promise<StoredCredential | null> {
   try {
-    // Search all user credential blobs
-    const { blobs } = await list({ prefix: 'webauthn/' });
-    for (const blob of blobs) {
-      // Skip legacy prefix
-      if (blob.pathname.startsWith(LEGACY_PREFIX)) continue;
-      const parts = blob.pathname.split('/');
-      // pathname: webauthn/{userId}/c/{encoded}
-      if (parts.length < 4) continue;
-      const encoded = parts[3];
-      const cred = decodeFromPath(encoded);
-      if (cred && cred.id === credId) return cred;
-    }
-    return null;
+    const index = await readCredIndex();
+    const userId = index[credId];
+    if (!userId) return null;
+    const creds = await getCredentialsForUser(userId);
+    return creds.find(c => c.id === credId) ?? null;
   } catch {
     return null;
   }
 }
 
 export async function saveCredentialsForUser(userId: string, creds: StoredCredential[]): Promise<void> {
-  const prefix = prefixFor(userId);
-  // Delete existing credentials for this user
-  const { blobs } = await list({ prefix });
-  if (blobs.length > 0) {
-    await del(blobs.map(b => b.url));
+  await put(credPath(userId), JSON.stringify(creds), {
+    access: 'private',
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: 'application/json',
+  });
+
+  const index = await readCredIndex();
+  for (const key of Object.keys(index)) {
+    if (index[key] === userId) delete index[key];
   }
   for (const cred of creds) {
-    await put(`${prefix}${encodeToPath(cred)}`, '{}', {
-      access: 'private',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    });
+    index[cred.id] = userId;
   }
+  await writeCredIndex(index);
 }
 
-/** Update counter for a specific credential */
+export async function deleteCredentialsForUser(userId: string): Promise<void> {
+  const blob = await head(credPath(userId));
+  if (blob) await del(blob.url);
+
+  const index = await readCredIndex();
+  for (const key of Object.keys(index)) {
+    if (index[key] === userId) delete index[key];
+  }
+  await writeCredIndex(index);
+}
+
 export async function updateCredentialCounter(credId: string, newCounter: number): Promise<void> {
   const cred = await findCredentialById(credId);
   if (!cred) return;

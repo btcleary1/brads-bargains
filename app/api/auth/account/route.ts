@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest, clearSessionCookie } from '@/lib/session';
 import { deleteUser } from '@/lib/users';
 import { del, list } from '@vercel/blob';
+import { deleteCredentialsForUser } from '@/lib/webauthn-store';
 import { logAudit, getClientIp } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -12,17 +13,12 @@ export async function DELETE(req: NextRequest) {
 
   const { userId, email } = session;
 
-  // Delete all health data blobs for this user
-  const { blobs: healthBlobs } = await list({ prefix: `health-data/${userId}/` });
-  if (healthBlobs.length > 0) await del(healthBlobs.map(b => b.url));
+  // Delete all deal data blobs for this user
+  const { blobs: dealBlobs } = await list({ prefix: `deal-wiz/${userId}/` });
+  if (dealBlobs.length > 0) await del(dealBlobs.map(b => b.url));
 
   // Delete WebAuthn credentials
-  const { blobs: webauthnBlobs } = await list({ prefix: `health-app/webauthn/${userId}/` });
-  if (webauthnBlobs.length > 0) await del(webauthnBlobs.map(b => b.url));
-
-  // Delete uploads
-  const { blobs: uploadBlobs } = await list({ prefix: `health-app/uploads/${userId}/` });
-  if (uploadBlobs.length > 0) await del(uploadBlobs.map(b => b.url));
+  await deleteCredentialsForUser(userId);
 
   // Delete user record + remove from index
   await deleteUser(userId);
