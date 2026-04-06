@@ -25,8 +25,9 @@ export default function LoginPage() {
     setSupportsWebAuthn(browserSupportsWebAuthn());
     const ua = navigator.userAgent;
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Sign in with Face ID');
-    else if (/Mac/.test(ua) && /Safari/.test(ua)) setBiometricLabel('Sign in with Touch ID');
-    else if (/Win/.test(ua) || /CrOS/.test(ua)) setBiometricLabel('Sign in with Windows Hello');
+    else if (/Mac/.test(ua) && !/CrOS/.test(ua)) setBiometricLabel('Sign in with Touch ID');
+    else if (/CrOS/.test(ua)) setBiometricLabel('Sign in with Screen Lock');
+    else if (/Win/.test(ua)) setBiometricLabel('Sign in with Windows Hello');
     // Redirect already-logged-in users
     fetch('/api/auth/me').then(r => { if (r.ok) router.replace('/deals'); }).catch(() => {});
   }, [router]);
@@ -59,7 +60,11 @@ export default function LoginPage() {
     setBiometricLoading(true);
     setBiometricError('');
     try {
-      const optRes = await fetch('/api/auth/webauthn/auth-options', { method: 'POST' });
+      const optRes = await fetch('/api/auth/webauthn/auth-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() || undefined }),
+      });
       if (!optRes.ok) { setBiometricError('Biometric login unavailable — use password.'); setBiometricLoading(false); return; }
       const options = await optRes.json();
       const assertion = await startAuthentication({ optionsJSON: options });

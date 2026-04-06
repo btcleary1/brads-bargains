@@ -5,8 +5,9 @@ import { getSessionFromRequest } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
-const RP_ID = process.env.WEBAUTHN_RP_ID || 'healthwiz.vercel.app';
-const ORIGIN = process.env.WEBAUTHN_ORIGIN || `https://${RP_ID}`;
+const RP_ID = process.env.WEBAUTHN_RP_ID ||
+  (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : 'localhost');
+const ORIGIN = process.env.WEBAUTHN_ORIGIN || process.env.NEXT_PUBLIC_APP_URL || `https://${RP_ID}`;
 
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -34,11 +35,15 @@ export async function POST(req: NextRequest) {
     }
 
     const { credential } = verification.registrationInfo;
+    const transports: string[] =
+      body.response?.transports ??
+      (body.authenticatorAttachment === 'platform' ? ['internal'] : []);
     const newCred = {
       id: credential.id,
       publicKey: Buffer.from(credential.publicKey).toString('base64'),
       counter: credential.counter,
       userId: session.userId,
+      transports,
     };
 
     const existing = await getCredentialsForUser(session.userId);

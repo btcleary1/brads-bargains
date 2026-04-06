@@ -4,7 +4,8 @@ import { getSessionFromRequest } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
-const RP_ID = process.env.WEBAUTHN_RP_ID || 'healthwiz.vercel.app';
+const RP_ID = process.env.WEBAUTHN_RP_ID ||
+  (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : 'localhost');
 
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   }
 
   const options = await generateRegistrationOptions({
-    rpName: 'Health Wiz',
+    rpName: "Brad's Bargains",
     rpID: RP_ID,
     userID: new TextEncoder().encode(session.userId),
     userName: session.email,

@@ -5,6 +5,7 @@ export interface StoredCredential {
   publicKey: string; // base64
   counter: number;
   userId: string;
+  transports?: string[]; // e.g. ['internal'] for platform (Face ID / Touch ID)
 }
 
 // Credentials are encoded in the blob pathname — no content reads needed.
