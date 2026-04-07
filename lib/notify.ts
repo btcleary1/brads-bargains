@@ -1,8 +1,8 @@
 import { Resend } from 'resend';
 import { EbayItem } from './ebay';
 
-export async function sendDealAlert(deals: EbayItem[], query: string): Promise<void> {
-  const to = process.env.NOTIFICATION_EMAIL;
+export async function sendDealAlert(deals: EbayItem[], query: string, toOverride?: string): Promise<void> {
+  const to = toOverride || process.env.NOTIFICATION_EMAIL;
   if (!to) return;
 
   const resend = new Resend(process.env.RESEND_API_KEY);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound } from 'lucide-react';
+import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell } from 'lucide-react';
 import { startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import Header from '@/components/Header';
 
@@ -25,6 +25,10 @@ export default function SettingsPage() {
 
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
 
+  const [notifEmail, setNotifEmail] = useState('');
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifMessage, setNotifMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
     setSupportsWebAuthn(browserSupportsWebAuthn());
@@ -32,6 +36,9 @@ export default function SettingsPage() {
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Face ID');
     else if (/Mac/.test(ua) || /CrOS/.test(ua) || /Win/.test(ua)) setBiometricLabel('Fingerprint / Touch ID');
     fetchStatus();
+    fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then(p => {
+      if (p.notificationEmail) setNotifEmail(p.notificationEmail);
+    }).catch(() => {});
   }, [router]);
 
   const fetchStatus = async () => {
@@ -103,6 +110,28 @@ export default function SettingsPage() {
       setCpMessage({ type: 'error', text: data.error || 'Failed to update password.' });
     }
     setCpLoading(false);
+  };
+
+  const handleSaveNotifEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setNotifLoading(true);
+    setNotifMessage(null);
+    try {
+      const res = await fetch('/api/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationEmail: notifEmail.trim() || null }),
+      });
+      if (res.ok) {
+        setNotifMessage({ type: 'success', text: 'Alert email saved.' });
+      } else {
+        const d = await res.json();
+        setNotifMessage({ type: 'error', text: d.error || 'Failed to save.' });
+      }
+    } catch {
+      setNotifMessage({ type: 'error', text: 'Network error.' });
+    }
+    setNotifLoading(false);
   };
 
   const handleDeleteAccount = async () => {
@@ -209,6 +238,38 @@ export default function SettingsPage() {
             >
               {cpLoading && <Loader2 className="w-4 h-4 animate-spin" />}
               Update Password
+            </button>
+          </form>
+        </div>
+
+        {/* Deal alerts */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Bell className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">Deal Alert Email</h2>
+          </div>
+          <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Where to send hot deal notifications when you search with alerts on.</p>
+          {notifMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: notifMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${notifMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: notifMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {notifMessage.text}
+            </div>
+          )}
+          <form onSubmit={handleSaveNotifEmail} className="flex gap-2">
+            <input
+              type="email"
+              value={notifEmail}
+              onChange={e => setNotifEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="flex-1 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <button
+              type="submit"
+              disabled={notifLoading}
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
+            >
+              {notifLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
             </button>
           </form>
         </div>

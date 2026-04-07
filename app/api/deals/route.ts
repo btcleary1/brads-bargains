@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { searchDeals, EbayItem } from '@/lib/ebay';
 import { sendDealAlert } from '@/lib/notify';
+import { getUserPrefs } from '@/lib/tracker-data';
 
 export const runtime = 'nodejs';
 
@@ -25,7 +26,12 @@ export async function GET(req: NextRequest) {
     );
 
     if (notify && hotDeals.length > 0) {
-      sendDealAlert(hotDeals, query).catch(() => {}); // fire and forget
+      // Use per-user notification email, fallback to env var
+      const prefs = await getUserPrefs(session.userId);
+      const alertEmail = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
+      if (alertEmail) {
+        sendDealAlert(hotDeals, query, alertEmail).catch(() => {});
+      }
     }
 
     return NextResponse.json({

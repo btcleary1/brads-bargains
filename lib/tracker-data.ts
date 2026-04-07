@@ -81,3 +81,17 @@ export async function getSavedSearches(userId: string): Promise<SavedSearch[]> {
 export async function saveSavedSearches(userId: string, searches: SavedSearch[]): Promise<void> {
   await writeBlob(`${PREFIX}/${userId}/searches.json`, searches);
 }
+
+// ── User preferences ─────────────────────────────────────────────────────────
+
+export interface UserPrefs {
+  notificationEmail?: string; // where deal alerts are sent
+}
+
+export async function getUserPrefs(userId: string): Promise<UserPrefs> {
+  return (await readBlob<UserPrefs>(`${PREFIX}/${userId}/prefs.json`)) ?? {};
+}
+
+export async function saveUserPrefs(userId: string, prefs: UserPrefs): Promise<void> {
+  await writeBlob(`${PREFIX}/${userId}/prefs.json`, prefs);
+}

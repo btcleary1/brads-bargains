@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest, clearSessionCookie } from '@/lib/session';
 import { deleteUser } from '@/lib/users';
-import { del, list } from '@vercel/blob';
+import { del } from '@vercel/blob';
 import { deleteCredentialsForUser } from '@/lib/webauthn-store';
 import { logAudit, getClientIp } from '@/lib/audit';
 
 export const runtime = 'nodejs';
+
+const USER_BLOBS = (userId: string) => [
+  `deal-wiz/${userId}/deals.json`,
+  `deal-wiz/${userId}/searches.json`,
+  `deal-wiz/${userId}/prefs.json`,
+];
 
 export async function DELETE(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -13,9 +19,8 @@ export async function DELETE(req: NextRequest) {
 
   const { userId, email } = session;
 
-  // Delete all deal data blobs for this user
-  const { blobs: dealBlobs } = await list({ prefix: `deal-wiz/${userId}/` });
-  if (dealBlobs.length > 0) await del(dealBlobs.map(b => b.url));
+  // Delete all deal data blobs for this user (explicit paths — no list() needed)
+  await del(USER_BLOBS(userId)).catch(() => {});
 
   // Delete WebAuthn credentials
   await deleteCredentialsForUser(userId);
