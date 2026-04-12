@@ -33,8 +33,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Use all mock results when query matches nothing
-    const items: EbayItem[] = raw.length === 0 ? MOCK_DEALS : raw;
+    const items: EbayItem[] = raw;
 
     // Filter to deals with marketPrice and 70%+ discount
     const hotDeals: EbayItem[] = topDeals(items, 50, MIN_DISCOUNT);
