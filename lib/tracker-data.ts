@@ -1,29 +1,13 @@
-import { put, head } from '@vercel/blob';
+import { r2Get, r2Put } from './r2';
 
 const PREFIX = 'deal-wiz';
 
 async function readBlob<T>(path: string): Promise<T | null> {
-  try {
-    const blob = await head(path);
-    if (!blob) return null;
-    const res = await fetch(blob.downloadUrl, {
-      headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return await res.json() as T;
-  } catch {
-    return null;
-  }
+  return r2Get<T>(path);
 }
 
 async function writeBlob(path: string, data: unknown): Promise<void> {
-  await put(path, JSON.stringify(data), {
-    access: 'private',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: 'application/json',
-  });
+  await r2Put(path, JSON.stringify(data));
 }
 
 // ── Deal / Tracker item ──────────────────────────────────────────────────────

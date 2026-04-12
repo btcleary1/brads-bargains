@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest, clearSessionCookie } from '@/lib/session';
 import { deleteUser } from '@/lib/users';
-import { del } from '@vercel/blob';
+import { r2Del } from '@/lib/r2';
 import { deleteCredentialsForUser } from '@/lib/webauthn-store';
 import { logAudit, getClientIp } from '@/lib/audit';
 
@@ -20,7 +20,7 @@ export async function DELETE(req: NextRequest) {
   const { userId, email } = session;
 
   // Delete all deal data blobs for this user (explicit paths — no list() needed)
-  await del(USER_BLOBS(userId)).catch(() => {});
+  await r2Del(USER_BLOBS(userId));
 
   // Delete WebAuthn credentials
   await deleteCredentialsForUser(userId);

@@ -1,4 +1,4 @@
-import { put, head } from '@vercel/blob';
+import { r2Get, r2Put } from './r2';
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -10,31 +10,16 @@ interface AttemptRecord {
   lockedUntil?: number;
 }
 
+function sanitizeKey(ip: string): string {
+  return ip.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 64);
+}
+
 async function getRecord(key: string): Promise<AttemptRecord | null> {
-  try {
-    const blob = await head(`${BLOB_PREFIX}${key}.json`);
-    if (!blob) return null;
-    const res = await fetch(blob.downloadUrl, {
-      headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
+  return r2Get<AttemptRecord>(`${BLOB_PREFIX}${key}.json`);
 }
 
 async function saveRecord(key: string, record: AttemptRecord): Promise<void> {
-  await put(`${BLOB_PREFIX}${key}.json`, JSON.stringify(record), {
-    access: 'private',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: 'application/json',
-  });
-}
-
-function sanitizeKey(ip: string): string {
-  return ip.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 64);
+  await r2Put(`${BLOB_PREFIX}${key}.json`, JSON.stringify(record));
 }
 
 export async function checkRateLimit(ip: string): Promise<void> {

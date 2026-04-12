@@ -1,4 +1,4 @@
-import { put } from '@vercel/blob';
+import { r2Put } from './r2';
 
 export type AuditAction =
   | 'login_success'
@@ -23,13 +23,8 @@ export interface AuditEntry {
 
 export function logAudit(entry: AuditEntry): void {
   // Fire and forget — never block the response
-  const path = `health-app/audit/${entry.userId}/${Date.now()}.json`;
-  put(path, JSON.stringify(entry), {
-    access: 'private',
-    addRandomSuffix: false,
-    allowOverwrite: false,
-    contentType: 'application/json',
-  }).catch(() => {});
+  const path = `deal-wiz/audit/${entry.userId}/${Date.now()}.json`;
+  r2Put(path, JSON.stringify(entry)).catch(() => {});
 }
 
 export function getClientIp(req: Request): string {

@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
-import { getUserById } from '@/lib/users';
-import { put } from '@vercel/blob';
-import { createHash, randomBytes } from 'crypto';
+import { getUserById, updatePassword } from '@/lib/users';
+import { randomBytes } from 'crypto';
 
 export const runtime = 'nodejs';
-
-function hashPassword(password: string): string {
-  const salt = process.env.SESSION_SECRET ?? 'health-app-salt';
-  return createHash('sha256').update(salt + password).digest('hex');
-}
 
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
@@ -34,14 +28,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
 
   const tempPassword = generateTempPassword();
-  const updated = { ...user, passwordHash: hashPassword(tempPassword) };
-
-  await put(`health-app/users/${userId}.json`, JSON.stringify(updated), {
-    access: 'private',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: 'application/json',
-  });
+  await updatePassword(userId, tempPassword);
 
   return NextResponse.json({ success: true, tempPassword, email: user.email });
 }
