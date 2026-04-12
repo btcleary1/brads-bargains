@@ -21,12 +21,20 @@ export async function GET(req: NextRequest) {
 
   try {
     const isMock = process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID;
-    const raw = isMock
-      ? MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '')
-      : await searchDeals(query, 50);
+    let raw: EbayItem[];
+    if (isMock) {
+      raw = MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '');
+    } else {
+      try {
+        raw = await searchDeals(query, 50);
+      } catch {
+        // eBay credentials not yet active — fall back to mock data
+        raw = MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '');
+      }
+    }
 
-    // Use mock all results when query is generic, otherwise filter by query
-    const items: EbayItem[] = isMock && raw.length === 0 ? MOCK_DEALS : raw;
+    // Use all mock results when query matches nothing
+    const items: EbayItem[] = raw.length === 0 ? MOCK_DEALS : raw;
 
     // Filter to deals with marketPrice and 70%+ discount
     const hotDeals: EbayItem[] = topDeals(items, 50, MIN_DISCOUNT);
