@@ -36,7 +36,7 @@ export default function SettingsPage() {
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Face ID');
     else if (/Mac/.test(ua) || /CrOS/.test(ua) || /Win/.test(ua)) setBiometricLabel('Fingerprint / Touch ID');
     fetchStatus();
-    fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then(p => {
+    fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
       if (p.notificationEmail) setNotifEmail(p.notificationEmail);
     }).catch(() => {});
   }, [router]);
