@@ -140,7 +140,14 @@ export default function SettingsPage() {
     setDeleteAccountLoading(true);
     try {
       const res = await fetch('/api/auth/account', { method: 'DELETE' });
-      if (res.ok) router.push('/login');
+      if (res.ok) {
+        router.push('/login');
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert('Delete failed: ' + (d.error || `HTTP ${res.status}. Try refreshing and signing in again.`));
+      }
+    } catch (e: any) {
+      alert('Delete failed: ' + e.message);
     } finally { setDeleteAccountLoading(false); }
   };
 
