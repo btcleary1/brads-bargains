@@ -1,4 +1,3 @@
-import { Resend } from 'resend';
 import { EbayItem } from './ebay';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
@@ -99,16 +98,22 @@ function dealRow(deal: EbayItem, rank: number): string {
 export async function sendDailyDigest(deals: EbayItem[], toEmail: string): Promise<void> {
   if (deals.length === 0 || !toEmail) return;
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  const apiKey = (process.env.RESEND_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
   const top5 = deals.slice(0, 5);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const rows = top5.map((d, i) => dealRow(d, i + 1)).join('');
 
-  await resend.emails.send({
-    from: "Brad's Bargains <onboarding@resend.dev>",
-    to: toEmail,
-    subject: "Today's Top 5 Deals - " + today,
-    html: `<!DOCTYPE html>
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: "Brad's Bargains <onboarding@resend.dev>",
+      to: toEmail,
+      subject: "Today's Top 5 Deals - " + today,
+      html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
@@ -153,6 +158,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string): Promi
 </table>
 </body>
 </html>`,
+    }),
   });
 }
 
