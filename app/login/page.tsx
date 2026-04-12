@@ -67,7 +67,7 @@ export default function LoginPage() {
       });
       if (!optRes.ok) { setBiometricError('Biometric login unavailable — use password.'); setBiometricLoading(false); return; }
       const options = await optRes.json();
-      const assertion = await startAuthentication({ optionsJSON: options });
+      const assertion = await startAuthentication({ optionsJSON: options, useBrowserAutofill: false });
       const verRes = await fetch('/api/auth/webauthn/auth-verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -28,11 +28,12 @@ export async function POST(req: NextRequest) {
     await clearFailures(ip);
     logAudit({ timestamp: new Date().toISOString(), userId: user.userId, email: user.email, action: 'login_success', ip });
 
-    const res = NextResponse.json({ success: true, name: user.name });
+    const safeName = user.name.replace(/[^\u0000-\u00FF]/g, '').trim() || user.email;
+    const res = NextResponse.json({ success: true, name: safeName });
     setSessionCookie(res, {
       userId: user.userId,
       email: user.email,
-      name: user.name,
+      name: safeName,
       role: user.role,
     });
     return res;

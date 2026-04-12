@@ -7,18 +7,25 @@ export const runtime = 'nodejs';
 const RP_ID = process.env.WEBAUTHN_RP_ID ||
   (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : 'localhost');
 
+function toLatin1(s: string): string {
+  return s.replace(/[^\u0000-\u00FF]/g, '').trim();
+}
+
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
+  const safeName = toLatin1(session.name) || session.email;
+  const safeEmail = toLatin1(session.email) || session.userId;
+
   const options = await generateRegistrationOptions({
     rpName: "Brad's Bargains",
     rpID: RP_ID,
     userID: new TextEncoder().encode(session.userId),
-    userName: session.email,
-    userDisplayName: session.name.replace(/[^\x00-\xFF]/g, '').trim() || session.email,
+    userName: safeEmail,
+    userDisplayName: safeName,
     authenticatorSelection: {
       residentKey: 'required',
       userVerification: 'required',
