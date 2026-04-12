@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserByEmail, updatePassword, createUser } from '@/lib/users';
+import { clearFailures } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +13,9 @@ export async function POST(req: NextRequest) {
   if (secret !== RESET_SECRET) {
     return NextResponse.json({ error: 'Invalid secret' }, { status: 403 });
   }
+  // Clear rate limit for this IP so login works immediately after
+  await clearFailures(getClientIp(req));
+
   const user = await getUserByEmail(email);
   if (!user) {
     // Account missing from index — create fresh
