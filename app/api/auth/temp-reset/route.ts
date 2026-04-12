@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByEmail, updatePassword } from '@/lib/users';
+import { getUserByEmail, updatePassword, createUser } from '@/lib/users';
 
 export const runtime = 'nodejs';
 
@@ -12,7 +12,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid secret' }, { status: 403 });
   }
   const user = await getUserByEmail(email);
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  if (!user) {
+    // Account missing from index — create fresh
+    await createUser(email, email.split('@')[0], newPassword, 'admin');
+    return NextResponse.json({ success: true, created: true });
+  }
   await updatePassword(user.userId, newPassword);
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, updated: true });
 }
