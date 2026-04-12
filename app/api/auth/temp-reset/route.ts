@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserByEmail, updatePassword, createUser } from '@/lib/users';
-import { clearFailures } from '@/lib/rate-limit';
-import { getClientIp } from '@/lib/audit';
+import { r2List, r2Del } from '@/lib/r2';
 
 export const runtime = 'nodejs';
 
@@ -9,19 +8,26 @@ export const runtime = 'nodejs';
 const RESET_SECRET = 'bb-reset-2026';
 
 export async function POST(req: NextRequest) {
-  const { email, newPassword, secret } = await req.json();
-  if (secret !== RESET_SECRET) {
-    return NextResponse.json({ error: 'Invalid secret' }, { status: 403 });
-  }
-  // Clear rate limit for this IP so login works immediately after
-  await clearFailures(getClientIp(req));
+  try {
+    const { email, newPassword, secret } = await req.json();
+    if (secret !== RESET_SECRET) {
+      return NextResponse.json({ error: 'Invalid secret' }, { status: 403 });
+    }
 
-  const user = await getUserByEmail(email);
-  if (!user) {
-    // Account missing from index — create fresh
-    await createUser(email, email.split('@')[0], newPassword, 'admin');
-    return NextResponse.json({ success: true, created: true });
+    // Clear all rate-limit records so login works immediately
+    try {
+      const keys = await r2List('deal-wiz/rate-limit/');
+      if (keys.length > 0) await r2Del(keys);
+    } catch { /* non-fatal */ }
+
+    const user = await getUserByEmail(email);
+    if (!user) {
+      await createUser(email, email.split('@')[0], newPassword, 'admin');
+      return NextResponse.json({ success: true, created: true });
+    }
+    await updatePassword(user.userId, newPassword);
+    return NextResponse.json({ success: true, updated: true });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
-  await updatePassword(user.userId, newPassword);
-  return NextResponse.json({ success: true, updated: true });
 }
