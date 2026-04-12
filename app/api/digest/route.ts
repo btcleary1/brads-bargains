@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const toEmail = process.env.NOTIFICATION_EMAIL;
+  const toEmail = req.nextUrl.searchParams.get('to') || process.env.NOTIFICATION_EMAIL;
   if (!toEmail) {
     return NextResponse.json({ error: 'NOTIFICATION_EMAIL not configured' }, { status: 500 });
   }
