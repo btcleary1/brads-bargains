@@ -72,9 +72,9 @@ function DealCard({
   const [localDeal, setLocalDeal] = useState(deal);
 
   const profit = localDeal.sellActualPrice && localDeal.ebayPrice
-    ? (localDeal.sellActualPrice - localDeal.ebayPrice - (localDeal.shippingCost ?? 0))
+    ? (localDeal.sellActualPrice * 0.85 - localDeal.ebayPrice - (localDeal.shippingCost ?? 0))
     : localDeal.sellTargetPrice && localDeal.ebayPrice
-    ? (localDeal.sellTargetPrice - localDeal.ebayPrice - (localDeal.shippingCost ?? 0))
+    ? (localDeal.sellTargetPrice * 0.85 - localDeal.ebayPrice - (localDeal.shippingCost ?? 0))
     : null;
 
   const updateField = async (patch: Partial<TrackerDeal>) => {
@@ -305,7 +305,7 @@ export default function TrackerPage() {
   const totalSold = deals.filter(d => d.status === 'sold').reduce((s, d) => s + (d.sellActualPrice ?? 0), 0);
   const totalProfit = deals
     .filter(d => d.status === 'sold' && d.sellActualPrice)
-    .reduce((s, d) => s + (d.sellActualPrice! - d.ebayPrice - (d.shippingCost ?? 0)), 0);
+    .reduce((s, d) => s + (d.sellActualPrice! * 0.85 - d.ebayPrice - (d.shippingCost ?? 0)), 0);
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }}>
