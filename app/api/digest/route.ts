@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const forceMock = req.nextUrl.searchParams.get('mock') === '1';
   const toEmail = req.nextUrl.searchParams.get('to') || process.env.NOTIFICATION_EMAIL;
   if (!toEmail) {
     return NextResponse.json({ error: 'NOTIFICATION_EMAIL not configured' }, { status: 500 });
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
   try {
     let allItems;
 
-    if (process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID) {
+    if (forceMock || process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID) {
       // Use mock data
       allItems = MOCK_DEALS;
     } else {
