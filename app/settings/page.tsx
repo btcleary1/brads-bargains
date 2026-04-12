@@ -181,14 +181,25 @@ export default function SettingsPage() {
             {registered === null ? (
               <div className="flex justify-center py-2"><Loader2 className="w-4 h-4 animate-spin" style={{ color: '#6B7280' }} /></div>
             ) : registered ? (
-              <button
-                onClick={handleDisable}
-                disabled={authLoading}
-                className="w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
-                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#F87171' }}
-              >
-                {authLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : `Disable ${biometricLabel}`}
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleEnable}
+                  disabled={authLoading}
+                  className="w-full py-2.5 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                  style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 2px 12px rgba(99,102,241,0.3)' }}
+                >
+                  {authLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
+                  Register this device
+                </button>
+                <button
+                  onClick={handleDisable}
+                  disabled={authLoading}
+                  className="w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#F87171' }}
+                >
+                  {authLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : `Disable all devices`}
+                </button>
+              </div>
             ) : (
               <button
                 onClick={handleEnable}
