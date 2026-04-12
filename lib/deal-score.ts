@@ -9,6 +9,10 @@ const MIN_SAVINGS = 75;
 // Maximum shipping cost to exclude heavy/bulky items
 const MAX_SHIPPING = 30;
 
+// Minimum seller requirements
+const MIN_FEEDBACK_PERCENT = 98;  // below this = skip entirely
+const MIN_FEEDBACK_COUNT   = 25;  // new sellers with few ratings = skip
+
 // Condition quality — affects resale price and ease of sale
 const CONDITION_SCORE: Record<string, number> = {
   'New':        100,
@@ -52,6 +56,17 @@ function liquidityScore(item: EbayItem): number {
   return 55; // default
 }
 
+// Seller trust score 0-100
+function sellerScore(item: EbayItem): number {
+  const pct   = item.sellerFeedbackPercent ?? 100;
+  const count = item.sellerFeedbackScore   ?? 0;
+  if (pct >= 99.5 && count >= 500) return 100;
+  if (pct >= 99.0 && count >= 100) return 85;
+  if (pct >= 98.5 && count >= 50)  return 70;
+  if (pct >= 98.0 && count >= 25)  return 55;
+  return 0; // below minimum — will be filtered out
+}
+
 // Net flip profit after eBay fees
 function netProfit(item: EbayItem): number {
   if (!item.marketPrice) return 0;
@@ -68,20 +83,22 @@ function profitScore(item: EbayItem): number {
 /**
  * Score a deal 0-100 for buy-low-sell-high flipping.
  * Weights:
- *   50% - net flip profit after eBay fees (biggest driver)
+ *   45% - net flip profit after eBay fees (biggest driver)
+ *   20% - seller reputation (trust gate)
  *   20% - condition (affects resale value and speed)
- *   20% - category liquidity (how fast it sells)
- *   10% - discount % (validates the deal is legit)
+ *   10% - category liquidity (how fast it sells)
+ *    5% - discount % (validates the deal is legit)
  */
 export function scoreDeal(item: EbayItem): number {
   if (!item.discountPct || !item.marketPrice) return 0;
 
-  const profitComponent    = profitScore(item)                     * 0.50;
-  const conditionComponent = conditionScore(item.condition)        * 0.20;
-  const liquidityComponent = liquidityScore(item)                  * 0.20;
-  const discountComponent  = Math.min(item.discountPct, 100)       * 0.10;
+  const profitComponent    = profitScore(item)               * 0.45;
+  const sellerComponent    = sellerScore(item)               * 0.20;
+  const conditionComponent = conditionScore(item.condition)  * 0.20;
+  const liquidityComponent = liquidityScore(item)            * 0.10;
+  const discountComponent  = Math.min(item.discountPct, 100) * 0.05;
 
-  return profitComponent + conditionComponent + liquidityComponent + discountComponent;
+  return profitComponent + sellerComponent + conditionComponent + liquidityComponent + discountComponent;
 }
 
 /**
@@ -90,6 +107,7 @@ export function scoreDeal(item: EbayItem): number {
  *   - 70%+ off market price
  *   - $75+ absolute savings (not worth time for micro-deals)
  *   - Shipping <= $30 (avoid heavy/bulky items)
+ *   - Seller >= 98% positive feedback with >= 25 ratings
  */
 export function topDeals(items: EbayItem[], n = 5, minDiscount = 70): EbayItem[] {
   return items
@@ -99,6 +117,11 @@ export function topDeals(items: EbayItem[], n = 5, minDiscount = 70): EbayItem[]
       const savings = i.marketPrice - i.price;
       if (savings < MIN_SAVINGS) return false;
       if (i.shippingCost !== null && i.shippingCost > MAX_SHIPPING) return false;
+      // Seller hard filter — skip sketchy sellers entirely
+      const pct   = i.sellerFeedbackPercent ?? 100;
+      const count = i.sellerFeedbackScore   ?? 0;
+      if (pct < MIN_FEEDBACK_PERCENT) return false;
+      if (count < MIN_FEEDBACK_COUNT) return false;
       return true;
     })
     .map(i => ({ item: i, score: scoreDeal(i) }))

@@ -68,6 +68,12 @@ function dealRow(deal: EbayItem, rank: number): string {
             <div style="font-size:12px;color:#64748B;">
               ${condition} &middot; ${location}${shipping ? ' &middot; ' + shipping : ''}
             </div>
+            ${deal.sellerFeedbackPercent !== null
+              ? `<div style="font-size:11px;color:#64748B;margin-top:3px;">
+                  Seller: ${safe(deal.seller)}
+                  &middot; ${deal.sellerFeedbackPercent}% (${deal.sellerFeedbackScore?.toLocaleString()} ratings)
+                 </div>`
+              : ''}
           </td>
 
           <!-- Price -->

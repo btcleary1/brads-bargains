@@ -53,6 +53,8 @@ export interface EbayItem {
   additionalImages: string[];
   itemUrl: string;
   seller: string;
+  sellerFeedbackScore: number | null;   // total feedback count
+  sellerFeedbackPercent: number | null; // positive feedback % (e.g. 99.2)
   location: string;
   category: string;
   shippingCost: number | null;
@@ -82,6 +84,8 @@ function toEbayItem(raw: any): EbayItem {
     additionalImages: (raw.additionalImages ?? []).map((i: any) => i.imageUrl).filter(Boolean),
     itemUrl: raw.itemWebUrl ?? '',
     seller: raw.seller?.username ?? '',
+    sellerFeedbackScore: raw.seller?.feedbackScore ?? null,
+    sellerFeedbackPercent: raw.seller?.feedbackPercentage ? parseFloat(raw.seller.feedbackPercentage) : null,
     location: raw.itemLocation?.city
       ? `${raw.itemLocation.city}, ${raw.itemLocation.stateOrProvince ?? ''}`
       : (raw.itemLocation?.country ?? ''),
