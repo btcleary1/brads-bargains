@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     rpID: RP_ID,
     userID: new TextEncoder().encode(session.userId),
     userName: session.email,
-    userDisplayName: session.name,
+    userDisplayName: session.name.replace(/[^\x00-\xFF]/g, '').trim() || session.email,
     authenticatorSelection: {
       residentKey: 'required',
       userVerification: 'required',
