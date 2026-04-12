@@ -103,7 +103,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string): Promi
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const rows = top5.map((d, i) => dealRow(d, i + 1)).join('');
 
-  await fetch('https://api.resend.com/emails', {
+  const emailRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       'Authorization': 'Bearer ' + apiKey,
@@ -160,6 +160,10 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string): Promi
 </html>`,
     }),
   });
+  if (!emailRes.ok) {
+    const errText = await emailRes.text();
+    throw new Error('Resend API error ' + emailRes.status + ': ' + errText);
+  }
 }
 
 // Legacy alias
