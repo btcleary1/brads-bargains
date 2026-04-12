@@ -59,7 +59,7 @@ function dealRow(deal: EbayItem, rank: number): string {
             ${deal.marketPrice ? `<div style="font-size:12px;color:#94A3B8;text-decoration:line-through;margin-top:2px;">$${deal.marketPrice.toFixed(0)}</div>` : ''}
             <div style="font-size:13px;font-weight:700;color:#22C55E;margin-top:2px;">${deal.discountPct}% off</div>
             ${savings > 0 ? `<div style="font-size:11px;color:#64748B;margin-top:1px;">Save $${savings.toFixed(0)}</div>` : ''}
-            <a href="${deal.itemUrl}" style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View →</a>
+            <a href="${deal.itemUrl}" style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View &rarr;</a>
           </td>
         </tr>
       </table>
@@ -109,7 +109,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string): Promi
   <tr><td style="padding:8px 0 24px;text-align:center;">
     <a href="${APP_URL}/deals"
       style="display:inline-block;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:10px;letter-spacing:-0.2px;">
-      Search More Deals →
+      Search More Deals &rarr;
     </a>
   </td></tr>
 
