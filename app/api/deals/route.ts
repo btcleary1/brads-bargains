@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { searchDeals, EbayItem } from '@/lib/ebay';
-import { sendDealAlert } from '@/lib/notify';
+import { MOCK_DEALS } from '@/lib/mock-deals';
+import { topDeals } from '@/lib/deal-score';
+import { sendDailyDigest } from '@/lib/notify';
 import { getUserPrefs } from '@/lib/tracker-data';
 
 export const runtime = 'nodejs';
@@ -18,19 +20,23 @@ export async function GET(req: NextRequest) {
   if (!query.trim()) return NextResponse.json({ error: 'Search query required.' }, { status: 400 });
 
   try {
-    const items = await searchDeals(query, 50);
+    const isMock = process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID;
+    const raw = isMock
+      ? MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '')
+      : await searchDeals(query, 50);
+
+    // Use mock all results when query is generic, otherwise filter by query
+    const items: EbayItem[] = isMock && raw.length === 0 ? MOCK_DEALS : raw;
 
     // Filter to deals with marketPrice and 70%+ discount
-    const hotDeals: EbayItem[] = items.filter(
-      item => item.marketPrice !== null && item.discountPct !== null && item.discountPct >= MIN_DISCOUNT
-    );
+    const hotDeals: EbayItem[] = topDeals(items, 50, MIN_DISCOUNT);
 
     if (notify && hotDeals.length > 0) {
       // Use per-user notification email, fallback to env var
       const prefs = await getUserPrefs(session.userId);
       const alertEmail = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
       if (alertEmail) {
-        sendDealAlert(hotDeals, query, alertEmail).catch(() => {});
+        sendDailyDigest(topDeals(hotDeals, 5), alertEmail).catch(() => {});
       }
     }
 
