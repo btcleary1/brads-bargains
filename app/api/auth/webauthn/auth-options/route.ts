@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     rpID: RP_ID,
     userVerification: 'required',
     allowCredentials: allowCredentials ?? [],
+    hints: ['client-device'], // prefer platform authenticator over cross-device QR
   } as any);
 
   const res = NextResponse.json(options);

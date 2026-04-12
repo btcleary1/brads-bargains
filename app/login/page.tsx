@@ -149,13 +149,16 @@ export default function LoginPage() {
             <div className="mb-5">
               <button
                 onClick={handleBiometricLogin}
-                disabled={biometricLoading}
+                disabled={biometricLoading || !email.trim()}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white transition-all disabled:opacity-60"
                 style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
               >
                 {biometricLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
                 {biometricLabel}
               </button>
+              {!email.trim() && !biometricError && (
+                <p className="text-[11px] mt-1.5 text-center" style={{ color: '#4B5563' }}>Enter your email below to enable</p>
+              )}
               {biometricError && <p className="text-xs mt-2 text-center" style={{ color: '#F87171' }}>{biometricError}</p>}
               <div className="flex items-center gap-3 my-5">
                 <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
