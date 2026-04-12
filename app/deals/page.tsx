@@ -17,6 +17,8 @@ interface EbayItem {
   additionalImages: string[];
   itemUrl: string;
   seller: string;
+  sellerFeedbackScore: number | null;
+  sellerFeedbackPercent: number | null;
   location: string;
   category: string;
   shippingCost: number | null;
@@ -70,8 +72,9 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
     setTracking(false);
   };
 
+  // Net profit after ~15% eBay fees
   const profit = item.marketPrice && item.marketPrice > 0
-    ? Math.round((item.marketPrice * 0.6 - item.price) * 100) / 100
+    ? Math.round((item.marketPrice * 0.85 - item.price - (item.shippingCost ?? 0)) * 100) / 100
     : null;
 
   return (
@@ -97,15 +100,20 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
             )}
             {item.discountPct !== null && <DealBadge pct={item.discountPct} />}
           </div>
-          <div className="flex flex-wrap gap-3 text-xs mb-3" style={{ color: '#6B7280' }}>
+          <div className="flex flex-wrap gap-3 text-xs mb-2" style={{ color: '#6B7280' }}>
             <span className="flex items-center gap-1"><Package className="w-3 h-3" />{item.condition}</span>
             <span className="flex items-center gap-1"><Tag className="w-3 h-3" />{item.category || 'Other'}</span>
             {profit !== null && profit > 0 && (
               <span className="flex items-center gap-1" style={{ color: '#4ADE80' }}>
-                <TrendingDown className="w-3 h-3" />~${profit.toFixed(0)} est. profit
+                <TrendingDown className="w-3 h-3" />~${profit.toFixed(0)} net profit
               </span>
             )}
           </div>
+          {item.sellerFeedbackPercent !== null && (
+            <div className="text-xs mb-3" style={{ color: item.sellerFeedbackPercent >= 99 ? '#4ADE80' : item.sellerFeedbackPercent >= 98 ? '#FCD34D' : '#F87171' }}>
+              Seller: {item.seller} &middot; {item.sellerFeedbackPercent}% ({item.sellerFeedbackScore?.toLocaleString()} ratings)
+            </div>
+          )}
           <div className="flex gap-2">
             <a
               href={item.itemUrl}
