@@ -1,53 +1,106 @@
 import { EbayItem } from './ebay';
 
-// Condition quality scores
+// eBay final value fee + payment processing (~15% total)
+const EBAY_FEE_RATE = 0.15;
+
+// Minimum absolute savings to be worth flipping
+const MIN_SAVINGS = 75;
+
+// Maximum shipping cost to exclude heavy/bulky items
+const MAX_SHIPPING = 30;
+
+// Condition quality — affects resale price and ease of sale
 const CONDITION_SCORE: Record<string, number> = {
-  'New':       100,
-  'Like New':  90,
-  'Very Good': 75,
-  'Good':      60,
-  'Acceptable': 40,
+  'New':        100,
+  'Like New':    90,
+  'Very Good':   75,
+  'Good':        55,
+  'Acceptable':  30,
 };
 
 function conditionScore(condition: string): number {
   for (const [key, val] of Object.entries(CONDITION_SCORE)) {
     if (condition.toLowerCase().includes(key.toLowerCase())) return val;
   }
-  return 50; // unknown
+  return 50;
 }
 
-// Normalize absolute savings to 0-100 scale relative to a $1000 cap
-function savingsScore(item: EbayItem): number {
+// Category liquidity — how fast you can resell it
+// Fast-moving = higher score
+const CATEGORY_LIQUIDITY: { pattern: RegExp; score: number }[] = [
+  { pattern: /iphone|samsung.*phone|pixel/i,              score: 100 },
+  { pattern: /macbook|laptop/i,                           score: 95  },
+  { pattern: /playstation|ps5|xbox/i,                     score: 90  },
+  { pattern: /ipad|tablet/i,                              score: 85  },
+  { pattern: /airpods|headphone|earbuds/i,                score: 80  },
+  { pattern: /nintendo|switch/i,                          score: 80  },
+  { pattern: /apple watch|smartwatch/i,                   score: 80  },
+  { pattern: /drone|gopro|camera/i,                       score: 70  },
+  { pattern: /pokemon|sports card|trading card/i,         score: 75  },
+  { pattern: /basketball card|football card|baseball card/i, score: 70 },
+  { pattern: /lego/i,                                     score: 65  },
+  { pattern: /tv|television/i,                            score: 40  }, // heavy, hard to ship
+  { pattern: /comic/i,                                    score: 50  },
+  { pattern: /vintage|antique/i,                          score: 40  },
+];
+
+function liquidityScore(item: EbayItem): number {
+  const text = `${item.title} ${item.category}`;
+  for (const { pattern, score } of CATEGORY_LIQUIDITY) {
+    if (pattern.test(text)) return score;
+  }
+  return 55; // default
+}
+
+// Net flip profit after eBay fees
+function netProfit(item: EbayItem): number {
   if (!item.marketPrice) return 0;
-  const savings = item.marketPrice - item.price;
-  return Math.min(savings / 1000, 1) * 100;
+  const salePrice = item.marketPrice * (1 - EBAY_FEE_RATE);
+  const shippingCost = item.shippingCost ?? 0;
+  return salePrice - item.price - shippingCost;
+}
+
+// Normalize net profit to 0-100 (capped at $1500 net profit)
+function profitScore(item: EbayItem): number {
+  return Math.min(netProfit(item) / 1500, 1) * 100;
 }
 
 /**
- * Score a deal 0–100.
+ * Score a deal 0-100 for buy-low-sell-high flipping.
  * Weights:
- *   40% — discount percentage (how deep the deal is)
- *   40% — absolute dollar savings (bigger savings = more opportunity)
- *   10% — condition quality
- *   10% — free shipping bonus
+ *   50% - net flip profit after eBay fees (biggest driver)
+ *   20% - condition (affects resale value and speed)
+ *   20% - category liquidity (how fast it sells)
+ *   10% - discount % (validates the deal is legit)
  */
 export function scoreDeal(item: EbayItem): number {
   if (!item.discountPct || !item.marketPrice) return 0;
 
-  const discountComponent  = Math.min(item.discountPct, 100) * 0.40;
-  const savingsComponent   = savingsScore(item)              * 0.40;
-  const conditionComponent = conditionScore(item.condition)  * 0.10;
-  const shippingBonus      = (item.shippingCost === 0)       ? 10 : 0;
+  const profitComponent    = profitScore(item)                     * 0.50;
+  const conditionComponent = conditionScore(item.condition)        * 0.20;
+  const liquidityComponent = liquidityScore(item)                  * 0.20;
+  const discountComponent  = Math.min(item.discountPct, 100)       * 0.10;
 
-  return discountComponent + savingsComponent + conditionComponent + shippingBonus;
+  return profitComponent + conditionComponent + liquidityComponent + discountComponent;
 }
 
 /**
- * Filter to hot deals (≥70% off), score them, return top N sorted best-first.
+ * Filter to genuinely flippable deals, score them, return top N sorted best-first.
+ * Hard filters:
+ *   - 70%+ off market price
+ *   - $75+ absolute savings (not worth time for micro-deals)
+ *   - Shipping <= $30 (avoid heavy/bulky items)
  */
 export function topDeals(items: EbayItem[], n = 5, minDiscount = 70): EbayItem[] {
   return items
-    .filter(i => i.discountPct !== null && i.discountPct >= minDiscount && i.marketPrice !== null)
+    .filter(i => {
+      if (!i.discountPct || !i.marketPrice) return false;
+      if (i.discountPct < minDiscount) return false;
+      const savings = i.marketPrice - i.price;
+      if (savings < MIN_SAVINGS) return false;
+      if (i.shippingCost !== null && i.shippingCost > MAX_SHIPPING) return false;
+      return true;
+    })
     .map(i => ({ item: i, score: scoreDeal(i) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, n)

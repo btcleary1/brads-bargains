@@ -1,11 +1,11 @@
 import { EbayItem } from './ebay';
 
-// Realistic mock deals for electronics and collectibles — used when EBAY_MOCK=true
+// Realistic mock deals for electronics and collectibles - used when EBAY_MOCK=true
 export const MOCK_DEALS: EbayItem[] = [
   // ── Electronics ──────────────────────────────────────────────────────
   {
     itemId: 'mock-001',
-    title: 'Apple MacBook Air M2 13" 8GB 256GB Space Gray — Near Mint',
+    title: 'Apple MacBook Air M2 13" 8GB 256GB Space Gray - Near Mint',
     price: 299,
     currency: 'USD',
     marketPrice: 1099,
@@ -22,7 +22,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-002',
-    title: 'Sony PlayStation 5 Disc Edition Console — Complete in Box',
+    title: 'Sony PlayStation 5 Disc Edition Console - Complete in Box',
     price: 149,
     currency: 'USD',
     marketPrice: 499,
@@ -39,7 +39,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-003',
-    title: 'Apple iPhone 14 Pro 256GB Deep Purple — Unlocked, Excellent',
+    title: 'Apple iPhone 14 Pro 256GB Deep Purple - Unlocked, Excellent',
     price: 189,
     currency: 'USD',
     marketPrice: 799,
@@ -56,7 +56,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-004',
-    title: 'Sony WH-1000XM5 Wireless Noise-Canceling Headphones — Black',
+    title: 'Sony WH-1000XM5 Wireless Noise-Canceling Headphones - Black',
     price: 69,
     currency: 'USD',
     marketPrice: 349,
@@ -73,7 +73,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-005',
-    title: 'DJI Mini 3 Pro Drone + RC Controller — Barely Used, All Accessories',
+    title: 'DJI Mini 3 Pro Drone + RC Controller - Barely Used, All Accessories',
     price: 129,
     currency: 'USD',
     marketPrice: 759,
@@ -107,7 +107,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-007',
-    title: 'Samsung 65" QLED 4K Smart TV QN65Q80C — 2023, Perfect Panel',
+    title: 'Samsung 65" QLED 4K Smart TV QN65Q80C - 2023, Perfect Panel',
     price: 349,
     currency: 'USD',
     marketPrice: 1299,
@@ -124,7 +124,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-008',
-    title: 'GoPro HERO 11 Black Action Camera — Complete Kit, 2 Batteries',
+    title: 'GoPro HERO 11 Black Action Camera - Complete Kit, 2 Batteries',
     price: 79,
     currency: 'USD',
     marketPrice: 399,
@@ -141,7 +141,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-009',
-    title: 'Nintendo Switch OLED Model — White, All Original Accessories',
+    title: 'Nintendo Switch OLED Model - White, All Original Accessories',
     price: 89,
     currency: 'USD',
     marketPrice: 349,
@@ -158,7 +158,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-010',
-    title: 'Apple Watch Ultra 2 49mm Titanium — GPS + Cellular, Excellent',
+    title: 'Apple Watch Ultra 2 49mm Titanium - GPS + Cellular, Excellent',
     price: 299,
     currency: 'USD',
     marketPrice: 799,
@@ -177,7 +177,7 @@ export const MOCK_DEALS: EbayItem[] = [
   // ── Collectibles ──────────────────────────────────────────────────────
   {
     itemId: 'mock-011',
-    title: 'Pokémon Base Set Charizard Holo 1st Edition PSA 7 — BGS Verified',
+    title: 'Pokemon Base Set Charizard Holo 1st Edition PSA 7 - BGS Verified',
     price: 799,
     currency: 'USD',
     marketPrice: 3200,
@@ -188,13 +188,13 @@ export const MOCK_DEALS: EbayItem[] = [
     itemUrl: 'https://www.ebay.com/itm/mock-011',
     seller: 'poke_vault_graded',
     location: 'Los Angeles, CA',
-    category: 'Pokémon Trading Card Games',
+    category: 'Pokemon Trading Card Games',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
   },
   {
     itemId: 'mock-012',
-    title: 'Michael Jordan 1986 Fleer Rookie #57 PSA 8 — Centered, Sharp Corners',
+    title: 'Michael Jordan 1986 Fleer Rookie #57 PSA 8 - Centered, Sharp Corners',
     price: 249,
     currency: 'USD',
     marketPrice: 1100,
@@ -211,7 +211,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-013',
-    title: 'LEGO Star Wars UCS Millennium Falcon 75192 — SEALED, New in Box',
+    title: 'LEGO Star Wars UCS Millennium Falcon 75192 - SEALED, New in Box',
     price: 499,
     currency: 'USD',
     marketPrice: 1799,
@@ -228,7 +228,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-014',
-    title: 'Tom Brady 2000 Contenders Rookie Ticket Auto PSA 9 — Population 12',
+    title: 'Tom Brady 2000 Contenders Rookie Ticket Auto PSA 9 - Population 12',
     price: 349,
     currency: 'USD',
     marketPrice: 1500,
@@ -245,7 +245,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-015',
-    title: 'Star Wars Original Trilogy 1977 Lobby Card Set (8) — Near Mint',
+    title: 'Star Wars Original Trilogy 1977 Lobby Card Set (8) - Near Mint',
     price: 129,
     currency: 'USD',
     marketPrice: 599,
@@ -262,7 +262,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-016',
-    title: 'Pokémon Base Set Booster Box SEALED Unlimited — WOTC 1999',
+    title: 'Pokemon Base Set Booster Box SEALED Unlimited - WOTC 1999',
     price: 899,
     currency: 'USD',
     marketPrice: 3500,
@@ -273,13 +273,13 @@ export const MOCK_DEALS: EbayItem[] = [
     itemUrl: 'https://www.ebay.com/itm/mock-016',
     seller: 'sealed_wax_world',
     location: 'San Francisco, CA',
-    category: 'Pokémon Trading Card Games',
+    category: 'Pokemon Trading Card Games',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
   },
   {
     itemId: 'mock-017',
-    title: 'Vintage Apple Macintosh 128K — Working, Original Box & Manuals',
+    title: 'Vintage Apple Macintosh 128K - Working, Original Box & Manuals',
     price: 299,
     currency: 'USD',
     marketPrice: 1200,
@@ -313,7 +313,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-019',
-    title: 'Rolex Submariner Hulk 116610LV Box & Papers 2019 — Serviced',
+    title: 'Rolex Submariner Hulk 116610LV Box & Papers 2019 - Serviced',
     price: 8999,
     currency: 'USD',
     marketPrice: 18500,
@@ -330,7 +330,7 @@ export const MOCK_DEALS: EbayItem[] = [
   },
   {
     itemId: 'mock-020',
-    title: 'Batman #1 (1940) CGC 3.0 — Golden Age, First Joker Cover',
+    title: 'Batman #1 (1940) CGC 3.0 - Golden Age, First Joker Cover',
     price: 1499,
     currency: 'USD',
     marketPrice: 6000,

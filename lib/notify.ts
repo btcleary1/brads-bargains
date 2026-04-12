@@ -3,6 +3,11 @@ import { EbayItem } from './ebay';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
 
+// Strip any non-Latin-1 characters from strings that end up in email HTML
+function safe(s: string): string {
+  return s.replace(/[^\x00-\xFF]/g, '');
+}
+
 function categoryLabel(category: string): string {
   const c = category.toLowerCase();
   if (c.includes('phone') || c.includes('iphone')) return 'Phone';
@@ -28,6 +33,9 @@ function tierLabel(pct: number): { label: string; color: string; bg: string; bor
 }
 
 function dealRow(deal: EbayItem, rank: number): string {
+  const title    = safe(deal.title);
+  const location = safe(deal.location);
+  const condition = safe(deal.condition);
   const savings = deal.marketPrice ? deal.marketPrice - deal.price : 0;
   const tier = tierLabel(deal.discountPct ?? 0);
   const cat = categoryLabel(deal.category);
@@ -56,9 +64,9 @@ function dealRow(deal: EbayItem, rank: number): string {
               <span style="font-size:10px;font-weight:800;letter-spacing:0.07em;color:${tier.color};background:${tier.bg};border:1px solid ${tier.border};padding:2px 7px;border-radius:4px;">${tier.label}</span>
             </div>
             <a href="${deal.itemUrl}"
-              style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;line-height:1.4;display:block;margin-bottom:5px;">${deal.title}</a>
+              style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;line-height:1.4;display:block;margin-bottom:5px;">${title}</a>
             <div style="font-size:12px;color:#64748B;">
-              ${deal.condition} &middot; ${deal.location}${shipping ? ' &middot; ' + shipping : ''}
+              ${condition} &middot; ${location}${shipping ? ' &middot; ' + shipping : ''}
             </div>
           </td>
 
