@@ -113,7 +113,7 @@ export async function searchDeals(query: string, maxResults = 20): Promise<EbayI
   const params = new URLSearchParams({
     q: query,
     limit: String(maxResults),
-    sort: 'price',
+    sort: 'bestMatch',
     filter: 'buyingOptions:{FIXED_PRICE},priceCurrency:USD',
   });
 
