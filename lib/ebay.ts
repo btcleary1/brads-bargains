@@ -77,8 +77,15 @@ function buildItemUrl(itemWebUrl: string, itemId: string): string {
 
 function toEbayItem(raw: any): EbayItem {
   const price = parsePrice(raw.price);
-  const marketPrice = raw.marketPrice ? parsePrice(raw.marketPrice) : null;
-  const discountPct = marketPrice && marketPrice > 0
+  // Browse API uses marketingPrice.originalPrice (not marketPrice)
+  const marketPrice = raw.marketingPrice?.originalPrice
+    ? parsePrice(raw.marketingPrice.originalPrice)
+    : raw.marketPrice
+    ? parsePrice(raw.marketPrice)
+    : null;
+  const discountPct = raw.marketingPrice?.discountPercentage
+    ? Math.round(parseFloat(raw.marketingPrice.discountPercentage))
+    : marketPrice && marketPrice > 0
     ? Math.round(((marketPrice - price) / marketPrice) * 100)
     : null;
 
