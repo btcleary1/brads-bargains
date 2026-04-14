@@ -65,6 +65,16 @@ function parsePrice(priceObj: any): number {
   return parseFloat(priceObj?.value ?? '0');
 }
 
+// Build a reliable item URL — itemWebUrl from sandbox keys returns broken sandbox URLs.
+// Fall back to constructing a real ebay.com URL from the legacy item ID.
+// Browse API itemId format: "v1|123456789|0" — middle segment is the legacy item ID.
+function buildItemUrl(itemWebUrl: string, itemId: string): string {
+  const isSandboxUrl = itemWebUrl.includes('sandbox.ebay') || itemWebUrl.includes('ebay.com/itm/sandbox');
+  if (itemWebUrl && !isSandboxUrl) return itemWebUrl;
+  const legacyId = itemId?.split('|')[1] ?? itemId;
+  return legacyId ? `https://www.ebay.com/itm/${legacyId}` : '';
+}
+
 function toEbayItem(raw: any): EbayItem {
   const price = parsePrice(raw.price);
   const marketPrice = raw.marketPrice ? parsePrice(raw.marketPrice) : null;
@@ -82,7 +92,7 @@ function toEbayItem(raw: any): EbayItem {
     condition: raw.condition ?? 'Unknown',
     imageUrl: raw.image?.imageUrl ?? '',
     additionalImages: (raw.additionalImages ?? []).map((i: any) => i.imageUrl).filter(Boolean),
-    itemUrl: raw.itemWebUrl ?? '',
+    itemUrl: buildItemUrl(raw.itemWebUrl ?? '', raw.itemId ?? ''),
     seller: raw.seller?.username ?? '',
     sellerFeedbackScore: raw.seller?.feedbackScore ?? null,
     sellerFeedbackPercent: raw.seller?.feedbackPercentage ? parseFloat(raw.seller.feedbackPercentage) : null,
