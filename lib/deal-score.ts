@@ -110,7 +110,7 @@ export function scoreDeal(item: EbayItem): number {
  *   - Seller >= 98% positive feedback with >= 25 ratings
  * Falls back to top-scored items with no discount filter when marketPrice is sparse.
  */
-export function topDeals(items: EbayItem[], n = 5, minDiscount = 20): EbayItem[] {
+export function topDeals(items: EbayItem[], n = 5, minDiscount = 60): EbayItem[] {
   const strictPass = items.filter(i => {
     if (!i.discountPct || !i.marketPrice) return false;
     if (i.discountPct < minDiscount) return false;
