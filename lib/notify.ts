@@ -81,7 +81,7 @@ function dealRow(deal: EbayItem, rank: number): string {
             ${deal.marketPrice
               ? `<div style="font-size:12px;color:#94A3B8;text-decoration:line-through;margin-top:2px;">$${deal.marketPrice.toFixed(0)}</div>`
               : ''}
-            <div style="font-size:13px;font-weight:700;color:#16A34A;margin-top:2px;">${deal.discountPct}% off</div>
+            ${deal.discountPct ? `<div style="font-size:13px;font-weight:700;color:#16A34A;margin-top:2px;">${deal.discountPct}% off</div>` : ''}
             ${savings > 0
               ? `<div style="font-size:11px;color:#64748B;margin-top:1px;">Save $${savings.toFixed(0)}</div>`
               : ''}
