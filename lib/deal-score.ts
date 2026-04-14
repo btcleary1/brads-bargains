@@ -104,27 +104,41 @@ export function scoreDeal(item: EbayItem): number {
 /**
  * Filter to genuinely flippable deals, score them, return top N sorted best-first.
  * Hard filters:
- *   - 70%+ off market price
- *   - $75+ absolute savings (not worth time for micro-deals)
+ *   - 20%+ off market price (when available)
+ *   - $10+ absolute savings (when marketPrice available)
  *   - Shipping <= $30 (avoid heavy/bulky items)
  *   - Seller >= 98% positive feedback with >= 25 ratings
+ * Falls back to top-scored items with no discount filter when marketPrice is sparse.
  */
-export function topDeals(items: EbayItem[], n = 5, minDiscount = 70): EbayItem[] {
-  return items
-    .filter(i => {
-      if (!i.discountPct || !i.marketPrice) return false;
-      if (i.discountPct < minDiscount) return false;
-      const savings = i.marketPrice - i.price;
-      if (savings < MIN_SAVINGS) return false;
-      if (i.shippingCost !== null && i.shippingCost > MAX_SHIPPING) return false;
-      // Seller hard filter — skip sketchy sellers entirely
-      const pct   = i.sellerFeedbackPercent ?? 100;
-      const count = i.sellerFeedbackScore   ?? 0;
-      if (pct < MIN_FEEDBACK_PERCENT) return false;
-      if (count < MIN_FEEDBACK_COUNT) return false;
-      return true;
-    })
-    .map(i => ({ item: i, score: scoreDeal(i) }))
+export function topDeals(items: EbayItem[], n = 5, minDiscount = 20): EbayItem[] {
+  const strictPass = items.filter(i => {
+    if (!i.discountPct || !i.marketPrice) return false;
+    if (i.discountPct < minDiscount) return false;
+    const savings = i.marketPrice - i.price;
+    if (savings < 10) return false;
+    if (i.shippingCost !== null && i.shippingCost > MAX_SHIPPING) return false;
+    const pct   = i.sellerFeedbackPercent ?? 100;
+    const count = i.sellerFeedbackScore   ?? 0;
+    if (pct < MIN_FEEDBACK_PERCENT) return false;
+    if (count < MIN_FEEDBACK_COUNT) return false;
+    return true;
+  });
+
+  // Fall back to all items with decent seller ratings when marketPrice data is sparse
+  const pool = strictPass.length >= n ? strictPass : items.filter(i => {
+    if (i.shippingCost !== null && i.shippingCost > MAX_SHIPPING) return false;
+    const pct   = i.sellerFeedbackPercent ?? 100;
+    const count = i.sellerFeedbackScore   ?? 0;
+    if (pct < MIN_FEEDBACK_PERCENT) return false;
+    if (count < MIN_FEEDBACK_COUNT) return false;
+    return true;
+  });
+
+  // Last resort — just take any items
+  const finalPool = pool.length > 0 ? pool : items;
+
+  return finalPool
+    .map(i => ({ item: i, score: scoreDeal(i) + liquidityScore(i) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, n)
     .map(x => x.item);
