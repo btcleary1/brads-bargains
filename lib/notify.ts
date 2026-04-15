@@ -36,6 +36,7 @@ function dealRow(deal: EbayItem, rank: number): string {
   const location = safe(deal.location);
   const condition = safe(deal.condition);
   const savings = deal.marketPrice ? deal.marketPrice - deal.price : 0;
+  const netProfit = deal.marketPrice ? Math.round(deal.marketPrice * 0.85 - deal.price - (deal.shippingCost ?? 0)) : null;
   const tier = tierLabel(deal.discountPct ?? 0);
   const cat = categoryLabel(deal.category);
   const shipping = deal.shippingCost === 0
@@ -84,6 +85,9 @@ function dealRow(deal: EbayItem, rank: number): string {
             ${deal.discountPct ? `<div style="font-size:13px;font-weight:700;color:#16A34A;margin-top:2px;">${deal.discountPct}% off</div>` : ''}
             ${savings > 0
               ? `<div style="font-size:11px;color:#64748B;margin-top:1px;">Save $${savings.toFixed(0)}</div>`
+              : ''}
+            ${netProfit !== null && netProfit > 0
+              ? `<div style="font-size:12px;font-weight:700;color:#16A34A;margin-top:3px;">~$${netProfit} profit</div>`
               : ''}
             <a href="${deal.itemUrl}"
               style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View</a>

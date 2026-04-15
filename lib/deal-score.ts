@@ -17,6 +17,9 @@ const MIN_FEEDBACK_COUNT   = 50;  // new sellers with few ratings = skip
 // Title keywords that indicate junk listings
 const JUNK_TITLE_PATTERNS = /for parts|not working|broken|cracked screen|read description|as.is|untested|powers on|no returns|damaged|water damage/i;
 
+// Heavy/bulky items not worth storing or shipping
+const BULKY_PATTERNS = /\bconsole\b|desktop|monitor|printer|treadmill|bicycle|bike\b|guitar|amplifier|furniture|mattress|refrigerator|washer|dryer|dishwasher|television|\bsofa\b|\bcouch\b|elliptical|weight bench|kayak|surfboard|scooter|electric bike|e-bike|hoverboard/i;
+
 // Conditions to skip entirely
 const BAD_CONDITIONS = /acceptable|for parts|parts only/i;
 
@@ -100,6 +103,7 @@ function profitScore(item: EbayItem): number {
 function isJunk(item: EbayItem): boolean {
   if (!item.imageUrl) return true;
   if (JUNK_TITLE_PATTERNS.test(item.title)) return true;
+  if (BULKY_PATTERNS.test(item.title)) return true;
   if (BAD_CONDITIONS.test(item.condition)) return true;
   if (item.price < MIN_PRICE) return true;
   if (item.price > MAX_PRICE) return true;

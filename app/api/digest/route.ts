@@ -16,14 +16,24 @@ const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
 const SEARCH_QUERIES = [
   'iPhone unlocked',
   'MacBook Air',
-  'PlayStation 5',
+  'iPad unlocked',
+  'Apple Watch unlocked',
+  'AirPods',
   'Nintendo Switch',
-  'Sony headphones',
-  'iPad',
+  'Air Jordan sneakers',
+  'Nike sneakers deadstock',
   'Pokemon card PSA',
-  'sports card PSA',
+  'sports card PSA graded',
   'LEGO sealed',
   'vintage comic CGC',
+  'DJI drone',
+  'camera lens',
+  'gold coin',
+  'silver coin',
+  'video game lot',
+  'mechanical keyboard',
+  'designer sunglasses',
+  'luxury watch',
 ];
 
 function todayKey(): string {
