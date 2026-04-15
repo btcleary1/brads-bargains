@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
-import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, Package, AlertCircle } from 'lucide-react';
+import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, Package, AlertCircle, Mail, CheckCircle } from 'lucide-react';
 
 interface EbayItem {
   itemId: string;
@@ -148,9 +148,9 @@ export default function DealsPage() {
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [notify, setNotify] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [filterPct, setFilterPct] = useState<number | ''>('');
+  const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent'>('idle');
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
@@ -163,9 +163,9 @@ export default function DealsPage() {
     setError('');
     setResults(null);
     setShowAll(false);
+    setEmailState('idle');
     try {
-      const url = `/api/deals?q=${encodeURIComponent(query)}${notify ? '&notify=1' : ''}`;
-      const res = await fetch(url);
+      const res = await fetch(`/api/deals?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Search failed.');
       setResults(data);
@@ -173,6 +173,22 @@ export default function DealsPage() {
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendEmail = async () => {
+    if (!query.trim() || emailState !== 'idle') return;
+    setEmailState('sending');
+    try {
+      const res = await fetch(`/api/deals?q=${encodeURIComponent(query)}&notify=1`);
+      if (res.ok) {
+        setEmailState('sent');
+        setTimeout(() => setEmailState('idle'), 3000);
+      } else {
+        setEmailState('idle');
+      }
+    } catch {
+      setEmailState('idle');
     }
   };
 
@@ -226,15 +242,6 @@ export default function DealsPage() {
             </button>
           </form>
 
-          <label className="flex items-center gap-2 mt-3 cursor-pointer w-fit">
-            <input
-              type="checkbox"
-              checked={notify}
-              onChange={e => setNotify(e.target.checked)}
-              className="rounded"
-            />
-            <span className="text-xs" style={{ color: '#6B7280' }}>Email me these hot deals right now</span>
-          </label>
         </div>
 
         {/* Error */}
@@ -271,6 +278,21 @@ export default function DealsPage() {
                 </div>
               )}
             </div>
+
+            {/* Email button */}
+            <button
+              onClick={sendEmail}
+              disabled={emailState !== 'idle'}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold mb-4 transition-all disabled:opacity-70"
+              style={emailState === 'sent'
+                ? { background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ADE80' }
+                : { background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: '#818CF8' }}
+            >
+              {emailState === 'sending' && <Loader2 className="w-4 h-4 animate-spin" />}
+              {emailState === 'sent' && <CheckCircle className="w-4 h-4" />}
+              {emailState === 'idle' && <Mail className="w-4 h-4" />}
+              {emailState === 'sending' ? 'Sending…' : emailState === 'sent' ? 'Sent to your email!' : 'Email me these deals'}
+            </button>
 
             {/* Discount filter */}
             <div className="flex items-center gap-2 mb-4">
