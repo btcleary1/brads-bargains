@@ -150,6 +150,7 @@ export default function DealsPage() {
   const [error, setError] = useState('');
   const [notify, setNotify] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [filterPct, setFilterPct] = useState<number | ''>('');
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
@@ -175,15 +176,18 @@ export default function DealsPage() {
     }
   };
 
+  const activeFilter = filterPct !== '' ? filterPct : null;
+
   const displayItems = results
-    ? showAll
-      ? results.items
-      : results.items.filter(i => i.isHotDeal).length > 0
-        ? results.items.filter(i => i.isHotDeal)
-        : results.items.slice(0, 20)
+    ? (() => {
+        let pool = showAll ? results.items : results.items.filter(i => i.isHotDeal).length > 0 ? results.items.filter(i => i.isHotDeal) : results.items.slice(0, 20);
+        if (activeFilter !== null) pool = pool.filter(i => i.discountPct !== null && i.discountPct >= activeFilter);
+        return pool;
+      })()
     : [];
 
   const hotCount = results?.items.filter(i => i.isHotDeal).length ?? 0;
+  const minDiscount = results?.minDiscount ?? 60;
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }}>
@@ -198,7 +202,7 @@ export default function DealsPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-white leading-tight">Find Deals</h1>
-              <p className="text-xs" style={{ color: '#6B7280' }}>eBay items at 70%+ off market price</p>
+              <p className="text-xs" style={{ color: '#6B7280' }}>eBay items at {minDiscount}%+ off market price</p>
             </div>
           </div>
 
@@ -258,13 +262,33 @@ export default function DealsPage() {
                 <div className="font-bold text-white">{results.total}</div>
               </div>
               <div className="rounded-xl px-4 py-2.5" style={{ background: hotCount > 0 ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.04)', border: hotCount > 0 ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="text-xs" style={{ color: '#6B7280' }}>70%+ off</div>
+                <div className="text-xs" style={{ color: '#6B7280' }}>{minDiscount}%+ off</div>
                 <div className="font-bold" style={{ color: hotCount > 0 ? '#F87171' : 'white' }}>{hotCount}</div>
               </div>
               {hotCount === 0 && (
                 <div className="flex items-center text-xs px-3 py-2 rounded-xl" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: '#FCD34D' }}>
                   No hot deals found — try a different search or check back later
                 </div>
+              )}
+            </div>
+
+            {/* Discount filter */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs shrink-0" style={{ color: '#6B7280' }}>Min % off:</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={filterPct}
+                onChange={e => setFilterPct(e.target.value === '' ? '' : Math.min(100, Math.max(0, Number(e.target.value))))}
+                placeholder={`${minDiscount}`}
+                className="w-20 px-3 py-1.5 rounded-lg text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+              {filterPct !== '' && (
+                <button onClick={() => setFilterPct('')} className="text-xs px-2 py-1 rounded-lg" style={{ color: '#6B7280', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  Clear
+                </button>
               )}
             </div>
 
@@ -306,7 +330,7 @@ export default function DealsPage() {
               <Search className="w-8 h-8" style={{ color: '#374151' }} />
             </div>
             <div className="font-medium" style={{ color: '#6B7280' }}>Search eBay for deals</div>
-            <div className="text-sm mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings at 70%+ off market price</div>
+            <div className="text-sm mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings at {minDiscount}%+ off market price</div>
           </div>
         )}
       </div>

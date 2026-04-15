@@ -8,7 +8,18 @@ import { getUserPrefs } from '@/lib/tracker-data';
 
 export const runtime = 'nodejs';
 
-const MIN_DISCOUNT = 70; // 70% off market price
+const START_DISCOUNT = 60; // start at 60%, flex down until 5 hot deals found
+
+// Find the lowest discount threshold that yields at least 5 qualifying items.
+// Drops 1% per attempt from START_DISCOUNT down to 0.
+function flexDiscount(items: EbayItem[], target = 5): { hotDeals: EbayItem[]; minDiscount: number } {
+  for (let pct = START_DISCOUNT; pct >= 0; pct--) {
+    const hot = items.filter(i => i.discountPct !== null && i.discountPct >= pct);
+    if (hot.length >= target) return { hotDeals: hot, minDiscount: pct };
+  }
+  // No items have any discount data — return all items at 0%
+  return { hotDeals: items, minDiscount: 0 };
+}
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -28,18 +39,14 @@ export async function GET(req: NextRequest) {
       try {
         raw = await searchDeals(query, 50);
       } catch {
-        // eBay credentials not yet active — fall back to mock data
         raw = MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '');
       }
     }
 
     const items: EbayItem[] = raw;
-
-    // Filter to deals with marketPrice and 70%+ discount
-    const hotDeals: EbayItem[] = topDeals(items, 50, MIN_DISCOUNT);
+    const { hotDeals, minDiscount } = flexDiscount(items);
 
     if (notify && hotDeals.length > 0) {
-      // Use per-user notification email, fallback to env var
       const prefs = await getUserPrefs(session.userId);
       const alertEmail = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
       if (alertEmail) {
@@ -51,10 +58,10 @@ export async function GET(req: NextRequest) {
       query,
       total: items.length,
       hotDeals: hotDeals.length,
-      minDiscount: MIN_DISCOUNT,
+      minDiscount,
       items: items.map(item => ({
         ...item,
-        isHotDeal: item.discountPct !== null && item.discountPct >= MIN_DISCOUNT,
+        isHotDeal: item.discountPct !== null && item.discountPct >= minDiscount,
       })),
     });
   } catch (err) {
