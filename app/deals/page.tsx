@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
-import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, Package, AlertCircle, Mail, CheckCircle } from 'lucide-react';
+import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, Package, AlertCircle, Mail, CheckCircle, Clock } from 'lucide-react';
 
 interface EbayItem {
   itemId: string;
@@ -23,6 +23,7 @@ interface EbayItem {
   category: string;
   shippingCost: number | null;
   listingType: string;
+  listingDate: string | null;
   isHotDeal: boolean;
 }
 
@@ -43,6 +44,22 @@ function DealBadge({ pct }: { pct: number }) {
       {pct}% off
     </span>
   );
+}
+
+function listingAge(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const hours = Math.floor(diff / 3_600_000);
+  if (hours < 1) return 'Listed minutes ago';
+  if (hours < 24) return `Listed ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `Listed ${days}d ago`;
+  return null; // older listings don't need a badge
+}
+
+function soldCompsUrl(title: string): string {
+  const q = encodeURIComponent(title.split(' ').slice(0, 6).join(' '));
+  return `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Complete=1&LH_Sold=1`;
 }
 
 function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem) => void }) {
@@ -72,6 +89,9 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
     setTracking(false);
   };
 
+  const age = listingAge(item.listingDate);
+  const isFresh = item.listingDate && (Date.now() - new Date(item.listingDate).getTime()) < 24 * 3_600_000;
+
   // Net profit after ~15% eBay fees
   const profit = item.marketPrice && item.marketPrice > 0
     ? Math.round((item.marketPrice * 0.85 - item.price - (item.shippingCost ?? 0)) * 100) / 100
@@ -79,11 +99,18 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
 
   return (
     <div className="rounded-2xl overflow-hidden transition-all" style={{ background: 'rgba(255,255,255,0.04)', border: item.isHotDeal ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
-      {item.isHotDeal && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#F87171' }}>
-          <Zap className="w-3 h-3" /> Hot Deal
-        </div>
-      )}
+      <div className="flex">
+        {item.isHotDeal && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#F87171' }}>
+            <Zap className="w-3 h-3" /> Hot Deal
+          </div>
+        )}
+        {isFresh && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold" style={{ background: 'rgba(34,197,94,0.1)', color: '#4ADE80' }}>
+            <Clock className="w-3 h-3" /> Fresh
+          </div>
+        )}
+      </div>
       <div className="flex gap-3 p-4">
         {item.imageUrl && (
           <div className="shrink-0 w-20 h-20 rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
@@ -108,6 +135,7 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
                 <TrendingDown className="w-3 h-3" />~${profit.toFixed(0)} net profit
               </span>
             )}
+            {age && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{age}</span>}
           </div>
           {item.sellerFeedbackPercent !== null && (
             <div className="text-xs mb-3" style={{ color: item.sellerFeedbackPercent >= 99 ? '#4ADE80' : item.sellerFeedbackPercent >= 98 ? '#FCD34D' : '#F87171' }}>
@@ -123,6 +151,15 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
               style={{ border: '1px solid rgba(255,255,255,0.12)', color: '#9CA3AF' }}
             >
               <ExternalLink className="w-3 h-3" /> View
+            </a>
+            <a
+              href={soldCompsUrl(item.title)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-colors"
+              style={{ border: '1px solid rgba(251,191,36,0.3)', color: '#FCD34D' }}
+            >
+              <TrendingDown className="w-3 h-3" /> Sold
             </a>
             <button
               onClick={handleTrack}

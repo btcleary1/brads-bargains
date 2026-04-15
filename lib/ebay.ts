@@ -53,12 +53,13 @@ export interface EbayItem {
   additionalImages: string[];
   itemUrl: string;
   seller: string;
-  sellerFeedbackScore: number | null;   // total feedback count
-  sellerFeedbackPercent: number | null; // positive feedback % (e.g. 99.2)
+  sellerFeedbackScore: number | null;
+  sellerFeedbackPercent: number | null;
   location: string;
   category: string;
   shippingCost: number | null;
   listingType: string;
+  listingDate: string | null; // ISO date when item was listed
 }
 
 function parsePrice(priceObj: any): number {
@@ -111,6 +112,7 @@ function toEbayItem(raw: any): EbayItem {
       ? parsePrice(raw.shippingOptions[0].shippingCost)
       : null,
     listingType: raw.buyingOptions?.[0] ?? 'FIXED_PRICE',
+    listingDate: raw.itemCreationDate ?? null,
   };
 }
 
