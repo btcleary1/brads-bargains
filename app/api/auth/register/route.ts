@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   <div style="background:#0B1120;border-radius:20px;border:1px solid rgba(255,255,255,0.1);padding:36px;">
     <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#F9FAFB;">Welcome, ${firstName}!</h2>
     <p style="margin:0 0 20px;font-size:15px;color:#9CA3AF;line-height:1.6;">
-      Your Brad's Bargains account is ready. Find eBay deals at 70%+ off, track your flips, and get daily alerts on the best opportunities.
+      Your Brad's Bargains account is ready. Find the best eBay deals, track your flips, and get daily alerts on the best opportunities.
     </p>
     <a href="${appUrl}/deals"
       style="display:inline-block;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:12px;">

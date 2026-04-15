@@ -127,7 +127,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string): Promi
       <span style="font-size:18px;font-weight:800;color:#FFFFFF;letter-spacing:-0.3px;">Brad's Bargains</span>
     </div>
     <h1 style="margin:0 0 5px;font-size:24px;font-weight:800;color:#0F172A;letter-spacing:-0.5px;">Today's Top 5 Deals</h1>
-    <p style="margin:0;font-size:13px;color:#64748B;">${today} &middot; Electronics &amp; Collectibles &middot; 70%+ off market price</p>
+    <p style="margin:0;font-size:13px;color:#64748B;">${today} &middot; Electronics &amp; Collectibles &middot; Best deals today</p>
   </td></tr>
 
   <!-- Deals -->

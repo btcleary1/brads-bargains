@@ -91,7 +91,7 @@ export default function LoginPage() {
             <Zap className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white">Brad&apos;s Bargains</h1>
-          <p className="text-sm mt-1" style={{ color: '#6B7280' }}>Find eBay deals at 70%+ off</p>
+          <p className="text-sm mt-1" style={{ color: '#6B7280' }}>Find the best eBay deals</p>
         </div>
 
         {/* Biometric button */}

@@ -4,7 +4,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: { default: "Brad's Bargains", template: "%s | Brad's Bargains" },
-  description: "Find eBay deals at 70% off and track your flips.",
+  description: "Find the best eBay deals and track your flips.",
   applicationName: "Brad's Bargains",
   appleWebApp: { capable: true, title: "Brad's Bargains", statusBarStyle: 'default' },
 };

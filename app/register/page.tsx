@@ -42,7 +42,7 @@ export default function RegisterPage() {
             <Zap className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white">Brad&apos;s Bargains</h1>
-          <p className="text-sm mt-1" style={{ color: '#6B7280' }}>Create your account — find deals at 70%+ off</p>
+          <p className="text-sm mt-1" style={{ color: '#6B7280' }}>Create your account — find the best eBay deals</p>
         </div>
 
         <div className="glass-card p-7">
