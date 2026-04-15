@@ -188,6 +188,8 @@ export default function DealsPage() {
   const [showAll, setShowAll] = useState(false);
   const [filterPct, setFilterPct] = useState<number | ''>('');
   const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [recommendation, setRecommendation] = useState<string | null>(null);
+  const [recLoading, setRecLoading] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
@@ -201,11 +203,21 @@ export default function DealsPage() {
     setResults(null);
     setShowAll(false);
     setEmailState('idle');
+    setRecommendation(null);
     try {
       const res = await fetch(`/api/deals?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Search failed.');
       setResults(data);
+      // Fetch AI recommendation in background after results load
+      if (data.items?.length > 0) {
+        setRecLoading(true);
+        fetch('/api/deal-rec', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: data.items.filter((i: any) => i.isHotDeal).slice(0, 10) }),
+        }).then(r => r.json()).then(d => setRecommendation(d.recommendation ?? null)).catch(() => {}).finally(() => setRecLoading(false));
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -354,6 +366,20 @@ export default function DealsPage() {
                 </button>
               )}
             </div>
+
+            {/* AI Recommendation */}
+            {(recLoading || recommendation) && (
+              <div className="rounded-xl p-4 mb-4 flex gap-3 items-start" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
+                <div className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-sm" style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}>🤖</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold mb-1" style={{ color: '#818CF8' }}>AI Pick of the Day</div>
+                  {recLoading
+                    ? <div className="flex items-center gap-2 text-xs" style={{ color: '#6B7280' }}><Loader2 className="w-3 h-3 animate-spin" /> Analyzing deals…</div>
+                    : <p className="text-sm leading-relaxed" style={{ color: '#E2E8F0' }}>{recommendation}</p>
+                  }
+                </div>
+              </div>
+            )}
 
             {/* Items */}
             {displayItems.length > 0 && (
