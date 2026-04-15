@@ -150,7 +150,7 @@ export async function GET(req: NextRequest) {
         max_tokens: 100,
         messages: [{
           role: 'user',
-          content: `You are a sharp eBay flip advisor. Net profit figures already account for eBay fees. Given these listings, recommend the single best one to buy today for resale profit. Reference the net profit figure. Be direct, specific, and under 50 words. No disclaimers.\n\n${top}`,
+          content: `You are a sharp eBay flip advisor. Net profit figures already account for eBay fees. Given these listings, recommend the single best one to buy today for resale profit. Reference the net profit figure. Be direct, specific, and under 50 words. No disclaimers. No markdown formatting.\n\n${top}`,
         }],
       });
       aiPick = msg.content[0].type === 'text' ? msg.content[0].text.trim() : undefined;

@@ -136,7 +136,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
         </td>
         <td style="padding:14px 14px 14px 4px;vertical-align:top;">
           <div style="font-size:11px;font-weight:800;letter-spacing:0.07em;color:#1D4ED8;text-transform:uppercase;margin-bottom:4px;">AI Pick of the Day</div>
-          <div style="font-size:13px;color:#1E3A5F;line-height:1.5;">${safe(aiPick)}</div>
+          <div style="font-size:13px;color:#1E3A5F;line-height:1.5;">${safe(aiPick.replace(/\*\*/g, ''))}</div>
         </td>
       </tr>
     </table>
