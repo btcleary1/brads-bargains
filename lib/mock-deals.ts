@@ -21,6 +21,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Laptops & Netbooks',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-002',
@@ -40,6 +41,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Video Game Consoles',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-003',
@@ -59,6 +61,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Cell Phones & Smartphones',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-004',
@@ -78,6 +81,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Headphones',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-005',
@@ -97,6 +101,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Camera Drones',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-006',
@@ -116,6 +121,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Tablets & eBook Readers',
     shippingCost: 5.99,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-007',
@@ -135,6 +141,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Televisions',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-008',
@@ -154,6 +161,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Action Cameras',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-009',
@@ -173,6 +181,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Video Game Consoles',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-010',
@@ -192,6 +201,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Smart Watches',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
 
   // ── Collectibles ──────────────────────────────────────────────────────
@@ -213,6 +223,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Pokemon Trading Card Games',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-012',
@@ -232,6 +243,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Basketball Cards',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-013',
@@ -251,6 +263,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'LEGO Complete Sets',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-014',
@@ -270,6 +283,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Football Cards',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-015',
@@ -289,6 +303,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Movie Memorabilia',
     shippingCost: 8.99,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-016',
@@ -308,6 +323,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Pokemon Trading Card Games',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-017',
@@ -327,6 +343,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Vintage Computers',
     shippingCost: 24.99,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-018',
@@ -346,6 +363,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Basketball Cards',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-019',
@@ -365,6 +383,7 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Wristwatches',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
   {
     itemId: 'mock-020',
@@ -384,5 +403,6 @@ export const MOCK_DEALS: EbayItem[] = [
     category: 'Golden Age Comics',
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
+    listingDate: null,
   },
 ];

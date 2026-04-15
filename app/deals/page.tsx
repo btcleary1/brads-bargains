@@ -422,6 +422,22 @@ export default function DealsPage() {
             <div className="text-sm mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings at {minDiscount}%+ off market price</div>
           </div>
         )}
+
+        {/* Footer */}
+        <div className="mt-12 pt-6 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <p className="text-xs mb-3" style={{ color: '#4B5563' }}>
+            Search results powered by the{' '}
+            <a href="https://developer.ebay.com" target="_blank" rel="noopener noreferrer" style={{ color: '#6B7280' }}>
+              eBay Browse API
+            </a>
+            . Brad&apos;s Bargains is not affiliated with or endorsed by eBay Inc.
+          </p>
+          <div className="flex items-center justify-center gap-4 text-xs" style={{ color: '#4B5563' }}>
+            <a href="/terms" style={{ color: '#6B7280' }} className="hover:underline">Terms of Service</a>
+            <span>·</span>
+            <a href="/privacy" style={{ color: '#6B7280' }} className="hover:underline">Privacy Policy</a>
+          </div>
+        </div>
       </div>
     </div>
   );

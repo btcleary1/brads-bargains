@@ -5,6 +5,8 @@ import { MOCK_DEALS } from '@/lib/mock-deals';
 import { topDeals } from '@/lib/deal-score';
 import { sendDailyDigest } from '@/lib/notify';
 import { getUserPrefs } from '@/lib/tracker-data';
+import { checkRequestLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +26,10 @@ function flexDiscount(items: EbayItem[], target = 5): { hotDeals: EbayItem[]; mi
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // 20 searches per minute per user
+  try { await checkRequestLimit(session.userId, 'deals', 20, 60_000); }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 429 }); }
 
   const query = req.nextUrl.searchParams.get('q') ?? '';
   const notify = req.nextUrl.searchParams.get('notify') === '1';

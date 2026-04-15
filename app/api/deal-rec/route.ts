@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
+import { checkRequestLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -9,6 +10,10 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // 10 AI recommendations per hour per user
+  try { await checkRequestLimit(session.userId, 'deal-rec', 10, 3_600_000); }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 429 }); }
 
   const { items } = await req.json();
   if (!Array.isArray(items) || items.length === 0) {

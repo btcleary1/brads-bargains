@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import {
@@ -284,7 +284,7 @@ function DealCard({
   );
 }
 
-export default function TrackerPage() {
+function TrackerInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [deals, setDeals] = useState<TrackerDeal[]>([]);
@@ -430,5 +430,13 @@ export default function TrackerPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function TrackerPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }} />}>
+      <TrackerInner />
+    </Suspense>
   );
 }

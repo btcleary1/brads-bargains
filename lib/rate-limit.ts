@@ -58,3 +58,20 @@ export async function clearFailures(ip: string): Promise<void> {
   const key = sanitizeKey(ip);
   await saveRecord(key, { attempts: 0, windowStart: Date.now() });
 }
+
+// General-purpose request rate limiter (not failure-based)
+// Usage: checkRequestLimit(ip, 'deals', 30, 60_000) = 30 req/min
+export async function checkRequestLimit(ip: string, namespace: string, max: number, windowMs: number): Promise<void> {
+  const key = sanitizeKey(`${namespace}_${ip}`);
+  const now = Date.now();
+  const record = await getRecord(key);
+  if (!record || now - record.windowStart > windowMs) {
+    await saveRecord(key, { attempts: 1, windowStart: now });
+    return;
+  }
+  if (record.attempts >= max) {
+    const secondsLeft = Math.ceil((record.windowStart + windowMs - now) / 1000);
+    throw new Error(`Rate limit exceeded. Try again in ${secondsLeft}s.`);
+  }
+  await saveRecord(key, { ...record, attempts: record.attempts + 1 });
+}

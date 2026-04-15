@@ -79,7 +79,13 @@ export async function GET(req: NextRequest) {
         });
     }
 
-    const best5 = topDeals(allItems, 5);
+    // Flex down from 60% until we have at least 5 deals
+    let best5 = topDeals(allItems, 5, 60);
+    if (best5.length < 5) {
+      for (let pct = 59; pct >= 0 && best5.length < 5; pct--) {
+        best5 = topDeals(allItems, 5, pct);
+      }
+    }
 
     if (best5.length === 0) {
       return NextResponse.json({ sent: false, reason: 'No qualifying deals found' });
@@ -108,10 +114,16 @@ export async function GET(req: NextRequest) {
           const personalItems = personalResults
             .flatMap(res => res.status === 'fulfilled' ? res.value : [])
             .filter(item => { if (seen.has(item.itemId)) return false; seen.add(item.itemId); return true; });
-          userDeals = personalItems.length > 0 ? topDeals(personalItems, 5) : best5;
+          if (personalItems.length > 0) {
+            let personalDeals = topDeals(personalItems, 5, 60);
+            for (let pct = 59; pct >= 0 && personalDeals.length < 5; pct--) {
+              personalDeals = topDeals(personalItems, 5, pct);
+            }
+            userDeals = personalDeals.length > 0 ? personalDeals : best5;
+          }
         }
 
-        userDigests.push({ email: prefs.notificationEmail, deals: userDeals });
+        userDigests.push({ email: prefs.notificationEmail as string, deals: userDeals });
       }
 
       if (userDigests.length === 0 && process.env.NOTIFICATION_EMAIL) {
