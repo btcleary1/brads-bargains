@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/digest?secret=digest-2026",
-      "schedule": "0 13 * * *"
+      "schedule": "30 12 * * *"
     },
     {
       "path": "/api/price-check?secret=digest-2026",
