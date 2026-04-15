@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell } from 'lucide-react';
+import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus } from 'lucide-react';
 import { startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import Header from '@/components/Header';
 
@@ -29,6 +29,11 @@ export default function SettingsPage() {
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifMessage, setNotifMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [watchlistInput, setWatchlistInput] = useState('');
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistMessage, setWatchlistMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
     setSupportsWebAuthn(browserSupportsWebAuthn());
@@ -38,6 +43,7 @@ export default function SettingsPage() {
     fetchStatus();
     fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
       if (p.notificationEmail) setNotifEmail(p.notificationEmail);
+      if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
     }).catch(() => {});
   }, [router]);
 
@@ -133,6 +139,34 @@ export default function SettingsPage() {
     }
     setNotifLoading(false);
   };
+
+  const saveWatchlist = async (updated: string[]) => {
+    setWatchlistLoading(true);
+    setWatchlistMessage(null);
+    try {
+      const res = await fetch('/api/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ watchlistQueries: updated }),
+      });
+      if (res.ok) {
+        setWatchlist(updated);
+        setWatchlistMessage({ type: 'success', text: 'Watchlist saved.' });
+        setTimeout(() => setWatchlistMessage(null), 3000);
+      }
+    } catch { setWatchlistMessage({ type: 'error', text: 'Failed to save.' }); }
+    setWatchlistLoading(false);
+  };
+
+  const addWatchlistItem = () => {
+    const term = watchlistInput.trim();
+    if (!term || watchlist.includes(term)) return;
+    const updated = [...watchlist, term];
+    setWatchlistInput('');
+    saveWatchlist(updated);
+  };
+
+  const removeWatchlistItem = (term: string) => saveWatchlist(watchlist.filter(t => t !== term));
 
   const handleDeleteAccount = async () => {
     if (!confirm('Permanently delete your account and all your data? This cannot be undone.')) return;
@@ -290,6 +324,53 @@ export default function SettingsPage() {
               {notifLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
             </button>
           </form>
+        </div>
+
+        {/* Daily Watchlist */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <BookmarkPlus className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">My Daily Watchlist</h2>
+          </div>
+          <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Keywords your daily email will search. Leave empty to use default categories.</p>
+          {watchlistMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: watchlistMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${watchlistMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: watchlistMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {watchlistMessage.text}
+            </div>
+          )}
+          <div className="flex gap-2 mb-3">
+            <input
+              type="text"
+              value={watchlistInput}
+              onChange={e => setWatchlistInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addWatchlistItem())}
+              placeholder="e.g. Air Jordan, Pokemon PSA, MacBook"
+              className="flex-1 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <button
+              onClick={addWatchlistItem}
+              disabled={watchlistLoading || !watchlistInput.trim()}
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 flex items-center gap-1"
+              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
+            >
+              {watchlistLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            </button>
+          </div>
+          {watchlist.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {watchlist.map(term => (
+                <span key={term} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)', color: '#93C5FD' }}>
+                  {term}
+                  <button onClick={() => removeWatchlistItem(term)} style={{ color: '#6B7280', minHeight: 'unset' }}>
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs" style={{ color: '#4B5563' }}>No keywords yet — using default categories.</p>
+          )}
         </div>
 
         {/* Danger zone */}

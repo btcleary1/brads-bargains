@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import {
   BarChart2, Loader2, ShoppingCart, Tag, TrendingUp, DollarSign,
-  ClipboardCopy, Check, ExternalLink, Trash2, X, ChevronDown,
+  ClipboardCopy, Check, ExternalLink, X, ChevronDown,
 } from 'lucide-react';
 
 type DealStatus = 'watching' | 'purchased' | 'listed' | 'sold';
@@ -286,17 +286,40 @@ function DealCard({
 
 export default function TrackerPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [deals, setDeals] = useState<TrackerDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<DealStatus | 'all'>('all');
+  const [addedBanner, setAddedBanner] = useState('');
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
     fetch('/api/tracker')
       .then(r => r.json())
-      .then(d => setDeals(d.deals ?? []))
+      .then(async d => {
+        setDeals(d.deals ?? []);
+        // Handle ?add= param from email Track Deal button
+        const addParam = searchParams.get('add');
+        if (addParam) {
+          try {
+            const item = JSON.parse(atob(addParam.replace(/-/g, '+').replace(/_/g, '/')));
+            const res = await fetch('/api/tracker', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(item),
+            });
+            if (res.ok) {
+              const fresh = await fetch('/api/tracker').then(r => r.json());
+              setDeals(fresh.deals ?? []);
+              setAddedBanner(`"${item.title?.slice(0, 50)}…" added to tracker!`);
+              setTimeout(() => setAddedBanner(''), 5000);
+              router.replace('/tracker');
+            }
+          } catch { /* invalid param — ignore */ }
+        }
+      })
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, searchParams]);
 
   const filtered = filter === 'all' ? deals : deals.filter(d => d.status === filter);
 
@@ -311,6 +334,13 @@ export default function TrackerPage() {
     <div className="min-h-screen" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }}>
       <Header />
       <div className="max-w-3xl mx-auto px-4 py-6 pb-24 sm:pb-10">
+
+        {/* Added from email banner */}
+        {addedBanner && (
+          <div className="rounded-xl p-3 mb-4 flex items-center gap-2 text-sm font-medium" style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ADE80' }}>
+            <Check className="w-4 h-4 shrink-0" /> {addedBanner}
+          </div>
+        )}
 
         {/* Page header */}
         <div className="flex items-center gap-3 mb-5">

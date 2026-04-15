@@ -85,34 +85,48 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'No qualifying deals found' });
     }
 
-    // Build recipient list: all users with a saved notificationEmail, plus env fallback
-    let recipients: string[] = [];
+    // Build recipient list with personalized deals per user
+    type UserDigest = { email: string; deals: typeof best5 };
+    let userDigests: UserDigest[] = [];
+
     if (toOverride) {
-      recipients = [toOverride];
+      userDigests = [{ email: toOverride, deals: best5 }];
     } else {
       const users = await getAllUsers();
       const prefsResults = await Promise.allSettled(users.map(u => getUserPrefs(u.userId)));
-      prefsResults.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value.notificationEmail) {
-          recipients.push(r.value.notificationEmail);
-        } else if (r.status === 'rejected') {
-          // skip users with no prefs
+
+      for (let i = 0; i < users.length; i++) {
+        const r = prefsResults[i];
+        if (r.status !== 'fulfilled' || !r.value.notificationEmail) continue;
+        const prefs = r.value;
+
+        // If user has a personal watchlist, search those terms for their digest
+        let userDeals = best5;
+        if (prefs.watchlistQueries && prefs.watchlistQueries.length > 0) {
+          const personalResults = await Promise.allSettled(prefs.watchlistQueries.map(q => searchDeals(q, 20)));
+          const seen = new Set<string>();
+          const personalItems = personalResults
+            .flatMap(res => res.status === 'fulfilled' ? res.value : [])
+            .filter(item => { if (seen.has(item.itemId)) return false; seen.add(item.itemId); return true; });
+          userDeals = personalItems.length > 0 ? topDeals(personalItems, 5) : best5;
         }
-      });
-      // Fall back to env var if no users have saved an email
-      if (recipients.length === 0 && process.env.NOTIFICATION_EMAIL) {
-        recipients = [process.env.NOTIFICATION_EMAIL];
+
+        userDigests.push({ email: prefs.notificationEmail, deals: userDeals });
+      }
+
+      if (userDigests.length === 0 && process.env.NOTIFICATION_EMAIL) {
+        userDigests = [{ email: process.env.NOTIFICATION_EMAIL, deals: best5 }];
       }
     }
 
-    if (recipients.length === 0) {
+    if (userDigests.length === 0) {
       return NextResponse.json({ sent: false, reason: 'No recipients configured' });
     }
 
     // Send to all recipients — collect results to surface any errors
-    const sendResults = await Promise.allSettled(recipients.map(email => sendDailyDigest(best5, email)));
+    const sendResults = await Promise.allSettled(userDigests.map(({ email, deals }) => sendDailyDigest(deals, email)));
     const errors = sendResults
-      .map((r, i) => r.status === 'rejected' ? `${recipients[i]}: ${r.reason}` : null)
+      .map((r, i) => r.status === 'rejected' ? `${userDigests[i].email}: ${r.reason}` : null)
       .filter(Boolean);
     const successCount = sendResults.filter(r => r.status === 'fulfilled').length;
 

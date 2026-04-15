@@ -31,6 +31,22 @@ function tierLabel(pct: number): { label: string; color: string; bg: string; bor
   return             { label: 'GREAT DEAL',   color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' };
 }
 
+function buildTrackUrl(deal: EbayItem): string {
+  const payload = Buffer.from(JSON.stringify({
+    ebayItemId: deal.itemId,
+    title: deal.title,
+    ebayPrice: deal.price,
+    marketPrice: deal.marketPrice,
+    discountPct: deal.discountPct,
+    condition: deal.condition,
+    imageUrl: deal.imageUrl,
+    ebayUrl: deal.itemUrl,
+    category: deal.category,
+    shippingCost: deal.shippingCost,
+  })).toString('base64url');
+  return `${APP_URL}/tracker?add=${payload}`;
+}
+
 function dealRow(deal: EbayItem, rank: number): string {
   const title    = safe(deal.title);
   const location = safe(deal.location);
@@ -91,6 +107,8 @@ function dealRow(deal: EbayItem, rank: number): string {
               : ''}
             <a href="${deal.itemUrl}"
               style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View</a>
+            <a href="${buildTrackUrl(deal)}"
+              style="display:inline-block;margin-top:4px;background:#1D4ED8;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">Track Deal</a>
           </td>
 
         </tr>
