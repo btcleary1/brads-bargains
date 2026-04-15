@@ -289,8 +289,8 @@ export default function DealsPage() {
               disabled={emailState !== 'idle'}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold mb-4 transition-all disabled:opacity-70"
               style={emailState === 'sent'
-                ? { background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ADE80' }
-                : { background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: '#818CF8' }}
+                ? { background: 'linear-gradient(135deg,#16A34A,#15803D)', color: '#FFFFFF', boxShadow: '0 2px 12px rgba(22,163,74,0.4)' }
+                : { background: 'linear-gradient(135deg,#0EA5E9,#2563EB)', color: '#FFFFFF', boxShadow: '0 2px 12px rgba(14,165,233,0.4)' }}
             >
               {emailState === 'sending' && <Loader2 className="w-4 h-4 animate-spin" />}
               {emailState === 'sent' && <CheckCircle className="w-4 h-4" />}
