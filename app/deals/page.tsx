@@ -233,7 +233,7 @@ export default function DealsPage() {
               onChange={e => setNotify(e.target.checked)}
               className="rounded"
             />
-            <span className="text-xs" style={{ color: '#6B7280' }}>Email me when hot deals are found</span>
+            <span className="text-xs" style={{ color: '#6B7280' }}>Email me these hot deals right now</span>
           </label>
         </div>
 

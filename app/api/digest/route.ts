@@ -4,6 +4,8 @@ import { MOCK_DEALS } from '@/lib/mock-deals';
 import { topDeals } from '@/lib/deal-score';
 import { sendDailyDigest } from '@/lib/notify';
 import { r2Get, r2Put } from '@/lib/r2';
+import { getAllUsers } from '@/lib/users';
+import { getUserPrefs } from '@/lib/tracker-data';
 
 export const runtime = 'nodejs';
 
@@ -45,19 +47,15 @@ export async function GET(req: NextRequest) {
   }
 
   const forceMock = req.nextUrl.searchParams.get('mock') === '1';
-  const toEmail = req.nextUrl.searchParams.get('to') || process.env.NOTIFICATION_EMAIL;
-  if (!toEmail) {
-    return NextResponse.json({ error: 'NOTIFICATION_EMAIL not configured' }, { status: 500 });
-  }
+  // ?to= overrides for manual testing; otherwise sends to all registered users
+  const toOverride = req.nextUrl.searchParams.get('to') || null;
 
   try {
     let allItems;
 
     if (forceMock || process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID) {
-      // Use mock data
       allItems = MOCK_DEALS;
     } else {
-      // Pull from live eBay across all target categories
       const results = await Promise.allSettled(
         SEARCH_QUERIES.map(q => searchDeals(q, 20))
       );
@@ -77,7 +75,32 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'No qualifying deals found' });
     }
 
-    await sendDailyDigest(best5, toEmail);
+    // Build recipient list: all users with a saved notificationEmail, plus env fallback
+    let recipients: string[] = [];
+    if (toOverride) {
+      recipients = [toOverride];
+    } else {
+      const users = await getAllUsers();
+      const prefsResults = await Promise.allSettled(users.map(u => getUserPrefs(u.userId)));
+      prefsResults.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value.notificationEmail) {
+          recipients.push(r.value.notificationEmail);
+        } else if (r.status === 'rejected') {
+          // skip users with no prefs
+        }
+      });
+      // Fall back to env var if no users have saved an email
+      if (recipients.length === 0 && process.env.NOTIFICATION_EMAIL) {
+        recipients = [process.env.NOTIFICATION_EMAIL];
+      }
+    }
+
+    if (recipients.length === 0) {
+      return NextResponse.json({ sent: false, reason: 'No recipients configured' });
+    }
+
+    // Send to all recipients (fire and forget individually so one failure doesn't block others)
+    await Promise.allSettled(recipients.map(email => sendDailyDigest(best5, email)));
 
     // Record send date to prevent duplicates
     await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey() }));
@@ -85,6 +108,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       sent: true,
       date: todayKey(),
+      recipients: recipients.length,
       deals: best5.map(d => ({
         title: d.title,
         price: d.price,
