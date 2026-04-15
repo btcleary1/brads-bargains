@@ -141,15 +141,16 @@ export async function GET(req: NextRequest) {
     // Generate AI Pick of the Day from best5
     let aiPick: string | undefined;
     try {
-      const top = best5.slice(0, 5).map((i, idx) =>
-        `#${idx + 1} ${i.title} — $${i.price}${i.discountPct ? ` (${i.discountPct}% off)` : ''}${i.marketPrice ? `, market $${i.marketPrice}` : ''}. Condition: ${i.condition}.`
-      ).join('\n');
+      const top = best5.slice(0, 5).map((i, idx) => {
+        const netProfit = i.marketPrice ? Math.round(i.marketPrice * 0.85 - i.price - (i.shippingCost ?? 0)) : null;
+        return `#${idx + 1} ${i.title} — buy $${i.price}, market $${i.marketPrice ?? 'unknown'}, net profit after fees ~$${netProfit ?? '?'}. Condition: ${i.condition}.`;
+      }).join('\n');
       const msg = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 100,
         messages: [{
           role: 'user',
-          content: `You are a sharp eBay flip advisor. Given these listings, recommend the single best one to buy today for resale profit. Be direct, specific, and under 50 words. No disclaimers.\n\n${top}`,
+          content: `You are a sharp eBay flip advisor. Net profit figures already account for eBay fees. Given these listings, recommend the single best one to buy today for resale profit. Reference the net profit figure. Be direct, specific, and under 50 words. No disclaimers.\n\n${top}`,
         }],
       });
       aiPick = msg.content[0].type === 'text' ? msg.content[0].text.trim() : undefined;
