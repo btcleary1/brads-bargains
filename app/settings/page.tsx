@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus } from 'lucide-react';
+import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus, SlidersHorizontal } from 'lucide-react';
+import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import Header from '@/components/Header';
 
@@ -34,6 +35,11 @@ export default function SettingsPage() {
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [watchlistMessage, setWatchlistMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [digestCount, setDigestCount] = useState<number>(5);
+  const [digestCategories, setDigestCategories] = useState<string[]>([]);
+  const [emailPrefsLoading, setEmailPrefsLoading] = useState(false);
+  const [emailPrefsMessage, setEmailPrefsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
     setSupportsWebAuthn(browserSupportsWebAuthn());
@@ -44,6 +50,8 @@ export default function SettingsPage() {
     fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
       if (p.notificationEmail) setNotifEmail(p.notificationEmail);
       if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
+      if (p.digestCount) setDigestCount(p.digestCount);
+      if (p.digestCategories) setDigestCategories(p.digestCategories);
     }).catch(() => {});
   }, [router]);
 
@@ -156,6 +164,33 @@ export default function SettingsPage() {
       }
     } catch { setWatchlistMessage({ type: 'error', text: 'Failed to save.' }); }
     setWatchlistLoading(false);
+  };
+
+  const saveEmailPrefs = async (count: number, categories: string[]) => {
+    setEmailPrefsLoading(true);
+    setEmailPrefsMessage(null);
+    try {
+      const res = await fetch('/api/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ digestCount: count, digestCategories: categories }),
+      });
+      if (res.ok) {
+        setEmailPrefsMessage({ type: 'success', text: 'Email preferences saved.' });
+        setTimeout(() => setEmailPrefsMessage(null), 3000);
+      } else {
+        setEmailPrefsMessage({ type: 'error', text: 'Failed to save.' });
+      }
+    } catch { setEmailPrefsMessage({ type: 'error', text: 'Network error.' }); }
+    setEmailPrefsLoading(false);
+  };
+
+  const toggleCategory = (key: string) => {
+    const updated = digestCategories.includes(key)
+      ? digestCategories.filter(k => k !== key)
+      : [...digestCategories, key];
+    setDigestCategories(updated);
+    saveEmailPrefs(digestCount, updated);
   };
 
   const addWatchlistItem = () => {
@@ -371,6 +406,79 @@ export default function SettingsPage() {
           ) : (
             <p className="text-xs" style={{ color: '#4B5563' }}>No keywords yet — using default categories.</p>
           )}
+        </div>
+
+        {/* Email Preferences */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <SlidersHorizontal className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">Email Preferences</h2>
+          </div>
+          <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Customize how many deals you receive and which categories to include.</p>
+
+          {emailPrefsMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: emailPrefsMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${emailPrefsMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: emailPrefsMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {emailPrefsMessage.text}
+            </div>
+          )}
+
+          {/* Deal count */}
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-2" style={{ color: '#9CA3AF' }}>Deals per email</label>
+            <div className="flex gap-2">
+              {[3, 5, 10].map(n => (
+                <button
+                  key={n}
+                  onClick={() => { setDigestCount(n); saveEmailPrefs(n, digestCategories); }}
+                  disabled={emailPrefsLoading}
+                  className="px-5 py-2 rounded-xl text-sm font-semibold transition-all"
+                  style={{
+                    background: digestCount === n ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(255,255,255,0.06)',
+                    border: digestCount === n ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                    color: digestCount === n ? '#fff' : '#9CA3AF',
+                  }}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Category filter */}
+          <div>
+            <label className="block text-xs font-medium mb-2" style={{ color: '#9CA3AF' }}>
+              Categories {digestCategories.length === 0 ? <span style={{ color: '#4B5563' }}>(all included)</span> : <span style={{ color: '#60A5FA' }}>({digestCategories.length} selected)</span>}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {DIGEST_CATEGORIES.map(cat => {
+                const active = digestCategories.includes(cat.key);
+                return (
+                  <button
+                    key={cat.key}
+                    onClick={() => toggleCategory(cat.key)}
+                    disabled={emailPrefsLoading}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+                    style={{
+                      background: active ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
+                      border: active ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                      color: active ? '#60A5FA' : '#6B7280',
+                    }}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
+            {digestCategories.length > 0 && (
+              <button
+                onClick={() => { setDigestCategories([]); saveEmailPrefs(digestCount, []); }}
+                className="mt-2 text-xs"
+                style={{ color: '#4B5563' }}
+              >
+                Clear — use all categories
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Danger zone */}

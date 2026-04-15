@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { searchDeals } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
 import { topDeals } from '@/lib/deal-score';
@@ -16,28 +17,7 @@ const DIGEST_STATE_PATH = 'deal-wiz/digest-state.json';
 const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
 
 // Categories to search when live eBay API is available
-const SEARCH_QUERIES = [
-  'iPhone unlocked',
-  'MacBook Air',
-  'iPad unlocked',
-  'Apple Watch unlocked',
-  'AirPods',
-  'Nintendo Switch',
-  'Air Jordan sneakers',
-  'Nike sneakers deadstock',
-  'Pokemon card PSA',
-  'sports card PSA graded',
-  'LEGO sealed',
-  'vintage comic CGC',
-  'DJI drone',
-  'camera lens',
-  'gold coin',
-  'silver coin',
-  'video game lot',
-  'mechanical keyboard',
-  'designer sunglasses',
-  'luxury watch',
-];
+const SEARCH_QUERIES = DIGEST_CATEGORIES.map(c => c.query);
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -109,8 +89,28 @@ export async function GET(req: NextRequest) {
         if (r.status !== 'fulfilled' || !r.value.notificationEmail) continue;
         const prefs = r.value;
 
+        const count = prefs.digestCount ?? 5;
+
+        // Filter allItems by user's preferred categories if set
+        let pool = allItems;
+        if (prefs.digestCategories && prefs.digestCategories.length > 0) {
+          const allowedQueries = DIGEST_CATEGORIES
+            .filter(c => prefs.digestCategories!.includes(c.key))
+            .map(c => c.query.toLowerCase());
+          pool = allItems.filter(item =>
+            allowedQueries.some(q => item.title.toLowerCase().includes(q.split(' ')[0]))
+          );
+          if (pool.length === 0) pool = allItems; // fallback to all if filter yields nothing
+        }
+
         // If user has a personal watchlist, search those terms for their digest
-        let userDeals = best5;
+        let userDeals: typeof best5 = [];
+        let baseDeals = topDeals(pool, count, 60);
+        for (let pct = 59; pct >= 0 && baseDeals.length < count; pct--) {
+          baseDeals = topDeals(pool, count, pct);
+        }
+        userDeals = baseDeals;
+
         if (prefs.watchlistQueries && prefs.watchlistQueries.length > 0) {
           const personalResults = await Promise.allSettled(prefs.watchlistQueries.map(q => searchDeals(q, 20)));
           const seen = new Set<string>();
@@ -118,11 +118,11 @@ export async function GET(req: NextRequest) {
             .flatMap(res => res.status === 'fulfilled' ? res.value : [])
             .filter(item => { if (seen.has(item.itemId)) return false; seen.add(item.itemId); return true; });
           if (personalItems.length > 0) {
-            let personalDeals = topDeals(personalItems, 5, 60);
-            for (let pct = 59; pct >= 0 && personalDeals.length < 5; pct--) {
-              personalDeals = topDeals(personalItems, 5, pct);
+            let personalDeals = topDeals(personalItems, count, 60);
+            for (let pct = 59; pct >= 0 && personalDeals.length < count; pct--) {
+              personalDeals = topDeals(personalItems, count, pct);
             }
-            userDeals = personalDeals.length > 0 ? personalDeals : best5;
+            userDeals = personalDeals.length > 0 ? personalDeals : userDeals;
           }
         }
 

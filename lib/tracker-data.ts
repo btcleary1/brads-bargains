@@ -69,8 +69,10 @@ export async function saveSavedSearches(userId: string, searches: SavedSearch[])
 // ── User preferences ─────────────────────────────────────────────────────────
 
 export interface UserPrefs {
-  notificationEmail?: string;   // where deal alerts are sent
-  watchlistQueries?: string[];  // personalized search terms for daily digest
+  notificationEmail?: string;     // where deal alerts are sent
+  watchlistQueries?: string[];    // personalized search terms for daily digest
+  digestCount?: number;           // how many deals per email (3, 5, or 10)
+  digestCategories?: string[];    // which categories to include (empty = all)
 }
 
 export async function getUserPrefs(userId: string): Promise<UserPrefs> {
