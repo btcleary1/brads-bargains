@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
         }],
       });
       aiPick = msg.content[0].type === 'text' ? msg.content[0].text.trim() : undefined;
-    } catch { /* non-fatal — send email without AI pick */ }
+    } catch (e) { console.error('AI pick failed:', e); }
 
     // Send to all recipients — collect results to surface any errors
     const sendResults = await Promise.allSettled(userDigests.map(({ email, deals }) => sendDailyDigest(deals, email, aiPick)));
@@ -173,6 +173,7 @@ export async function GET(req: NextRequest) {
       sent: true,
       date: todayKey(),
       recipients: successCount,
+      aiPick: aiPick ?? null,
       errors: errors.length > 0 ? errors : undefined,
       deals: best5.map(d => ({
         title: d.title,
