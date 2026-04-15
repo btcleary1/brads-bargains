@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/price-check?secret=digest-2026",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 14 * * *"
     }
   ]
 }
