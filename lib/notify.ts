@@ -149,10 +149,10 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      personalizations: [{ to: [{ email: toEmail }] }],
       from: { name: "Brad's Bargains", email: 'btcleary1@gmail.com' },
-      to: [{ email: toEmail }],
       subject: "Today's Top 5 Deals - " + today,
-      html: `<!DOCTYPE html>
+      content: [{ type: 'text/html', value: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
@@ -199,7 +199,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
 </td></tr>
 </table>
 </body>
-</html>`,
+</html>` }],
     }),
   });
   if (emailRes.status >= 300) {
