@@ -120,7 +120,7 @@ function dealRow(deal: EbayItem, rank: number): string {
 export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick?: string): Promise<void> {
   if (deals.length === 0 || !toEmail) return;
 
-  const apiKey = (process.env.RESEND_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
+  const apiKey = (process.env.SENDGRID_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
   const top5 = deals.slice(0, 5);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const rows = top5.map((d, i) => dealRow(d, i + 1)).join('');
@@ -142,15 +142,15 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
     </table>
   </td></tr>` : '';
 
-  const emailRes = await fetch('https://api.resend.com/emails', {
+  const emailRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: {
       'Authorization': 'Bearer ' + apiKey,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: "Brad's Bargains <onboarding@resend.dev>",
-      to: toEmail,
+      from: { name: "Brad's Bargains", email: 'btcleary1@gmail.com' },
+      to: [{ email: toEmail }],
       subject: "Today's Top 5 Deals - " + today,
       html: `<!DOCTYPE html>
 <html>
@@ -202,9 +202,9 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
 </html>`,
     }),
   });
-  if (!emailRes.ok) {
+  if (emailRes.status >= 300) {
     const errText = await emailRes.text();
-    throw new Error('Resend API error ' + emailRes.status + ': ' + errText);
+    throw new Error('SendGrid API error ' + emailRes.status + ': ' + errText);
   }
 }
 
