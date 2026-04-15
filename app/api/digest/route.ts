@@ -99,8 +99,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'No recipients configured' });
     }
 
-    // Send to all recipients (fire and forget individually so one failure doesn't block others)
-    await Promise.allSettled(recipients.map(email => sendDailyDigest(best5, email)));
+    // Send to all recipients — collect results to surface any errors
+    const sendResults = await Promise.allSettled(recipients.map(email => sendDailyDigest(best5, email)));
+    const errors = sendResults
+      .map((r, i) => r.status === 'rejected' ? `${recipients[i]}: ${r.reason}` : null)
+      .filter(Boolean);
+    const successCount = sendResults.filter(r => r.status === 'fulfilled').length;
+
+    if (successCount === 0) {
+      return NextResponse.json({ sent: false, reason: 'All emails failed', errors }, { status: 500 });
+    }
 
     // Record send date to prevent duplicates
     await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey() }));
@@ -108,7 +116,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       sent: true,
       date: todayKey(),
-      recipients: recipients.length,
+      recipients: successCount,
+      errors: errors.length > 0 ? errors : undefined,
       deals: best5.map(d => ({
         title: d.title,
         price: d.price,
