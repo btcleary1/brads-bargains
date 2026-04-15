@@ -179,15 +179,19 @@ export default function DealsPage() {
   const sendEmail = async () => {
     if (!query.trim() || emailState !== 'idle') return;
     setEmailState('sending');
+    setError('');
     try {
       const res = await fetch(`/api/deals?q=${encodeURIComponent(query)}&notify=1`);
-      if (res.ok) {
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Failed to send email.');
+        setEmailState('idle');
+      } else {
         setEmailState('sent');
         setTimeout(() => setEmailState('idle'), 3000);
-      } else {
-        setEmailState('idle');
       }
     } catch {
+      setError('Failed to send email. Check your alert email is saved in Settings.');
       setEmailState('idle');
     }
   };
