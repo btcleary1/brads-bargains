@@ -50,7 +50,9 @@ export async function GET(req: NextRequest) {
       const prefs = await getUserPrefs(session.userId);
       const alertEmail = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
       if (alertEmail) {
-        sendDailyDigest(topDeals(hotDeals, 5), alertEmail).catch(() => {});
+        // Send top 5 hot deals sorted by discount — skip strict seller filter so email always sends
+        const top5 = [...hotDeals].sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0)).slice(0, 5);
+        sendDailyDigest(top5, alertEmail).catch(() => {});
       }
     }
 
