@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
 import { searchDeals } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
 import { topDeals } from '@/lib/deal-score';
@@ -6,6 +7,8 @@ import { sendDailyDigest } from '@/lib/notify';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getAllUsers } from '@/lib/users';
 import { getUserPrefs } from '@/lib/tracker-data';
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export const runtime = 'nodejs';
 
@@ -135,8 +138,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'No recipients configured' });
     }
 
+    // Generate AI Pick of the Day from best5
+    let aiPick: string | undefined;
+    try {
+      const top = best5.slice(0, 5).map((i, idx) =>
+        `#${idx + 1} ${i.title} — $${i.price}${i.discountPct ? ` (${i.discountPct}% off)` : ''}${i.marketPrice ? `, market $${i.marketPrice}` : ''}. Condition: ${i.condition}.`
+      ).join('\n');
+      const msg = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 100,
+        messages: [{
+          role: 'user',
+          content: `You are a sharp eBay flip advisor. Given these listings, recommend the single best one to buy today for resale profit. Be direct, specific, and under 50 words. No disclaimers.\n\n${top}`,
+        }],
+      });
+      aiPick = msg.content[0].type === 'text' ? msg.content[0].text.trim() : undefined;
+    } catch { /* non-fatal — send email without AI pick */ }
+
     // Send to all recipients — collect results to surface any errors
-    const sendResults = await Promise.allSettled(userDigests.map(({ email, deals }) => sendDailyDigest(deals, email)));
+    const sendResults = await Promise.allSettled(userDigests.map(({ email, deals }) => sendDailyDigest(deals, email, aiPick)));
     const errors = sendResults
       .map((r, i) => r.status === 'rejected' ? `${userDigests[i].email}: ${r.reason}` : null)
       .filter(Boolean);

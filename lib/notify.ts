@@ -117,13 +117,30 @@ function dealRow(deal: EbayItem, rank: number): string {
   </tr>`;
 }
 
-export async function sendDailyDigest(deals: EbayItem[], toEmail: string): Promise<void> {
+export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick?: string): Promise<void> {
   if (deals.length === 0 || !toEmail) return;
 
   const apiKey = (process.env.RESEND_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
   const top5 = deals.slice(0, 5);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const rows = top5.map((d, i) => dealRow(d, i + 1)).join('');
+
+  const aiPickHtml = aiPick ? `
+  <!-- AI Pick -->
+  <tr><td style="padding-bottom:18px;">
+    <table width="100%" cellpadding="0" cellspacing="0"
+      style="background:#EFF6FF;border-radius:10px;border:1px solid #BFDBFE;overflow:hidden;">
+      <tr>
+        <td width="44" style="padding:14px 10px;text-align:center;vertical-align:top;">
+          <div style="font-size:22px;">🤖</div>
+        </td>
+        <td style="padding:14px 14px 14px 4px;vertical-align:top;">
+          <div style="font-size:11px;font-weight:800;letter-spacing:0.07em;color:#1D4ED8;text-transform:uppercase;margin-bottom:4px;">AI Pick of the Day</div>
+          <div style="font-size:13px;color:#1E3A5F;line-height:1.5;">${safe(aiPick)}</div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>` : '';
 
   const emailRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -151,6 +168,9 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string): Promi
     <h1 style="margin:0 0 5px;font-size:24px;font-weight:800;color:#0F172A;letter-spacing:-0.5px;">Today's Top 5 Deals</h1>
     <p style="margin:0;font-size:13px;color:#64748B;">${today} &middot; Electronics &amp; Collectibles &middot; Best deals today</p>
   </td></tr>
+
+  <!-- AI Pick -->
+  ${aiPickHtml}
 
   <!-- Deals -->
   <tr><td>
