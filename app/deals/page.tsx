@@ -42,8 +42,13 @@ function SellBadge({ score }: { score: number }) {
   const color = score >= 70 ? '#4ADE80' : score >= 45 ? '#FCD34D' : '#F87171';
   const bg    = score >= 70 ? 'rgba(34,197,94,0.12)' : score >= 45 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)';
   const border= score >= 70 ? 'rgba(34,197,94,0.3)'  : score >= 45 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)';
+  const tooltip = `Sell Confidence Score: ${score}/100\n\n🟢 High (70+): Single item, fast-moving category, deep discount, unique price\n🟡 Medium (45–69): Some competition or moderate discount\n🔴 Lower (<45): Multi-quantity, slow category, or modest discount`;
   return (
-    <span className="text-xs font-semibold px-2 py-1 rounded-lg" style={{ background: bg, border: `1px solid ${border}`, color }}>
+    <span
+      className="text-xs font-semibold px-2 py-1 rounded-lg cursor-help"
+      style={{ background: bg, border: `1px solid ${border}`, color }}
+      title={tooltip}
+    >
       {label}
     </span>
   );
