@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { searchDeals } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
-import { topDeals } from '@/lib/deal-score';
+import { topDeals, sellabilityScore } from '@/lib/deal-score';
 import { sendDailyDigest } from '@/lib/notify';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getAllUsers } from '@/lib/users';
@@ -79,7 +79,8 @@ export async function GET(req: NextRequest) {
     let userDigests: UserDigest[] = [];
 
     if (toOverride) {
-      userDigests = [{ email: toOverride, deals: best5 }];
+      const sortedBest5 = [...best5].sort((a, b) => sellabilityScore(b, best5) - sellabilityScore(a, best5));
+      userDigests = [{ email: toOverride, deals: sortedBest5 }];
     } else {
       const users = await getAllUsers();
       const prefsResults = await Promise.allSettled(users.map(u => getUserPrefs(u.userId)));
@@ -126,7 +127,8 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        userDigests.push({ email: prefs.notificationEmail as string, deals: userDeals });
+        const sortedDeals = [...userDeals].sort((a, b) => sellabilityScore(b, userDeals) - sellabilityScore(a, userDeals));
+        userDigests.push({ email: prefs.notificationEmail as string, deals: sortedDeals });
       }
 
       if (userDigests.length === 0 && process.env.NOTIFICATION_EMAIL) {
