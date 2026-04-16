@@ -23,6 +23,9 @@ const BULKY_PATTERNS = /\bconsole\b|desktop|monitor|printer|treadmill|bicycle|bi
 // Conditions to skip entirely
 const BAD_CONDITIONS = /acceptable|for parts|parts only/i;
 
+// Tech categories where device age matters
+const TECH_PATTERNS = /iphone|ipad|macbook|laptop|samsung|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
+
 // Max items per category in the final result (prevents all-iPhone digests)
 const MAX_PER_CATEGORY = 2;
 
@@ -34,6 +37,22 @@ const CONDITION_SCORE: Record<string, number> = {
   'Good':        55,
   'Acceptable':  30,
 };
+
+const CURRENT_YEAR = 2026;
+
+// Penalize old tech — a 2018 iPad is hard to resell regardless of discount
+function techAgePenalty(title: string): number {
+  if (!TECH_PATTERNS.test(title)) return 0; // non-tech items (cards, LEGO) — no penalty
+  const match = title.match(/\b(20\d{2})\b/);
+  if (!match) return 0; // no year in title — no penalty
+  const age = CURRENT_YEAR - parseInt(match[1]);
+  if (age <= 2) return 0;   // 2024-2026: current gen
+  if (age <= 3) return 10;  // 2023: minor penalty
+  if (age <= 4) return 20;  // 2022: two gens back
+  if (age <= 5) return 30;  // 2021: aging
+  if (age <= 7) return 45;  // 2019-2020: significantly dated
+  return 60;                // 2018 and older: very hard to resell
+}
 
 function conditionScore(condition: string): number {
   for (const [key, val] of Object.entries(CONDITION_SCORE)) {
@@ -138,7 +157,9 @@ export function sellabilityScore(item: EbayItem, allItems: EbayItem[]): number {
   const cheaperCount = similar.filter(i => i.price <= item.price).length;
   const uniquenessScore = similar.length === 0 ? 20 : cheaperCount === 0 ? 20 : cheaperCount <= 1 ? 12 : 4;
 
-  return quantityScore + demandScore + discountScore + uniquenessScore;
+  const agePenalty = techAgePenalty(item.title);
+
+  return Math.max(0, quantityScore + demandScore + discountScore + uniquenessScore - agePenalty);
 }
 
 export function sellabilityLabel(score: number): { label: string; color: string; bg: string; border: string } {
@@ -159,7 +180,8 @@ export function scoreDeal(item: EbayItem): number {
   const liquidityComponent = liquidityScore(item)            * 0.10;
   const discountComponent  = Math.min(item.discountPct, 100) * 0.05;
 
-  return profitComponent + sellerComponent + conditionComponent + liquidityComponent + discountComponent;
+  const raw = profitComponent + sellerComponent + conditionComponent + liquidityComponent + discountComponent;
+  return Math.max(0, raw - techAgePenalty(item.title));
 }
 
 /**

@@ -307,7 +307,17 @@ export default function DealsPage() {
     const similar = allItems.filter(i => i.itemId !== item.itemId && i.title.toLowerCase().split(' ').slice(0, 3).join(' ') === item.title.toLowerCase().split(' ').slice(0, 3).join(' '));
     const cheaperCount = similar.filter(i => i.price <= item.price).length;
     const uniquenessScore = similar.length === 0 ? 20 : cheaperCount === 0 ? 20 : cheaperCount <= 1 ? 12 : 4;
-    return quantityScore + demandScore + discountScore + uniquenessScore;
+    // Tech age penalty
+    const techPatterns = /iphone|ipad|macbook|laptop|samsung|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
+    let agePenalty = 0;
+    if (techPatterns.test(item.title)) {
+      const yearMatch = item.title.match(/\b(20\d{2})\b/);
+      if (yearMatch) {
+        const age = 2026 - parseInt(yearMatch[1]);
+        agePenalty = age <= 2 ? 0 : age <= 3 ? 10 : age <= 4 ? 20 : age <= 5 ? 30 : age <= 7 ? 45 : 60;
+      }
+    }
+    return Math.max(0, quantityScore + demandScore + discountScore + uniquenessScore - agePenalty);
   }
 
   const hotCount = results?.items.filter(i => i.isHotDeal).length ?? 0;
