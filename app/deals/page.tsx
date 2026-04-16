@@ -268,8 +268,15 @@ export default function DealsPage() {
         let pool = showAll ? results.items : results.items.filter(i => i.isHotDeal).length > 0 ? results.items.filter(i => i.isHotDeal) : results.items.slice(0, 20);
         if (activeFilter !== null) pool = pool.filter(i => i.discountPct !== null && i.discountPct >= activeFilter);
         if (filterSingleQty) pool = pool.filter(i => i.quantity === null || i.quantity <= 1);
-        // Compute sell score for each item relative to full pool
-        return pool.map(i => ({ ...i, sellScore: computeSellScore(i, results.items) }));
+        // Compute blended score: 50% eBay relevance rank + 50% sellability
+        const totalItems = results.items.length;
+        return pool
+          .map((i, idx) => {
+            const ebayRank = Math.round((1 - idx / Math.max(totalItems - 1, 1)) * 100);
+            const sell = computeSellScore(i, results.items);
+            return { ...i, sellScore: sell, blendScore: Math.round(ebayRank * 0.5 + sell * 0.5) };
+          })
+          .sort((a, b) => (b as any).blendScore - (a as any).blendScore);
       })()
     : [];
 
