@@ -1,4 +1,5 @@
 import { EbayItem } from './ebay';
+import { sellabilityScore, sellabilityLabel } from './deal-score';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
 
@@ -47,7 +48,7 @@ function buildTrackUrl(deal: EbayItem): string {
   return `${APP_URL}/tracker?add=${payload}`;
 }
 
-function dealRow(deal: EbayItem, rank: number): string {
+function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
   const title    = safe(deal.title);
   const location = safe(deal.location);
   const condition = safe(deal.condition);
@@ -55,6 +56,8 @@ function dealRow(deal: EbayItem, rank: number): string {
   const netProfit = deal.marketPrice ? Math.round(deal.marketPrice * 0.85 - deal.price - (deal.shippingCost ?? 0)) : null;
   const tier = tierLabel(deal.discountPct ?? 0);
   const cat = categoryLabel(deal.category);
+  const sellScore = sellabilityScore(deal, allDeals);
+  const sell = sellabilityLabel(sellScore);
   const shipping = deal.shippingCost === 0
     ? 'Free shipping'
     : deal.shippingCost
@@ -76,8 +79,9 @@ function dealRow(deal: EbayItem, rank: number): string {
 
           <!-- Item info -->
           <td style="padding:14px 14px;vertical-align:top;">
-            <div style="margin-bottom:6px;">
+            <div style="margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap;">
               <span style="font-size:10px;font-weight:800;letter-spacing:0.07em;color:${tier.color};background:${tier.bg};border:1px solid ${tier.border};padding:2px 7px;border-radius:4px;">${tier.label}</span>
+              <span style="font-size:10px;font-weight:700;color:${sell.color};background:${sell.bg};border:1px solid ${sell.border};padding:2px 7px;border-radius:4px;">${sell.label}</span>
             </div>
             <a href="${deal.itemUrl}"
               style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;line-height:1.4;display:block;margin-bottom:5px;">${title}</a>
@@ -123,7 +127,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
   const apiKey = (process.env.SENDGRID_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
   const top5 = deals.slice(0, 5);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const rows = top5.map((d, i) => dealRow(d, i + 1)).join('');
+  const rows = top5.map((d, i) => dealRow(d, i + 1, top5)).join('');
 
   const aiPickHtml = aiPick ? `
   <!-- AI Pick -->

@@ -60,6 +60,7 @@ export interface EbayItem {
   shippingCost: number | null;
   listingType: string;
   listingDate: string | null; // ISO date when item was listed
+  quantity: number | null;    // how many the seller has available
 }
 
 function parsePrice(priceObj: any): number {
@@ -113,6 +114,7 @@ function toEbayItem(raw: any): EbayItem {
       : null,
     listingType: raw.buyingOptions?.[0] ?? 'FIXED_PRICE',
     listingDate: raw.itemCreationDate ?? null,
+    quantity: raw.estimatedAvailabilities?.[0]?.estimatedAvailableQuantity ?? null,
   };
 }
 

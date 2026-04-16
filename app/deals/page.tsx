@@ -24,7 +24,9 @@ interface EbayItem {
   shippingCost: number | null;
   listingType: string;
   listingDate: string | null;
+  quantity: number | null;
   isHotDeal: boolean;
+  sellScore?: number;
 }
 
 interface SearchResult {
@@ -33,6 +35,18 @@ interface SearchResult {
   hotDeals: number;
   minDiscount: number;
   items: EbayItem[];
+}
+
+function SellBadge({ score }: { score: number }) {
+  const label = score >= 70 ? 'High Confidence' : score >= 45 ? 'Med Confidence' : 'Lower Confidence';
+  const color = score >= 70 ? '#4ADE80' : score >= 45 ? '#FCD34D' : '#F87171';
+  const bg    = score >= 70 ? 'rgba(34,197,94,0.12)' : score >= 45 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)';
+  const border= score >= 70 ? 'rgba(34,197,94,0.3)'  : score >= 45 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)';
+  return (
+    <span className="text-xs font-semibold px-2 py-1 rounded-lg" style={{ background: bg, border: `1px solid ${border}`, color }}>
+      {label}
+    </span>
+  );
 }
 
 function DealBadge({ pct }: { pct: number }) {
@@ -126,6 +140,7 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
               <span className="text-sm line-through" style={{ color: '#4B5563' }}>${item.marketPrice.toFixed(2)}</span>
             )}
             {item.discountPct !== null && <DealBadge pct={item.discountPct} />}
+            {item.sellScore !== undefined && <SellBadge score={item.sellScore} />}
           </div>
           <div className="flex flex-wrap gap-3 text-xs mb-2" style={{ color: '#6B7280' }}>
             <span className="flex items-center gap-1"><Package className="w-3 h-3" />{item.condition}</span>
@@ -187,6 +202,7 @@ export default function DealsPage() {
   const [error, setError] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [filterPct, setFilterPct] = useState<number | ''>('');
+  const [filterSingleQty, setFilterSingleQty] = useState(false);
   const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [recommendation, setRecommendation] = useState<string | null>(null);
   const [recLoading, setRecLoading] = useState(false);
@@ -251,9 +267,36 @@ export default function DealsPage() {
     ? (() => {
         let pool = showAll ? results.items : results.items.filter(i => i.isHotDeal).length > 0 ? results.items.filter(i => i.isHotDeal) : results.items.slice(0, 20);
         if (activeFilter !== null) pool = pool.filter(i => i.discountPct !== null && i.discountPct >= activeFilter);
-        return pool;
+        if (filterSingleQty) pool = pool.filter(i => i.quantity === null || i.quantity <= 1);
+        // Compute sell score for each item relative to full pool
+        return pool.map(i => ({ ...i, sellScore: computeSellScore(i, results.items) }));
       })()
     : [];
+
+  function computeSellScore(item: EbayItem, allItems: EbayItem[]): number {
+    const qty = item.quantity ?? 1;
+    const quantityScore = qty <= 1 ? 30 : qty <= 3 ? 20 : qty <= 10 ? 10 : 0;
+    const pct = item.discountPct ?? 0;
+    const discountScore = pct >= 80 ? 25 : pct >= 70 ? 20 : pct >= 60 ? 14 : pct >= 50 ? 8 : 3;
+    const liquidityMap: Record<string, number> = { phone: 100, laptop: 95, gaming: 90, tablet: 85, audio: 80, watch: 80, camera: 70, cards: 75, lego: 65, comic: 50, vintage: 40 };
+    const text = `${item.title} ${item.category}`.toLowerCase();
+    let liq = 55;
+    if (/iphone|samsung.*phone|pixel/.test(text)) liq = 100;
+    else if (/macbook|laptop/.test(text)) liq = 95;
+    else if (/playstation|ps5|xbox/.test(text)) liq = 90;
+    else if (/ipad|tablet/.test(text)) liq = 85;
+    else if (/airpods|headphone/.test(text)) liq = 80;
+    else if (/nintendo|switch/.test(text)) liq = 80;
+    else if (/apple watch|smartwatch/.test(text)) liq = 80;
+    else if (/drone|camera/.test(text)) liq = 70;
+    else if (/pokemon|sports card/.test(text)) liq = 75;
+    else if (/lego/.test(text)) liq = 65;
+    const demandScore = Math.round((liq / 100) * 25);
+    const similar = allItems.filter(i => i.itemId !== item.itemId && i.title.toLowerCase().split(' ').slice(0, 3).join(' ') === item.title.toLowerCase().split(' ').slice(0, 3).join(' '));
+    const cheaperCount = similar.filter(i => i.price <= item.price).length;
+    const uniquenessScore = similar.length === 0 ? 20 : cheaperCount === 0 ? 20 : cheaperCount <= 1 ? 12 : 4;
+    return quantityScore + demandScore + discountScore + uniquenessScore;
+  }
 
   const hotCount = results?.items.filter(i => i.isHotDeal).length ?? 0;
   const minDiscount = results?.minDiscount ?? 60;
@@ -365,6 +408,17 @@ export default function DealsPage() {
                   Clear
                 </button>
               )}
+              <button
+                onClick={() => setFilterSingleQty(v => !v)}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+                style={{
+                  background: filterSingleQty ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.04)',
+                  border: filterSingleQty ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                  color: filterSingleQty ? '#4ADE80' : '#6B7280',
+                }}
+              >
+                {filterSingleQty ? '✓ ' : ''}Single qty only
+              </button>
             </div>
 
             {/* AI Recommendation */}

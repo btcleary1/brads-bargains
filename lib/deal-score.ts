@@ -112,6 +112,42 @@ function isJunk(item: EbayItem): boolean {
 }
 
 /**
+ * Sellability confidence score 0-100.
+ * Answers: "How likely am I to actually resell this?"
+ * Based on 4 signals — no extra API calls needed.
+ */
+export function sellabilityScore(item: EbayItem, allItems: EbayItem[]): number {
+  // 1. Quantity scarcity (30pts) — single item = scarce = easier to sell at good price
+  const qty = item.quantity ?? 1;
+  const quantityScore = qty <= 1 ? 30 : qty <= 3 ? 20 : qty <= 10 ? 10 : 0;
+
+  // 2. Category demand (25pts) — how fast this category moves on eBay
+  const demand = liquidityScore(item);
+  const demandScore = Math.round((demand / 100) * 25);
+
+  // 3. Discount depth (25pts) — deeper discount = stronger signal it's a genuine deal
+  const pct = item.discountPct ?? 0;
+  const discountScore = pct >= 80 ? 25 : pct >= 70 ? 20 : pct >= 60 ? 14 : pct >= 50 ? 8 : 3;
+
+  // 4. Price uniqueness (20pts) — is this priced lower than all similar items in results?
+  const similar = allItems.filter(i =>
+    i.itemId !== item.itemId &&
+    i.title.toLowerCase().split(' ').slice(0, 3).join(' ') ===
+    item.title.toLowerCase().split(' ').slice(0, 3).join(' ')
+  );
+  const cheaperCount = similar.filter(i => i.price <= item.price).length;
+  const uniquenessScore = similar.length === 0 ? 20 : cheaperCount === 0 ? 20 : cheaperCount <= 1 ? 12 : 4;
+
+  return quantityScore + demandScore + discountScore + uniquenessScore;
+}
+
+export function sellabilityLabel(score: number): { label: string; color: string; bg: string; border: string } {
+  if (score >= 70) return { label: 'High Confidence',   color: '#16A34A', bg: 'rgba(34,197,94,0.12)',   border: 'rgba(34,197,94,0.3)'   };
+  if (score >= 45) return { label: 'Medium Confidence', color: '#D97706', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.3)'  };
+  return              { label: 'Lower Confidence',  color: '#DC2626', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.3)'  };
+}
+
+/**
  * Score a deal 0-100 for buy-low-sell-high flipping.
  */
 export function scoreDeal(item: EbayItem): number {

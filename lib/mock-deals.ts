@@ -22,6 +22,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-002',
@@ -42,6 +43,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-003',
@@ -62,6 +64,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-004',
@@ -82,6 +85,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-005',
@@ -102,6 +106,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-006',
@@ -122,6 +127,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 5.99,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-007',
@@ -142,6 +148,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-008',
@@ -162,6 +169,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-009',
@@ -182,6 +190,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-010',
@@ -202,6 +211,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
 
   // ── Collectibles ──────────────────────────────────────────────────────
@@ -224,6 +234,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-012',
@@ -244,6 +255,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-013',
@@ -264,6 +276,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-014',
@@ -284,6 +297,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-015',
@@ -304,6 +318,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 8.99,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-016',
@@ -324,6 +339,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-017',
@@ -344,6 +360,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 24.99,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-018',
@@ -364,6 +381,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-019',
@@ -384,6 +402,7 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
   {
     itemId: 'mock-020',
@@ -404,5 +423,6 @@ export const MOCK_DEALS: EbayItem[] = [
     shippingCost: 0,
     listingType: 'FIXED_PRICE',
     listingDate: null,
+    quantity: null,
   },
 ];
