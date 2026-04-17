@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
         SEARCH_QUERIES.map(q => searchDeals(q, 30))
       );
       const seen = new Set<string>();
+      const failedQueries = results.filter(r => r.status === 'rejected').length;
       allItems = results
         .flatMap(r => r.status === 'fulfilled' ? r.value : [])
         .filter(item => {
@@ -60,6 +61,7 @@ export async function GET(req: NextRequest) {
           seen.add(item.itemId);
           return true;
         });
+      console.log(`[digest] eBay searches: ${results.length} total, ${failedQueries} failed, ${allItems.length} raw items`);
     }
 
     // Flex down from 60% to 35% minimum — never send weak deals
@@ -176,6 +178,7 @@ export async function GET(req: NextRequest) {
       sent: true,
       date: todayKey(),
       recipients: successCount,
+      rawItemCount: allItems.length,
       aiPick: aiPick ?? null,
       errors: errors.length > 0 ? errors : undefined,
       deals: best5.map(d => ({
