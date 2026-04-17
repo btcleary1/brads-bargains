@@ -15,10 +15,10 @@ const MIN_FEEDBACK_PERCENT = 97;  // below this = skip entirely
 const MIN_FEEDBACK_COUNT   = 10;  // new sellers with few ratings = skip
 
 // Title keywords that indicate junk listings
-const JUNK_TITLE_PATTERNS = /for parts|not working|broken|cracked screen|read description|as.is|untested|powers on|no returns|damaged|water damage/i;
+const JUNK_TITLE_PATTERNS = /for parts|not working|broken|cracked screen|read description|as.is|untested|powers on|no returns|damaged|water damage|print ad|framed poster|framed print|game poster|movie poster|art print|lithograph/i;
 
 // Accessories and low-value add-ons not worth flipping
-const ACCESSORY_PATTERNS = /\bstrap\b|watch band|\bcase\b|\bcover\b|screen protector|tempered glass|charger cable|\bcord\b|\badapter\b|car mount|phone mount|stand holder|game holder|card holder|lamp attachment|searchlight|burst light|\blight\b.*drone|drone.*\blight\b|\bskin\b.*phone|phone.*\bskin\b|keycap|wrist rest/i;
+const ACCESSORY_PATTERNS = /\bstrap\b|watch band|\bcase\b|\bcover\b|screen protector|tempered glass|charger cable|\bcord\b|\badapter\b|car mount|phone mount|stand holder|game holder|card holder|lamp attachment|searchlight|burst light|\blight\b.*drone|drone.*\blight\b|\bskin\b.*phone|phone.*\bskin\b|keycap|wrist rest|\bposter\b/i;
 
 // Heavy/bulky items not worth storing or shipping
 const BULKY_PATTERNS = /\bconsole\b|desktop|monitor|printer|treadmill|bicycle|bike\b|guitar|amplifier|furniture|mattress|refrigerator|washer|dryer|dishwasher|television|\bsofa\b|\bcouch\b|elliptical|weight bench|kayak|surfboard|scooter|electric bike|e-bike|hoverboard/i;
@@ -55,6 +55,13 @@ function appleModelYear(title: string): number | null {
     if (n === 12) return 2020;
     if (n === 11) return 2019;
     return 2017; // iPhone X and older
+  }
+
+  // iPhone SE by generation
+  if (/iPhone SE/i.test(title)) {
+    if (/3rd|gen\s*3/i.test(title)) return 2022;
+    if (/2nd|gen\s*2/i.test(title)) return 2020;
+    return 2016; // 1st gen SE
   }
 
   // iPad Pro with screen size (not generation number) — old models
@@ -301,14 +308,19 @@ export function topDeals(items: EbayItem[], n = 5, minDiscount = 60): EbayItem[]
     .map(i => ({ item: i, score: scoreDeal(i) + liquidityScore(i) }))
     .sort((a, b) => b.score - a.score);
 
-  // Pick top N with category cap
+  // Pick top N with category cap and title deduplication
   const result: EbayItem[] = [];
   const categoryCounts: Record<string, number> = {};
+  const titleKeys = new Set<string>();
   for (const { item } of scored) {
     const cat = categoryLabel(item);
     const count = categoryCounts[cat] ?? 0;
     if (count >= MAX_PER_CATEGORY) continue;
+    // Skip near-duplicate titles (first 5 words match an already-picked item)
+    const titleKey = item.title.toLowerCase().split(/\s+/).slice(0, 5).join(' ');
+    if (titleKeys.has(titleKey)) continue;
     categoryCounts[cat] = count + 1;
+    titleKeys.add(titleKey);
     result.push(item);
     if (result.length >= n) break;
   }
@@ -318,6 +330,9 @@ export function topDeals(items: EbayItem[], n = 5, minDiscount = 60): EbayItem[]
     const picked = new Set(result.map(i => i.itemId));
     for (const { item } of scored) {
       if (!picked.has(item.itemId)) {
+        const titleKey = item.title.toLowerCase().split(/\s+/).slice(0, 5).join(' ');
+        if (titleKeys.has(titleKey)) continue;
+        titleKeys.add(titleKey);
         result.push(item);
         if (result.length >= n) break;
       }
