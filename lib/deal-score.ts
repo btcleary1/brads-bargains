@@ -24,7 +24,7 @@ const ACCESSORY_PATTERNS = /\bstrap\b|watch band|\bcase\b|\bcover\b|screen prote
 const BULKY_PATTERNS = /\bconsole\b|desktop|monitor|printer|treadmill|bicycle|bike\b|guitar|amplifier|furniture|mattress|refrigerator|washer|dryer|dishwasher|television|\bsofa\b|\bcouch\b|elliptical|weight bench|kayak|surfboard|scooter|electric bike|e-bike|hoverboard/i;
 
 // Conditions to skip entirely
-const BAD_CONDITIONS = /acceptable|for parts|parts only|refurbished/i;
+const BAD_CONDITIONS = /acceptable|for parts|parts only|refurbished|poor/i;
 
 // Tech categories where device age matters
 const TECH_PATTERNS = /iphone|ipad|macbook|laptop|samsung|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
@@ -56,7 +56,10 @@ function appleModelYear(title: string): number | null {
     if (n === 11) return 2019;
     return 2017; // iPhone X and older
   }
-  const ipad = title.match(/iPad\s+(?:Pro|Air|Mini)?\s*(\d+)/i);
+
+  // iPad: guard against screen-size numbers (10.5", 12.9") — only match bare generation numbers
+  // "iPad Pro 10.5" should NOT match as gen-10; check no decimal follows
+  const ipad = title.match(/iPad(?:\s+(?:Pro|Air|Mini))?\s+(\d+)(?!\s*[."])/i);
   if (ipad) {
     const n = parseInt(ipad[1]);
     if (n >= 10) return 2022;
@@ -65,6 +68,31 @@ function appleModelYear(title: string): number | null {
     if (n === 7)  return 2019;
     return 2018; // iPad 6th gen and older
   }
+
+  // Apple Watch series number
+  const watch = title.match(/Apple Watch(?:\s+Series)?\s+(\d+)/i);
+  if (watch) {
+    const n = parseInt(watch[1]);
+    if (n >= 10) return 2024; // Ultra 2 / Series 10
+    if (n === 9)  return 2023;
+    if (n === 8)  return 2022;
+    if (n === 7)  return 2021;
+    if (n === 6)  return 2020;
+    if (n === 5)  return 2019;
+    if (n === 4)  return 2018;
+    return 2017; // Series 3 and older
+  }
+
+  // MacBook chip generation (M-series or Intel)
+  if (/macbook/i.test(title)) {
+    if (/\bM4\b/i.test(title)) return 2024;
+    if (/\bM3\b/i.test(title)) return 2023;
+    if (/\bM2\b/i.test(title)) return 2022;
+    if (/\bM1\b/i.test(title)) return 2020;
+    // Intel MacBooks — older; treat as 2018 unless explicit year found
+    if (/\bi[357][-\s]/i.test(title) || /\bA1\d{3}\b/.test(title)) return 2017;
+  }
+
   return null;
 }
 
