@@ -153,7 +153,6 @@ function profitScore(item: EbayItem): number {
 // Hard filter — returns true if item should be excluded
 function isJunk(item: EbayItem): boolean {
   if (!item.imageUrl) return true;
-  if (!item.marketPrice) return true;  // no market price = can't calculate profit
   if (JUNK_TITLE_PATTERNS.test(item.title)) return true;
   if (ACCESSORY_PATTERNS.test(item.title)) return true;
   if (BULKY_PATTERNS.test(item.title)) return true;

@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       allItems = MOCK_DEALS;
     } else {
       const results = await Promise.allSettled(
-        SEARCH_QUERIES.map(q => searchDeals(q, 20))
+        SEARCH_QUERIES.map(q => searchDeals(q, 30))
       );
       const seen = new Set<string>();
       allItems = results
@@ -62,10 +62,10 @@ export async function GET(req: NextRequest) {
         });
     }
 
-    // Flex down from 60% to 40% minimum — never send weak deals
+    // Flex down from 60% to 35% minimum — never send weak deals
     let best5 = topDeals(allItems, 5, 60);
     if (best5.length < 5) {
-      for (let pct = 59; pct >= 40 && best5.length < 5; pct--) {
+      for (let pct = 59; pct >= 35 && best5.length < 5; pct--) {
         best5 = topDeals(allItems, 5, pct);
       }
     }
