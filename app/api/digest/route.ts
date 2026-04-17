@@ -187,6 +187,7 @@ export async function GET(req: NextRequest) {
       date: todayKey(),
       recipients: successCount,
       rawItemCount: allItems.length,
+      nonRefurbCount: nonRefurb.length,
       aiPick: aiPick ?? null,
       errors: errors.length > 0 ? errors : undefined,
       deals: best5.map(d => ({
