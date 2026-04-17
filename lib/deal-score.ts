@@ -156,6 +156,7 @@ function isJunk(item: EbayItem): boolean {
   if (JUNK_TITLE_PATTERNS.test(item.title)) return true;
   if (ACCESSORY_PATTERNS.test(item.title)) return true;
   if (BULKY_PATTERNS.test(item.title)) return true;
+  if (/refurbished/i.test(item.title)) return true;
   if (BAD_CONDITIONS.test(item.condition)) return true;
   if (item.price < MIN_PRICE) return true;
   if (item.price > MAX_PRICE) return true;
