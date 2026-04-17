@@ -121,16 +121,18 @@ function toEbayItem(raw: any): EbayItem {
 export async function searchDeals(query: string, maxResults = 20): Promise<EbayItem[]> {
   const token = await getEbayToken();
 
+  // Build base params without filter (URLSearchParams encodes {|} which breaks eBay filter syntax)
   const params = new URLSearchParams({
     q: query,
     limit: String(maxResults),
     sort: 'bestMatch',
-    // Condition IDs: 1000=New, 1500=New Open Box, 3000=Used, 4000=Very Good, 5000=Good
-    // Excludes refurbished (2000-2500 range) at the API level
-    filter: 'buyingOptions:{FIXED_PRICE},priceCurrency:USD,conditionIds:{1000|1500|3000|4000|5000}',
   });
+  // Append filter unencoded — eBay requires literal {|} characters
+  // Condition IDs: 1000=New, 1500=Open Box, 3000=Used, 4000=Very Good, 5000=Good
+  // Excludes refurbished (2000-2500 range)
+  const url = `${base()}/buy/browse/v1/item_summary/search?${params}&filter=buyingOptions:{FIXED_PRICE},priceCurrency:USD,conditionIds:{1000|1500|3000|4000|5000}`;
 
-  const res = await fetch(`${base()}/buy/browse/v1/item_summary/search?${params}`, {
+  const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
       'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
