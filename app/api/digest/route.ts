@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
-import { searchDeals } from '@/lib/ebay';
+import { searchDeals, EbayItem } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
 import { topDeals, sellabilityScore } from '@/lib/deal-score';
 import { sendDailyDigest } from '@/lib/notify';
