@@ -307,13 +307,20 @@ export default function DealsPage() {
     const similar = allItems.filter(i => i.itemId !== item.itemId && i.title.toLowerCase().split(' ').slice(0, 3).join(' ') === item.title.toLowerCase().split(' ').slice(0, 3).join(' '));
     const cheaperCount = similar.filter(i => i.price <= item.price).length;
     const uniquenessScore = similar.length === 0 ? 20 : cheaperCount === 0 ? 20 : cheaperCount <= 1 ? 12 : 4;
-    // Tech age penalty
+    // Tech age penalty — checks explicit year OR Apple model number
     const techPatterns = /iphone|ipad|macbook|laptop|samsung|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
     let agePenalty = 0;
     if (techPatterns.test(item.title)) {
       const yearMatch = item.title.match(/\b(20\d{2})\b/);
-      if (yearMatch) {
-        const age = 2026 - parseInt(yearMatch[1]);
+      let releaseYear: number | null = yearMatch ? parseInt(yearMatch[1]) : null;
+      if (!releaseYear) {
+        const iphone = item.title.match(/iPhone\s+(\d+)/i);
+        if (iphone) { const n = parseInt(iphone[1]); releaseYear = n >= 16 ? 2024 : n === 15 ? 2023 : n === 14 ? 2022 : n === 13 ? 2021 : n === 12 ? 2020 : n === 11 ? 2019 : 2017; }
+        const ipad = !releaseYear && item.title.match(/iPad\s+(?:Pro|Air|Mini)?\s*(\d+)/i);
+        if (ipad) { const n = parseInt(ipad[1]); releaseYear = n >= 10 ? 2022 : n === 9 ? 2021 : n === 8 ? 2020 : n === 7 ? 2019 : 2018; }
+      }
+      if (releaseYear) {
+        const age = 2026 - releaseYear;
         agePenalty = age <= 2 ? 0 : age <= 3 ? 10 : age <= 4 ? 20 : age <= 5 ? 30 : age <= 7 ? 45 : 60;
       }
     }

@@ -40,12 +40,41 @@ const CONDITION_SCORE: Record<string, number> = {
 
 const CURRENT_YEAR = 2026;
 
-// Penalize old tech — a 2018 iPad is hard to resell regardless of discount
+// Map Apple model numbers to release year (no year in title like "iPhone 13")
+function appleModelYear(title: string): number | null {
+  const iphone = title.match(/iPhone\s+(\d+)/i);
+  if (iphone) {
+    const n = parseInt(iphone[1]);
+    if (n >= 16) return 2024;
+    if (n === 15) return 2023;
+    if (n === 14) return 2022;
+    if (n === 13) return 2021;
+    if (n === 12) return 2020;
+    if (n === 11) return 2019;
+    return 2017; // iPhone X and older
+  }
+  const ipad = title.match(/iPad\s+(?:Pro|Air|Mini)?\s*(\d+)/i);
+  if (ipad) {
+    const n = parseInt(ipad[1]);
+    if (n >= 10) return 2022;
+    if (n === 9)  return 2021;
+    if (n === 8)  return 2020;
+    if (n === 7)  return 2019;
+    return 2018; // iPad 6th gen and older
+  }
+  return null;
+}
+
+// Penalize old tech — old iPhones/iPads are hard to resell regardless of discount
 function techAgePenalty(title: string): number {
   if (!TECH_PATTERNS.test(title)) return 0; // non-tech items (cards, LEGO) — no penalty
-  const match = title.match(/\b(20\d{2})\b/);
-  if (!match) return 0; // no year in title — no penalty
-  const age = CURRENT_YEAR - parseInt(match[1]);
+
+  // Try explicit year in title first (e.g. "2020 MacBook Air")
+  const yearMatch = title.match(/\b(20\d{2})\b/);
+  const releaseYear = yearMatch ? parseInt(yearMatch[1]) : appleModelYear(title);
+  if (!releaseYear) return 0;
+
+  const age = CURRENT_YEAR - releaseYear;
   if (age <= 2) return 0;   // 2024-2026: current gen
   if (age <= 3) return 10;  // 2023: minor penalty
   if (age <= 4) return 20;  // 2022: two gens back
