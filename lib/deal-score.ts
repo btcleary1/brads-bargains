@@ -7,12 +7,12 @@ const EBAY_FEE_RATE = 0.15;
 const MAX_SHIPPING = 30;
 
 // Price range worth flipping
-const MIN_PRICE = 75;
+const MIN_PRICE = 50;
 const MAX_PRICE = 2000;
 
 // Minimum seller requirements
-const MIN_FEEDBACK_PERCENT = 99;  // below this = skip entirely
-const MIN_FEEDBACK_COUNT   = 50;  // new sellers with few ratings = skip
+const MIN_FEEDBACK_PERCENT = 97;  // below this = skip entirely
+const MIN_FEEDBACK_COUNT   = 10;  // new sellers with few ratings = skip
 
 // Title keywords that indicate junk listings
 const JUNK_TITLE_PATTERNS = /for parts|not working|broken|cracked screen|read description|as.is|untested|powers on|no returns|damaged|water damage/i;
@@ -160,10 +160,10 @@ function isJunk(item: EbayItem): boolean {
   if (item.price < MIN_PRICE) return true;
   if (item.price > MAX_PRICE) return true;
   if (item.shippingCost !== null && item.shippingCost > MAX_SHIPPING) return true;
-  // Exclude listings older than 30 days — stale inventory that isn't moving
+  // Exclude listings older than 60 days — stale inventory that isn't moving
   if (item.listingDate) {
     const daysOld = (Date.now() - new Date(item.listingDate).getTime()) / 86400000;
-    if (daysOld > 30) return true;
+    if (daysOld > 60) return true;
   }
   return false;
 }

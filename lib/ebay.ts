@@ -121,14 +121,14 @@ function toEbayItem(raw: any): EbayItem {
 export async function searchDeals(query: string, maxResults = 20): Promise<EbayItem[]> {
   const token = await getEbayToken();
 
-  // Only return listings from the last 30 days
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19) + '.000Z';
+  // Only return listings from the last 60 days
+  const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19) + '.000Z';
 
   const params = new URLSearchParams({
     q: query,
     limit: String(maxResults),
-    sort: 'newlyListed',
-    filter: `buyingOptions:{FIXED_PRICE},priceCurrency:USD,itemStartDate:[${thirtyDaysAgo}]`,
+    sort: 'bestMatch',
+    filter: `buyingOptions:{FIXED_PRICE},priceCurrency:USD,itemStartDate:[${sixtyDaysAgo}]`,
   });
 
   const res = await fetch(`${base()}/buy/browse/v1/item_summary/search?${params}`, {
