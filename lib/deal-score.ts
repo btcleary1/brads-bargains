@@ -156,10 +156,10 @@ function isJunk(item: EbayItem): boolean {
   if (item.price < MIN_PRICE) return true;
   if (item.price > MAX_PRICE) return true;
   if (item.shippingCost !== null && item.shippingCost > MAX_SHIPPING) return true;
-  // Exclude listings older than 90 days — stale inventory that isn't moving
+  // Exclude listings older than 30 days — stale inventory that isn't moving
   if (item.listingDate) {
     const daysOld = (Date.now() - new Date(item.listingDate).getTime()) / 86400000;
-    if (daysOld > 90) return true;
+    if (daysOld > 30) return true;
   }
   return false;
 }
