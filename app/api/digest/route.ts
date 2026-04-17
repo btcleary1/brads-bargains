@@ -62,10 +62,10 @@ export async function GET(req: NextRequest) {
         });
     }
 
-    // Flex down from 60% until we have at least 5 deals
+    // Flex down from 60% to 40% minimum — never send weak deals
     let best5 = topDeals(allItems, 5, 60);
     if (best5.length < 5) {
-      for (let pct = 59; pct >= 0 && best5.length < 5; pct--) {
+      for (let pct = 59; pct >= 40 && best5.length < 5; pct--) {
         best5 = topDeals(allItems, 5, pct);
       }
     }
@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
         // If user has a personal watchlist, search those terms for their digest
         let userDeals: typeof best5 = [];
         let baseDeals = topDeals(pool, count, 60);
-        for (let pct = 59; pct >= 0 && baseDeals.length < count; pct--) {
+        for (let pct = 59; pct >= 40 && baseDeals.length < count; pct--) {
           baseDeals = topDeals(pool, count, pct);
         }
         userDeals = baseDeals;
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
             .filter(item => { if (seen.has(item.itemId)) return false; seen.add(item.itemId); return true; });
           if (personalItems.length > 0) {
             let personalDeals = topDeals(personalItems, count, 60);
-            for (let pct = 59; pct >= 0 && personalDeals.length < count; pct--) {
+            for (let pct = 59; pct >= 40 && personalDeals.length < count; pct--) {
               personalDeals = topDeals(personalItems, count, pct);
             }
             userDeals = personalDeals.length > 0 ? personalDeals : userDeals;
