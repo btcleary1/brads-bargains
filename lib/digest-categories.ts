@@ -1,7 +1,7 @@
 export const DIGEST_CATEGORIES: { key: string; label: string; query: string }[] = [
-  { key: 'iphone',     label: 'iPhones',          query: 'iPhone unlocked refurbished' },
-  { key: 'macbook',    label: 'MacBooks',          query: 'MacBook Air refurbished' },
-  { key: 'ipad',       label: 'iPads',             query: 'iPad unlocked refurbished' },
+  { key: 'iphone',     label: 'iPhones',          query: 'iPhone unlocked used' },
+  { key: 'macbook',    label: 'MacBooks',          query: 'MacBook Air used' },
+  { key: 'ipad',       label: 'iPads',             query: 'iPad unlocked used' },
   { key: 'watch',      label: 'Apple Watch',       query: 'Apple Watch unlocked' },
   { key: 'airpods',    label: 'AirPods',           query: 'AirPods Pro' },
   { key: 'nintendo',   label: 'Nintendo Switch',   query: 'Nintendo Switch OLED' },

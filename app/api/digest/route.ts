@@ -67,11 +67,16 @@ export async function GET(req: NextRequest) {
       console.log(`[digest] eBay searches: ${SEARCH_QUERIES.length} total, ${allItems.length} raw items`);
     }
 
+    // Hard-remove refurbished items before scoring
+    const nonRefurb = allItems.filter(i => !/refurb/i.test(i.condition) && !/refurb/i.test(i.title));
+    const itemPool = nonRefurb.length >= 10 ? nonRefurb : allItems;
+    console.log(`[digest] non-refurb items: ${nonRefurb.length} of ${allItems.length}`);
+
     // Flex down from 60% to 35% minimum — never send weak deals
-    let best5 = topDeals(allItems, 5, 60);
+    let best5 = topDeals(itemPool, 5, 60);
     if (best5.length < 5) {
       for (let pct = 59; pct >= 35 && best5.length < 5; pct--) {
-        best5 = topDeals(allItems, 5, pct);
+        best5 = topDeals(itemPool, 5, pct);
       }
     }
 
