@@ -244,7 +244,7 @@ export function topDeals(items: EbayItem[], n = 5, minDiscount = 60): EbayItem[]
     return true;
   });
 
-  const finalPool = pool.length > 0 ? pool : clean.length > 0 ? clean : items;
+  const finalPool = pool.length > 0 ? pool : clean;
 
   // Score and sort
   const scored = finalPool
