@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
 
+  const [isGoogleAuth, setIsGoogleAuth] = useState(false);
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
 
   const [notifEmail, setNotifEmail] = useState('');
@@ -41,18 +42,21 @@ export default function SettingsPage() {
   const [emailPrefsMessage, setEmailPrefsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
+    fetch('/api/auth/me').then(r => r.ok ? r.json() : Promise.reject()).then((me: any) => {
+      if (me.googleAuth) setIsGoogleAuth(true);
+      // Pre-populate notification email with Gmail if not already saved
+      fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
+        setNotifEmail(p.notificationEmail || me.email || '');
+        if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
+        if (p.digestCount) setDigestCount(p.digestCount);
+        if (p.digestCategories) setDigestCategories(p.digestCategories);
+      }).catch(() => {});
+    }).catch(() => router.replace('/login'));
     setSupportsWebAuthn(browserSupportsWebAuthn());
     const ua = navigator.userAgent;
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Face ID');
     else if (/Mac/.test(ua) || /CrOS/.test(ua) || /Win/.test(ua)) setBiometricLabel('Fingerprint / Touch ID');
     fetchStatus();
-    fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
-      if (p.notificationEmail) setNotifEmail(p.notificationEmail);
-      if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
-      if (p.digestCount) setDigestCount(p.digestCount);
-      if (p.digestCategories) setDigestCategories(p.digestCategories);
-    }).catch(() => {});
   }, [router]);
 
   const fetchStatus = async () => {
@@ -283,8 +287,8 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Change password */}
-        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        {/* Change password — hidden for Google OAuth users */}
+        {!isGoogleAuth && <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="flex items-center gap-2 mb-3">
             <KeyRound className="w-5 h-5" style={{ color: '#60A5FA' }} />
             <h2 className="font-semibold text-white text-[15px]">Change Password</h2>
@@ -327,7 +331,7 @@ export default function SettingsPage() {
               Update Password
             </button>
           </form>
-        </div>
+        </div>}
 
         {/* Deal alerts */}
         <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>

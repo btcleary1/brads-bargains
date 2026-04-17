@@ -11,6 +11,7 @@ export interface User {
   passwordHash: string;
   role: 'admin' | 'user';
   createdAt: string;
+  googleAuth?: boolean;
 }
 
 export type PublicUser = Omit<User, 'passwordHash'>;
@@ -99,6 +100,12 @@ export async function updatePassword(userId: string, newPassword: string): Promi
   const user = await getUserById(userId);
   if (!user) throw new Error('User not found.');
   await r2Put(`${PREFIX}${userId}.json`, JSON.stringify({ ...user, passwordHash: hashPassword(newPassword) }));
+}
+
+export async function markGoogleAuth(userId: string): Promise<void> {
+  const user = await getUserById(userId);
+  if (!user || user.googleAuth) return;
+  await r2Put(`${PREFIX}${userId}.json`, JSON.stringify({ ...user, googleAuth: true }));
 }
 
 export async function userCount(): Promise<number> {

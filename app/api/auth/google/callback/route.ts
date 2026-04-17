@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByEmail, createUser, userCount } from '@/lib/users';
+import { getUserByEmail, createUser, userCount, markGoogleAuth } from '@/lib/users';
 import { setSessionCookie } from '@/lib/session';
 import { logAudit, getClientIp } from '@/lib/audit';
 
@@ -61,6 +61,9 @@ export async function GET(req: NextRequest) {
     } else {
       logAudit({ timestamp: new Date().toISOString(), userId: user.userId, email: user.email, action: 'login_success', ip, details: 'google_oauth' });
     }
+
+    // Stamp googleAuth flag so settings page can hide password section
+    await markGoogleAuth(user.userId);
 
     const safeName = user.name.replace(/[^\u0000-\u00FF]/g, '').trim() || user.email;
     const res = NextResponse.redirect(`${APP_URL}/deals`);
