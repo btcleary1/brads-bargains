@@ -57,6 +57,10 @@ function appleModelYear(title: string): number | null {
     return 2017; // iPhone X and older
   }
 
+  // iPad Pro with screen size (not generation number) — old models
+  if (/iPad Pro\s+(?:9\.7|10\.5)/i.test(title)) return 2017;
+  if (/iPad Pro\s+(?:12\.9)/i.test(title)) return 2015; // 1st/2nd gen 12.9"
+
   // iPad: guard against screen-size numbers (10.5", 12.9") — only match bare generation numbers
   // "iPad Pro 10.5" should NOT match as gen-10; check no decimal follows
   const ipad = title.match(/iPad(?:\s+(?:Pro|Air|Mini))?\s+(\d+)(?!\s*[."])/i);
@@ -185,10 +189,13 @@ function isJunk(item: EbayItem): boolean {
   if (ACCESSORY_PATTERNS.test(item.title)) return true;
   if (BULKY_PATTERNS.test(item.title)) return true;
   if (/refurbished/i.test(item.title)) return true;
+  if (/\bpoor\b/i.test(item.title)) return true;  // "Used Poor" condition in title
   if (BAD_CONDITIONS.test(item.condition)) return true;
   if (item.price < MIN_PRICE) return true;
   if (item.price > MAX_PRICE) return true;
   if (item.shippingCost !== null && item.shippingCost > MAX_SHIPPING) return true;
+  // Reject tech devices older than ~6 years — too hard to resell
+  if (techAgePenalty(item.title) >= 45) return true;
   return false;
 }
 
