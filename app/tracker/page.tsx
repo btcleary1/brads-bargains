@@ -31,6 +31,7 @@ interface TrackerDeal {
   notes: string;
   listingDraft: string | null;
   createdAt: string;
+  priceHistory?: { date: string; price: number }[];
 }
 
 const STATUS_LABELS: Record<DealStatus, string> = {
@@ -53,6 +54,44 @@ function StatusBadge({ status }: { status: DealStatus }) {
     <span className="text-xs font-semibold px-2 py-1 rounded-lg" style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}>
       {STATUS_LABELS[status]}
     </span>
+  );
+}
+
+function PriceSparkline({ history }: { history: { date: string; price: number }[] }) {
+  if (history.length < 2) return null;
+  const W = 120, H = 36, pad = 4;
+  const prices = history.map(e => e.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const points = history.map((e, i) => {
+    const x = pad + (i / (history.length - 1)) * (W - pad * 2);
+    const y = pad + (1 - (e.price - min) / range) * (H - pad * 2);
+    return { x, y };
+  });
+  const pts = points.map(p => `${p.x},${p.y}`).join(' ');
+  const last = points[points.length - 1];
+  const first = prices[0];
+  const lastPrice = prices[prices.length - 1];
+  const trending = lastPrice < first ? '#4ADE80' : lastPrice > first ? '#F87171' : '#6B7280';
+  return (
+    <div className="mt-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px]" style={{ color: '#6B7280' }}>Price history ({history.length}d)</span>
+        <span className="text-[10px] font-semibold" style={{ color: trending }}>
+          {lastPrice < first ? `↓ $${(first - lastPrice).toFixed(0)} drop` : lastPrice > first ? `↑ $${(lastPrice - first).toFixed(0)} up` : 'Stable'}
+        </span>
+      </div>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+        <polyline points={pts} fill="none" stroke={trending} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx={last.x} cy={last.y} r="2.5" fill={trending} />
+      </svg>
+      <div className="flex justify-between text-[10px]" style={{ color: '#4B5563' }}>
+        <span>{history[0].date.slice(5)}</span>
+        <span>${lastPrice.toFixed(0)}</span>
+        <span>{history[history.length - 1].date.slice(5)}</span>
+      </div>
+    </div>
   );
 }
 
@@ -154,7 +193,10 @@ function DealCard({
               </span>
             )}
           </div>
-          <div className="flex gap-2">
+          {localDeal.priceHistory && localDeal.priceHistory.length >= 2 && (
+            <PriceSparkline history={localDeal.priceHistory} />
+          )}
+          <div className="flex gap-2 mt-2">
             <a
               href={localDeal.ebayUrl}
               target="_blank"

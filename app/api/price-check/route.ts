@@ -77,10 +77,22 @@ export async function GET(req: NextRequest) {
     const drops: { title: string; oldPrice: number; newPrice: number; saving: number; url: string }[] = [];
     const updatedDeals = [...deals];
 
+    const today = new Date().toISOString().slice(0, 10);
+
     for (const deal of watching) {
       try {
         const current = await getItemDetail(deal.ebayItemId);
         if (!current) continue;
+
+        const idx = updatedDeals.findIndex(d => d.id === deal.id);
+        if (idx === -1) continue;
+
+        // Record price snapshot (one per day — skip if already recorded today)
+        const history = updatedDeals[idx].priceHistory ?? [];
+        const alreadyToday = history.some(h => h.date === today);
+        const newHistory = alreadyToday ? history : [...history, { date: today, price: current.price }];
+        updatedDeals[idx] = { ...updatedDeals[idx], priceHistory: newHistory };
+
         if (current.price < deal.ebayPrice - 0.50) {
           drops.push({
             title: deal.title,
@@ -89,15 +101,15 @@ export async function GET(req: NextRequest) {
             saving: deal.ebayPrice - current.price,
             url: deal.ebayUrl,
           });
-          // Update stored price
-          const idx = updatedDeals.findIndex(d => d.id === deal.id);
-          if (idx !== -1) updatedDeals[idx] = { ...updatedDeals[idx], ebayPrice: current.price };
+          updatedDeals[idx] = { ...updatedDeals[idx], ebayPrice: current.price };
         }
       } catch { /* skip this item */ }
     }
 
+    // Always save to persist price history snapshots
+    await saveDeals(user.userId, updatedDeals);
+
     if (drops.length > 0) {
-      await saveDeals(user.userId, updatedDeals);
       const prefs = await getUserPrefs(user.userId);
       const email = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
       if (email) {

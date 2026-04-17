@@ -38,6 +38,8 @@ export interface TrackerDeal {
   // Listing draft
   listingDraft: string | null;
   createdAt: string;
+  // Price history — one snapshot per day from price-check cron
+  priceHistory?: { date: string; price: number }[];
 }
 
 export async function getDeals(userId: string): Promise<TrackerDeal[]> {
