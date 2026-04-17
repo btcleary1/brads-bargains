@@ -48,6 +48,16 @@ function buildTrackUrl(deal: EbayItem): string {
   return `${APP_URL}/tracker?add=${payload}`;
 }
 
+function listingAgeBadge(listingDate: string | null): string {
+  if (!listingDate) return '';
+  const days = Math.floor((Date.now() - new Date(listingDate).getTime()) / 86400000);
+  if (days <= 1)  return `<span style="font-size:10px;font-weight:800;letter-spacing:0.06em;color:#DC2626;background:#FEF2F2;border:1px solid #FECACA;padding:2px 7px;border-radius:4px;">NEW TODAY</span>`;
+  if (days <= 3)  return `<span style="font-size:10px;font-weight:700;color:#D97706;background:#FFF7ED;border:1px solid #FED7AA;padding:2px 7px;border-radius:4px;">Listed ${days}d ago</span>`;
+  if (days <= 7)  return `<span style="font-size:10px;font-weight:700;color:#0369A1;background:#F0F9FF;border:1px solid #BAE6FD;padding:2px 7px;border-radius:4px;">Listed ${days}d ago</span>`;
+  if (days <= 30) return `<span style="font-size:10px;color:#64748B;background:#F8FAFC;border:1px solid #E2E8F0;padding:2px 7px;border-radius:4px;">Listed ${days}d ago</span>`;
+  return `<span style="font-size:10px;color:#94A3B8;background:#F8FAFC;border:1px solid #E2E8F0;padding:2px 7px;border-radius:4px;">Listed ${days}d ago</span>`;
+}
+
 function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
   const title    = safe(deal.title);
   const location = safe(deal.location);
@@ -58,6 +68,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
   const cat = categoryLabel(deal.category);
   const sellScore = sellabilityScore(deal, allDeals);
   const sell = sellabilityLabel(sellScore);
+  const ageBadge = listingAgeBadge(deal.listingDate);
   const shipping = deal.shippingCost === 0
     ? 'Free shipping'
     : deal.shippingCost
@@ -82,6 +93,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
             <div style="margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap;">
               <span style="font-size:10px;font-weight:800;letter-spacing:0.07em;color:${tier.color};background:${tier.bg};border:1px solid ${tier.border};padding:2px 7px;border-radius:4px;">${tier.label}</span>
               <span style="font-size:10px;font-weight:700;color:${sell.color};background:${sell.bg};border:1px solid ${sell.border};padding:2px 7px;border-radius:4px;">${sell.label}</span>
+              ${ageBadge}
             </div>
             <a href="${deal.itemUrl}"
               style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;line-height:1.4;display:block;margin-bottom:5px;">${title}</a>
