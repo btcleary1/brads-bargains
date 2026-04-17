@@ -49,19 +49,22 @@ export async function GET(req: NextRequest) {
     if (forceMock || process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID) {
       allItems = MOCK_DEALS;
     } else {
-      const results = await Promise.allSettled(
-        SEARCH_QUERIES.map(q => searchDeals(q, 30))
-      );
+      // Run searches in batches of 5 with a small delay to avoid rate limiting
+      const allResults: EbayItem[] = [];
+      const batchSize = 5;
+      for (let i = 0; i < SEARCH_QUERIES.length; i += batchSize) {
+        const batch = SEARCH_QUERIES.slice(i, i + batchSize);
+        const batchResults = await Promise.allSettled(batch.map(q => searchDeals(q, 30)));
+        batchResults.forEach(r => { if (r.status === 'fulfilled') allResults.push(...r.value); });
+        if (i + batchSize < SEARCH_QUERIES.length) await new Promise(r => setTimeout(r, 500));
+      }
       const seen = new Set<string>();
-      const failedQueries = results.filter(r => r.status === 'rejected').length;
-      allItems = results
-        .flatMap(r => r.status === 'fulfilled' ? r.value : [])
-        .filter(item => {
-          if (seen.has(item.itemId)) return false;
-          seen.add(item.itemId);
-          return true;
-        });
-      console.log(`[digest] eBay searches: ${results.length} total, ${failedQueries} failed, ${allItems.length} raw items`);
+      allItems = allResults.filter(item => {
+        if (seen.has(item.itemId)) return false;
+        seen.add(item.itemId);
+        return true;
+      });
+      console.log(`[digest] eBay searches: ${SEARCH_QUERIES.length} total, ${allItems.length} raw items`);
     }
 
     // Flex down from 60% to 35% minimum — never send weak deals
