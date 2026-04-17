@@ -73,18 +73,33 @@ function appleModelYear(title: string): number | null {
     return 2018; // iPad 6th gen and older
   }
 
-  // Apple Watch series number
-  const watch = title.match(/Apple Watch(?:\s+Series)?\s+(\d+)/i);
-  if (watch) {
-    const n = parseInt(watch[1]);
-    if (n >= 10) return 2024; // Ultra 2 / Series 10
-    if (n === 9)  return 2023;
-    if (n === 8)  return 2022;
-    if (n === 7)  return 2021;
-    if (n === 6)  return 2020;
-    if (n === 5)  return 2019;
-    if (n === 4)  return 2018;
-    return 2017; // Series 3 and older
+  // Apple Watch SE and series number
+  if (/Apple Watch/i.test(title)) {
+    if (/Watch Ultra/i.test(title)) return 2022; // Ultra 1st gen 2022, Ultra 2 2023
+    if (/SE.*2nd|2nd.*SE/i.test(title)) return 2022;
+    if (/Watch SE/i.test(title)) return 2021; // SE 1st gen 2020/2021
+    const watch = title.match(/Apple Watch(?:\s+Series)?\s+(\d+)/i);
+    if (watch) {
+      const n = parseInt(watch[1]);
+      if (n >= 10) return 2024;
+      if (n === 9)  return 2023;
+      if (n === 8)  return 2022;
+      if (n === 7)  return 2021;
+      if (n === 6)  return 2020;
+      if (n === 5)  return 2019;
+      if (n === 4)  return 2018;
+      return 2017;
+    }
+  }
+
+  // AirPods generation
+  if (/airpods/i.test(title)) {
+    if (/AirPods.*4th|4th.*AirPods/i.test(title)) return 2024;
+    if (/AirPods Pro.*2nd|AirPods Pro 2\b|2nd.*AirPods Pro/i.test(title)) return 2022;
+    if (/AirPods.*3rd|3rd.*AirPods/i.test(title)) return 2021;
+    if (/AirPods Pro.*1st|AirPods Pro\b(?!.*2nd)/i.test(title)) return 2019;
+    if (/AirPods.*2nd|2nd.*AirPods/i.test(title)) return 2019;
+    return 2019; // default old AirPods
   }
 
   // MacBook chip generation (M-series or Intel)
@@ -194,8 +209,8 @@ function isJunk(item: EbayItem): boolean {
   if (item.price < MIN_PRICE) return true;
   if (item.price > MAX_PRICE) return true;
   if (item.shippingCost !== null && item.shippingCost > MAX_SHIPPING) return true;
-  // Reject tech devices older than ~6 years — too hard to resell
-  if (techAgePenalty(item.title) >= 45) return true;
+  // Reject Apple electronics older than 2 years — too old to flip profitably
+  if (techAgePenalty(item.title) > 0) return true;
   return false;
 }
 

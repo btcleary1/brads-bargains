@@ -84,13 +84,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'No qualifying deals found' });
     }
 
+    // Sort by sellabilityScore once — AI pick and email both use this ordering
+    best5 = [...best5].sort((a, b) => sellabilityScore(b, best5) - sellabilityScore(a, best5));
+
     // Build recipient list with personalized deals per user
     type UserDigest = { email: string; deals: typeof best5 };
     let userDigests: UserDigest[] = [];
 
     if (toOverride) {
-      const sortedBest5 = [...best5].sort((a, b) => sellabilityScore(b, best5) - sellabilityScore(a, best5));
-      userDigests = [{ email: toOverride, deals: sortedBest5 }];
+      userDigests = [{ email: toOverride, deals: best5 }];
     } else {
       const users = await getAllUsers();
       const prefsResults = await Promise.allSettled(users.map(u => getUserPrefs(u.userId)));
