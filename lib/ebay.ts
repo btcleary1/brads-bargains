@@ -121,11 +121,14 @@ function toEbayItem(raw: any): EbayItem {
 export async function searchDeals(query: string, maxResults = 20): Promise<EbayItem[]> {
   const token = await getEbayToken();
 
+  // Only return listings from the last 90 days
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19) + '.000Z';
+
   const params = new URLSearchParams({
     q: query,
     limit: String(maxResults),
-    sort: 'bestMatch',
-    filter: 'buyingOptions:{FIXED_PRICE},priceCurrency:USD',
+    sort: 'newlyListed',
+    filter: `buyingOptions:{FIXED_PRICE},priceCurrency:USD,itemStartDate:[${ninetyDaysAgo}]`,
   });
 
   const res = await fetch(`${base()}/buy/browse/v1/item_summary/search?${params}`, {
