@@ -24,7 +24,7 @@ const ACCESSORY_PATTERNS = /\bstrap\b|watch band|\bcase\b|\bcover\b|screen prote
 const BULKY_PATTERNS = /\bconsole\b|desktop|monitor|printer|treadmill|bicycle|bike\b|guitar|amplifier|furniture|mattress|refrigerator|washer|dryer|dishwasher|television|\bsofa\b|\bcouch\b|elliptical|weight bench|kayak|surfboard|scooter|electric bike|e-bike|hoverboard/i;
 
 // Conditions to skip entirely
-const BAD_CONDITIONS = /acceptable|for parts|parts only/i;
+const BAD_CONDITIONS = /acceptable|for parts|parts only|refurbished/i;
 
 // Tech categories where device age matters
 const TECH_PATTERNS = /iphone|ipad|macbook|laptop|samsung|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
