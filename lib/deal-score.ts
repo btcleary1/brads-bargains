@@ -14,6 +14,16 @@ const MAX_PRICE = 2000;
 const MIN_FEEDBACK_PERCENT = 97;  // below this = skip entirely
 const MIN_FEEDBACK_COUNT   = 10;  // new sellers with few ratings = skip
 
+export interface FilterPrefs {
+  minPrice?: number;            // default 50
+  maxPrice?: number;            // default 2000
+  maxShipping?: number;         // default 30
+  maxTechAgeYears?: number;     // 0 = no limit, default 2
+  minSellerFeedbackPct?: number; // default 97
+  minDiscountPct?: number;      // starting hot deal threshold, default 60
+  allowedConditions?: string[]; // empty = use default (excludes Acceptable/For Parts/etc.)
+}
+
 // Title keywords that indicate junk listings
 const JUNK_TITLE_PATTERNS = /for parts|not working|broken|cracked screen|read description|as.is|untested|powers on|no returns|damaged|water damage|print ad|framed poster|framed print|game poster|movie poster|art print|lithograph/i;
 
@@ -123,7 +133,9 @@ function appleModelYear(title: string): number | null {
 }
 
 // Penalize old tech — old iPhones/iPads are hard to resell regardless of discount
-function techAgePenalty(title: string): number {
+// maxAgeYears: 0 = no age limit; default 2 = reject anything older than 2 years
+function techAgePenalty(title: string, maxAgeYears = 2): number {
+  if (maxAgeYears === 0) return 0;
   if (!TECH_PATTERNS.test(title)) return 0; // non-tech items (cards, LEGO) — no penalty
 
   // Try explicit year in title first (e.g. "2020 MacBook Air")
@@ -132,12 +144,12 @@ function techAgePenalty(title: string): number {
   if (!releaseYear) return 0;
 
   const age = CURRENT_YEAR - releaseYear;
-  if (age <= 2) return 0;   // 2024-2026: current gen
-  if (age <= 3) return 10;  // 2023: minor penalty
-  if (age <= 4) return 20;  // 2022: two gens back
-  if (age <= 5) return 30;  // 2021: aging
-  if (age <= 7) return 45;  // 2019-2020: significantly dated
-  return 60;                // 2018 and older: very hard to resell
+  if (age <= maxAgeYears)     return 0;   // within allowed age
+  if (age <= maxAgeYears + 1) return 10;  // 1 year over limit
+  if (age <= maxAgeYears + 2) return 20;  // 2 years over limit
+  if (age <= maxAgeYears + 3) return 30;  // 3 years over limit
+  if (age <= maxAgeYears + 5) return 45;  // 4–5 years over limit
+  return 60;                              // 6+ years over limit
 }
 
 function conditionScore(condition: string): number {
@@ -205,19 +217,40 @@ function profitScore(item: EbayItem): number {
 }
 
 // Hard filter — returns true if item should be excluded
-function isJunk(item: EbayItem): boolean {
+// Accepts optional FilterPrefs to apply user-configured criteria
+export function isJunk(item: EbayItem, prefs?: FilterPrefs): boolean {
+  const minPrice    = prefs?.minPrice    ?? MIN_PRICE;
+  const maxPrice    = prefs?.maxPrice    ?? MAX_PRICE;
+  const maxShipping = prefs?.maxShipping ?? MAX_SHIPPING;
+  const maxTechAge  = prefs?.maxTechAgeYears ?? 2;
+  const minFeedPct  = prefs?.minSellerFeedbackPct ?? MIN_FEEDBACK_PERCENT;
+
   if (!item.imageUrl) return true;
   if (JUNK_TITLE_PATTERNS.test(item.title)) return true;
   if (ACCESSORY_PATTERNS.test(item.title)) return true;
   if (BULKY_PATTERNS.test(item.title)) return true;
   if (/refurbished/i.test(item.title)) return true;
-  if (/\bpoor\b/i.test(item.title)) return true;  // "Used Poor" condition in title
-  if (BAD_CONDITIONS.test(item.condition)) return true;
-  if (item.price < MIN_PRICE) return true;
-  if (item.price > MAX_PRICE) return true;
-  if (item.shippingCost !== null && item.shippingCost > MAX_SHIPPING) return true;
-  // Reject Apple electronics older than 2 years — too old to flip profitably
-  if (techAgePenalty(item.title) > 0) return true;
+  if (/\bpoor\b/i.test(item.title)) return true;
+
+  // Condition: if user specified allowed conditions, check against them; else use defaults
+  const allowed = prefs?.allowedConditions;
+  if (allowed && allowed.length > 0) {
+    const ok = allowed.some(c => item.condition.toLowerCase().includes(c.toLowerCase()));
+    if (!ok) return true;
+  } else {
+    if (BAD_CONDITIONS.test(item.condition)) return true;
+  }
+
+  if (item.price < minPrice) return true;
+  if (item.price > maxPrice) return true;
+  if (item.shippingCost !== null && item.shippingCost > maxShipping) return true;
+
+  // Seller feedback filter (skip check if we have no count data — new sellers handled elsewhere)
+  const feedbackPct   = item.sellerFeedbackPercent ?? 100;
+  const feedbackCount = item.sellerFeedbackScore   ?? 0;
+  if (feedbackCount >= MIN_FEEDBACK_COUNT && feedbackPct < minFeedPct) return true;
+
+  if (techAgePenalty(item.title, maxTechAge) > 0) return true;
   return false;
 }
 
@@ -279,8 +312,8 @@ export function scoreDeal(item: EbayItem): number {
  * Filter to genuinely flippable deals, score them, return top N sorted best-first.
  * Caps MAX_PER_CATEGORY items per category for variety.
  */
-export function topDeals(items: EbayItem[], n = 5, minDiscount = 60): EbayItem[] {
-  const clean = items.filter(i => !isJunk(i));
+export function topDeals(items: EbayItem[], n = 5, minDiscount = 60, prefs?: FilterPrefs): EbayItem[] {
+  const clean = items.filter(i => !isJunk(i, prefs));
 
   const strictPass = clean.filter(i => {
     if (!i.discountPct || !i.marketPrice) return false;
