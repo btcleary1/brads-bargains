@@ -58,7 +58,6 @@ export async function GET(req: NextRequest) {
     const { hotDeals, minDiscount } = flexDiscount(items, 5, startDiscount);
 
     if (notify && hotDeals.length > 0) {
-      const prefs = await getUserPrefs(session.userId);
       const alertEmail = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
       if (alertEmail) {
         // Send top 5 hot deals sorted by discount — skip strict seller filter so email always sends

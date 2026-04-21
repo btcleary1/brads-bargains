@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
-import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, Package, AlertCircle, Mail, CheckCircle, Clock } from 'lucide-react';
+import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, Package, AlertCircle, Mail, CheckCircle, Clock, Sparkles, ShoppingBag } from 'lucide-react';
 
 interface EbayItem {
   itemId: string;
@@ -211,9 +211,27 @@ export default function DealsPage() {
   const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [recommendation, setRecommendation] = useState<string | null>(null);
   const [recLoading, setRecLoading] = useState(false);
+  const [personalizedRecs, setPersonalizedRecs] = useState<EbayItem[] | null>(null);
+  const [recsLoading, setRecsLoading] = useState(false);
+  const [recsKeywords, setRecsKeywords] = useState<string[]>([]);
+  const [ebayConnected, setEbayConnected] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
+
+    // Fetch personalized recommendations on page load
+    setRecsLoading(true);
+    fetch('/api/recommendations')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: any) => {
+        if (d?.connected) {
+          setEbayConnected(true);
+          setPersonalizedRecs(d.recommendations ?? []);
+          setRecsKeywords(d.keywords ?? []);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRecsLoading(false));
   }, [router]);
 
   const search = async (e?: React.FormEvent) => {
@@ -270,7 +288,19 @@ export default function DealsPage() {
 
   const displayItems = results
     ? (() => {
-        let pool = showAll ? results.items : results.items.filter(i => i.isHotDeal).length > 0 ? results.items.filter(i => i.isHotDeal) : results.items.slice(0, 20);
+        let pool: EbayItem[];
+        if (showAll) {
+          pool = results.items;
+        } else {
+          const hot = results.items.filter(i => i.isHotDeal);
+          if (hot.length >= 30) {
+            pool = hot;
+          } else {
+            // Fill up to 30 with remaining scored items after hot deals
+            const rest = results.items.filter(i => !i.isHotDeal);
+            pool = [...hot, ...rest].slice(0, 30);
+          }
+        }
         if (activeFilter !== null) pool = pool.filter(i => i.discountPct !== null && i.discountPct >= activeFilter);
         if (filterSingleQty) pool = pool.filter(i => i.quantity === null || i.quantity <= 1);
         // Compute blended score: 50% eBay relevance rank + 50% sellability
@@ -495,14 +525,67 @@ export default function DealsPage() {
           </div>
         )}
 
-        {/* Empty state */}
+        {/* Empty state / Recommendations */}
         {!results && !loading && !error && (
-          <div className="text-center py-16" style={{ color: '#4B5563' }}>
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <Search className="w-8 h-8" style={{ color: '#374151' }} />
+          <div>
+            {/* Personalized recommendations */}
+            {(recsLoading || (ebayConnected && personalizedRecs !== null)) && (
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center justify-center w-7 h-7 rounded-lg shrink-0" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
+                    <Sparkles className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-white text-sm">Recommended for You</div>
+                    {recsKeywords.length > 0 && (
+                      <div className="text-xs" style={{ color: '#6B7280' }}>Based on your eBay purchases: {recsKeywords.join(', ')}</div>
+                    )}
+                  </div>
+                </div>
+
+                {recsLoading ? (
+                  <div className="flex items-center gap-2 py-6 justify-center text-sm" style={{ color: '#6B7280' }}>
+                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#F59E0B' }} />
+                    Finding deals for you…
+                  </div>
+                ) : personalizedRecs && personalizedRecs.length > 0 ? (
+                  <div className="space-y-3">
+                    {personalizedRecs.map(item => (
+                      <ItemCard key={item.itemId} item={item as any} onTrack={() => {}} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl p-4 text-sm text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#4B5563' }}>
+                    No matching deals right now — check back later or search above.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Prompt to connect eBay if not connected */}
+            {!recsLoading && !ebayConnected && (
+              <div className="rounded-2xl p-5 mb-6 flex gap-3 items-start" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                <div className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
+                  <ShoppingBag className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm mb-0.5" style={{ color: '#FCD34D' }}>Get personalized deal recommendations</div>
+                  <div className="text-xs mb-3" style={{ color: '#92400E' }}>Connect your eBay account and we&apos;ll surface deals matching your purchase history — automatically.</div>
+                  <a href="/settings" className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)', color: '#fff' }}>
+                    Connect in Settings →
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Default empty prompt */}
+            <div className="text-center py-10" style={{ color: '#4B5563' }}>
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <Search className="w-8 h-8" style={{ color: '#374151' }} />
+              </div>
+              <div className="font-medium" style={{ color: '#6B7280' }}>Search eBay for deals</div>
+              <div className="text-sm mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings at {minDiscount}%+ off market price</div>
             </div>
-            <div className="font-medium" style={{ color: '#6B7280' }}>Search eBay for deals</div>
-            <div className="text-sm mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings at {minDiscount}%+ off market price</div>
           </div>
         )}
 

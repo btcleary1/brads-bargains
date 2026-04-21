@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus, SlidersHorizontal } from 'lucide-react';
+import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus, SlidersHorizontal, Filter, ShoppingBag, Link2Off } from 'lucide-react';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import Header from '@/components/Header';
@@ -41,17 +41,57 @@ export default function SettingsPage() {
   const [emailPrefsLoading, setEmailPrefsLoading] = useState(false);
   const [emailPrefsMessage, setEmailPrefsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Deal filter prefs
+  const [fpMinPrice, setFpMinPrice] = useState<number>(50);
+  const [fpMaxPrice, setFpMaxPrice] = useState<number>(2000);
+  const [fpMaxShipping, setFpMaxShipping] = useState<number>(30);
+  const [fpTechAge, setFpTechAge] = useState<number>(2);
+  const [fpMinFeedback, setFpMinFeedback] = useState<number>(97);
+  const [fpMinDiscount, setFpMinDiscount] = useState<number>(60);
+  const [fpConditions, setFpConditions] = useState<string[]>(['New', 'Like New', 'Very Good', 'Good']);
+  const [filterLoading, setFilterLoading] = useState(false);
+  const [filterMessage, setFilterMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // eBay account connection
+  const [ebayConnected, setEbayConnected] = useState<boolean | null>(null);
+  const [ebayLoading, setEbayLoading] = useState(false);
+  const [ebayMessage, setEbayMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
+    // Handle eBay OAuth callback result in URL params
+    const params = new URLSearchParams(window.location.search);
+    const ebayParam = params.get('ebay');
+    if (ebayParam === 'connected') setEbayMessage({ type: 'success', text: 'eBay account connected successfully.' });
+    else if (ebayParam === 'denied') setEbayMessage({ type: 'error', text: 'eBay authorization was cancelled.' });
+    else if (ebayParam === 'error' || ebayParam === 'invalid') setEbayMessage({ type: 'error', text: 'Something went wrong connecting your eBay account.' });
+    if (ebayParam) window.history.replaceState({}, '', '/settings');
+
     fetch('/api/auth/me').then(r => r.ok ? r.json() : Promise.reject()).then((me: any) => {
       if (me.googleAuth) setIsGoogleAuth(true);
-      // Pre-populate notification email with Gmail if not already saved
       fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
         setNotifEmail(p.notificationEmail || me.email || '');
         if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
         if (p.digestCount) setDigestCount(p.digestCount);
         if (p.digestCategories) setDigestCategories(p.digestCategories);
+        // Load filter prefs
+        if (p.filterPrefs) {
+          const fp = p.filterPrefs;
+          if (fp.minPrice != null) setFpMinPrice(fp.minPrice);
+          if (fp.maxPrice != null) setFpMaxPrice(fp.maxPrice);
+          if (fp.maxShipping != null) setFpMaxShipping(fp.maxShipping);
+          if (fp.maxTechAgeYears != null) setFpTechAge(fp.maxTechAgeYears);
+          if (fp.minSellerFeedbackPct != null) setFpMinFeedback(fp.minSellerFeedbackPct);
+          if (fp.minDiscountPct != null) setFpMinDiscount(fp.minDiscountPct);
+          if (fp.allowedConditions?.length) setFpConditions(fp.allowedConditions);
+        }
       }).catch(() => {});
     }).catch(() => router.replace('/login'));
+
+    // Check eBay connection status
+    fetch('/api/auth/ebay/status').then(r => r.ok ? r.json() : { connected: false }).then((d: any) => {
+      setEbayConnected(d.connected);
+    }).catch(() => setEbayConnected(false));
+
     setSupportsWebAuthn(browserSupportsWebAuthn());
     const ua = navigator.userAgent;
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Face ID');
@@ -206,6 +246,57 @@ export default function SettingsPage() {
   };
 
   const removeWatchlistItem = (term: string) => saveWatchlist(watchlist.filter(t => t !== term));
+
+  const saveFilterPrefs = async (overrides?: Record<string, unknown>) => {
+    setFilterLoading(true);
+    setFilterMessage(null);
+    const fp = {
+      minPrice: fpMinPrice,
+      maxPrice: fpMaxPrice,
+      maxShipping: fpMaxShipping,
+      maxTechAgeYears: fpTechAge,
+      minSellerFeedbackPct: fpMinFeedback,
+      minDiscountPct: fpMinDiscount,
+      allowedConditions: fpConditions,
+      ...overrides,
+    };
+    try {
+      const res = await fetch('/api/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filterPrefs: fp }),
+      });
+      if (res.ok) {
+        setFilterMessage({ type: 'success', text: 'Filters saved.' });
+        setTimeout(() => setFilterMessage(null), 3000);
+      } else {
+        setFilterMessage({ type: 'error', text: 'Failed to save filters.' });
+      }
+    } catch {
+      setFilterMessage({ type: 'error', text: 'Network error.' });
+    }
+    setFilterLoading(false);
+  };
+
+  const toggleCondition = (cond: string) => {
+    const updated = fpConditions.includes(cond)
+      ? fpConditions.filter(c => c !== cond)
+      : [...fpConditions, cond];
+    setFpConditions(updated);
+  };
+
+  const handleEbayDisconnect = async () => {
+    if (!confirm('Disconnect your eBay account? Personalized recommendations will stop.')) return;
+    setEbayLoading(true);
+    const res = await fetch('/api/auth/ebay/disconnect', { method: 'POST' });
+    if (res.ok) {
+      setEbayConnected(false);
+      setEbayMessage({ type: 'success', text: 'eBay account disconnected.' });
+    } else {
+      setEbayMessage({ type: 'error', text: 'Failed to disconnect.' });
+    }
+    setEbayLoading(false);
+  };
 
   const handleDeleteAccount = async () => {
     if (!confirm('Permanently delete your account and all your data? This cannot be undone.')) return;
@@ -483,6 +574,160 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Deal Filter Criteria */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Filter className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">Deal Filter Criteria</h2>
+          </div>
+          <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Customize what items appear in your search results and recommendations.</p>
+
+          {filterMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: filterMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${filterMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: filterMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {filterMessage.text}
+            </div>
+          )}
+
+          {/* Price range */}
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-2" style={{ color: '#9CA3AF' }}>Price range</label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#6B7280' }}>$</span>
+                <input type="number" min={0} value={fpMinPrice} onChange={e => setFpMinPrice(Number(e.target.value))} className="w-full pl-6 pr-3 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} placeholder="50" />
+              </div>
+              <span className="text-xs shrink-0" style={{ color: '#4B5563' }}>to</span>
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#6B7280' }}>$</span>
+                <input type="number" min={0} value={fpMaxPrice} onChange={e => setFpMaxPrice(Number(e.target.value))} className="w-full pl-6 pr-3 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} placeholder="2000" />
+              </div>
+            </div>
+          </div>
+
+          {/* Max shipping + Min discount side by side */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div>
+              <label className="block text-xs font-medium mb-2" style={{ color: '#9CA3AF' }}>Max shipping</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#6B7280' }}>$</span>
+                <input type="number" min={0} value={fpMaxShipping} onChange={e => setFpMaxShipping(Number(e.target.value))} className="w-full pl-6 pr-3 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} placeholder="30" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-2" style={{ color: '#9CA3AF' }}>Min hot deal %</label>
+              <div className="relative">
+                <input type="number" min={0} max={100} value={fpMinDiscount} onChange={e => setFpMinDiscount(Number(e.target.value))} className="w-full px-3 pr-7 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} placeholder="60" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#6B7280' }}>%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tech age cutoff */}
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-2" style={{ color: '#9CA3AF' }}>Max electronics age</label>
+            <div className="flex gap-2 flex-wrap">
+              {[{ label: '2 years', val: 2 }, { label: '3 years', val: 3 }, { label: '5 years', val: 5 }, { label: 'No limit', val: 0 }].map(({ label, val }) => (
+                <button
+                  key={val}
+                  onClick={() => setFpTechAge(val)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                  style={{
+                    background: fpTechAge === val ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(255,255,255,0.06)',
+                    border: fpTechAge === val ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                    color: fpTechAge === val ? '#fff' : '#9CA3AF',
+                  }}
+                >{label}</button>
+              ))}
+            </div>
+            <p className="text-xs mt-1.5" style={{ color: '#4B5563' }}>Hides electronics older than the selected age from results.</p>
+          </div>
+
+          {/* Min seller feedback */}
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-2" style={{ color: '#9CA3AF' }}>Min seller feedback</label>
+            <div className="relative w-36">
+              <input type="number" min={80} max={100} step={0.5} value={fpMinFeedback} onChange={e => setFpMinFeedback(Number(e.target.value))} className="w-full px-3 pr-7 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} placeholder="97" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: '#6B7280' }}>%</span>
+            </div>
+          </div>
+
+          {/* Allowed conditions */}
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-2" style={{ color: '#9CA3AF' }}>Allowed conditions</label>
+            <div className="flex flex-wrap gap-2">
+              {['New', 'Like New', 'Very Good', 'Good', 'Acceptable'].map(cond => {
+                const active = fpConditions.includes(cond);
+                return (
+                  <button
+                    key={cond}
+                    onClick={() => toggleCondition(cond)}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+                    style={{
+                      background: active ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
+                      border: active ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                      color: active ? '#60A5FA' : '#6B7280',
+                    }}
+                  >{cond}</button>
+                );
+              })}
+            </div>
+          </div>
+
+          <button
+            onClick={() => saveFilterPrefs()}
+            disabled={filterLoading}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+            style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
+          >
+            {filterLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Save Filters
+          </button>
+        </div>
+
+        {/* eBay Account */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <ShoppingBag className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">eBay Account</h2>
+          </div>
+          <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Connect your eBay account so Brad&apos;s Bargains can recommend deals based on your purchase history.</p>
+
+          {ebayMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: ebayMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${ebayMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: ebayMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {ebayMessage.text}
+            </div>
+          )}
+
+          {ebayConnected === null ? (
+            <div className="flex justify-center py-2"><Loader2 className="w-4 h-4 animate-spin" style={{ color: '#6B7280' }} /></div>
+          ) : ebayConnected ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#4ADE80' }}>
+                <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+                Connected — personalized recommendations are active
+              </div>
+              <button
+                onClick={handleEbayDisconnect}
+                disabled={ebayLoading}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#9CA3AF' }}
+              >
+                {ebayLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2Off className="w-4 h-4" />}
+                Disconnect eBay
+              </button>
+            </div>
+          ) : (
+            <a
+              href="/api/auth/ebay/connect"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+              style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)', boxShadow: '0 2px 12px rgba(245,158,11,0.3)' }}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              Connect eBay Account
+            </a>
+          )}
         </div>
 
         {/* Danger zone */}
