@@ -1,0 +1,41 @@
+# Brad's Bargains — AI Assistant Rules
+
+## Regression Testing (mandatory after every change)
+
+After completing any code task, always run these steps before saying you're done:
+
+1. **Type check**: Run `npx tsc --noEmit`. Fix all errors. The only acceptable pre-existing warning is the `target=ES5` deprecation in tsconfig.json.
+
+2. **Build**: Run `npm run build` for any change to API routes, lib files, or page components. Zero errors required.
+
+3. **Read back every file you modified** and check for:
+   - Unused imports
+   - Duplicate variable declarations in the same scope
+   - Duplicate async/await calls fetching the same data twice
+   - Exported functions that are never imported anywhere
+   - API routes that don't handle error paths
+   - Missing null/undefined guards at system boundaries
+
+4. **Identify affected user flows** and explicitly state which ones you verified vs. which ones require live browser testing.
+
+5. **End with an honest summary** — what was verified, what wasn't, and any known risks.
+
+## General coding standards
+
+- No comments explaining what code does — only add a comment when the WHY is non-obvious
+- No unused code, no backwards-compat shims, no dead imports
+- Server-side filtering over client-side filtering wherever possible
+- All new user preferences must be saved to `/api/prefs` and loaded on page mount
+- New API routes must include session validation (`getSessionFromRequest`) and rate limiting (`checkRequestLimit`)
+- Store all user data in R2 under the `deal-wiz/{userId}/` prefix
+- TypeScript types for new data shapes go in `lib/tracker-data.ts` (user data) or the relevant lib file
+
+## Project-specific context
+
+- Framework: Next.js 14 App Router, React 18, TailwindCSS
+- Storage: Cloudflare R2 (via `lib/r2.ts`) — no SQL database
+- Auth: JWT in httpOnly cookie via `lib/session.ts`
+- eBay app-level OAuth: `lib/ebay.ts` (client credentials, for search)
+- eBay user-level OAuth: `lib/ebay-user.ts` (authorization code, for purchase history)
+- Deal filtering logic lives in `lib/deal-score.ts` — `FilterPrefs` controls all configurable thresholds
+- User preferences saved as `deal-wiz/{userId}/prefs.json`
