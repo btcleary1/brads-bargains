@@ -58,6 +58,7 @@ export interface SavedSearch {
   minDiscount: number;
   createdAt: string;
   lastRunAt: string | null;
+  lastNotifiedIds?: string[]; // itemIds already emailed — prevents repeat alerts
 }
 
 export async function getSavedSearches(userId: string): Promise<SavedSearch[]> {
@@ -75,6 +76,15 @@ export interface UserPrefs {
   watchlistQueries?: string[];    // personalized search terms for daily digest
   digestCount?: number;           // how many deals per email (3, 5, or 10)
   digestCategories?: string[];    // which categories to include (empty = all)
+  ebayAccessToken?: string;       // eBay OAuth user token
+  ebayRefreshToken?: string;
+  ebayTokenExpiresAt?: number;
+  defaultPriceMin?: number;
+  defaultPriceMax?: number;
+  defaultMinProfit?: number;
+  defaultMinDiscount?: number;
+  defaultSingleQtyOnly?: boolean;
+  notificationPhone?: string;
 }
 
 export async function getUserPrefs(userId: string): Promise<UserPrefs> {
