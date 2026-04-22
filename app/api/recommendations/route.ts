@@ -34,6 +34,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const prefs = await getUserPrefs(session.userId);
+  const filterPrefs = prefs.filterPrefs;
+
   // Fetch purchase history
   let keywords: string[] = [];
   try {
@@ -41,21 +44,16 @@ export async function GET(req: NextRequest) {
     keywords = extractSearchKeywords(purchases);
   } catch (err) {
     console.error('Purchase history fetch failed:', err);
-    // Fall back to watchlist queries if purchase history fails
   }
 
   // Fall back to watchlist or default categories if history is empty
   if (keywords.length === 0) {
-    const prefs = await getUserPrefs(session.userId);
     if (prefs.watchlistQueries?.length) {
       keywords = prefs.watchlistQueries.slice(0, 4);
     } else {
       keywords = ['iPhone', 'MacBook', 'PlayStation 5', 'Nintendo Switch'];
     }
   }
-
-  const prefs = await getUserPrefs(session.userId);
-  const filterPrefs = prefs.filterPrefs;
   const isMock = process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID;
 
   // Search for deals across the top keywords (parallel, cap at 3 to stay fast)

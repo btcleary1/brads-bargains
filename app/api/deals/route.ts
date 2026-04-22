@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { searchDeals, EbayItem } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
-import { topDeals, isJunk } from '@/lib/deal-score';
+import { isJunk } from '@/lib/deal-score';
 import { sendDailyDigest } from '@/lib/notify';
 import { getUserPrefs } from '@/lib/tracker-data';
 import { checkRequestLimit } from '@/lib/rate-limit';
