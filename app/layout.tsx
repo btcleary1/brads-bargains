@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   title: { default: "Brad's Bargains", template: "%s | Brad's Bargains" },
   description: "Find the best eBay deals and track your flips.",
   applicationName: "Brad's Bargains",
+  manifest: '/manifest.json',
   appleWebApp: { capable: true, title: "Brad's Bargains", statusBarStyle: 'black-translucent' },
   other: { 'mobile-web-app-capable': 'yes' },
 };
