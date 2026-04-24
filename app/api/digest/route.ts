@@ -4,7 +4,7 @@ import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { searchDeals, EbayItem } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
 import { topDeals, sellabilityScore } from '@/lib/deal-score';
-import { sendDailyDigest } from '@/lib/notify';
+import { sendDailyDigest, sendSmsDigest } from '@/lib/notify';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getAllUsers } from '@/lib/users';
 import { getUserPrefs } from '@/lib/tracker-data';
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
     best5 = [...best5].sort((a, b) => sellabilityScore(b, best5) - sellabilityScore(a, best5));
 
     // Build recipient list with personalized deals per user
-    type UserDigest = { email: string; deals: typeof best5 };
+    type UserDigest = { email: string; phone?: string; deals: typeof best5 };
     let userDigests: UserDigest[] = [];
 
     if (toOverride) {
@@ -99,8 +99,9 @@ export async function GET(req: NextRequest) {
 
       for (let i = 0; i < users.length; i++) {
         const r = prefsResults[i];
-        if (r.status !== 'fulfilled' || !r.value.notificationEmail) continue;
+        if (r.status !== 'fulfilled') continue;
         const prefs = r.value;
+        if (!prefs.notificationEmail && !prefs.notificationPhone) continue;
 
         const count = prefs.digestCount ?? 5;
 
@@ -140,7 +141,7 @@ export async function GET(req: NextRequest) {
         }
 
         const sortedDeals = [...userDeals].sort((a, b) => sellabilityScore(b, userDeals) - sellabilityScore(a, userDeals));
-        userDigests.push({ email: prefs.notificationEmail as string, deals: sortedDeals });
+        userDigests.push({ email: prefs.notificationEmail ?? '', phone: prefs.notificationPhone, deals: sortedDeals });
       }
 
       if (userDigests.length === 0 && process.env.NOTIFICATION_EMAIL) {
@@ -171,9 +172,14 @@ export async function GET(req: NextRequest) {
     } catch (e) { console.error('AI pick failed:', e); }
 
     // Send to all recipients — collect results to surface any errors
-    const sendResults = await Promise.allSettled(userDigests.map(({ email, deals }) => sendDailyDigest(deals, email, aiPick)));
+    const sendResults = await Promise.allSettled(userDigests.map(({ email, phone, deals }) =>
+      Promise.all([
+        email ? sendDailyDigest(deals, email, aiPick) : Promise.resolve(),
+        phone ? sendSmsDigest(deals, phone) : Promise.resolve(),
+      ])
+    ));
     const errors = sendResults
-      .map((r, i) => r.status === 'rejected' ? `${userDigests[i].email}: ${r.reason}` : null)
+      .map((r, i) => r.status === 'rejected' ? `${userDigests[i].email || userDigests[i].phone}: ${r.reason}` : null)
       .filter(Boolean);
     const successCount = sendResults.filter(r => r.status === 'fulfilled').length;
 

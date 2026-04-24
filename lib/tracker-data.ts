@@ -75,6 +75,7 @@ export type { FilterPrefs };
 
 export interface UserPrefs {
   notificationEmail?: string;     // where deal alerts are sent
+  notificationPhone?: string;     // E.164 phone number for SMS alerts
   watchlistQueries?: string[];    // personalized search terms for daily digest
   digestCount?: number;           // how many deals per email (3, 5, or 10)
   digestCategories?: string[];    // which categories to include (empty = all)

@@ -228,3 +228,51 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
 export async function sendDealAlert(deals: EbayItem[], _query: string, toOverride?: string): Promise<void> {
   await sendDailyDigest(deals, toOverride || process.env.NOTIFICATION_EMAIL || '');
 }
+
+async function twilioSend(to: string, body: string): Promise<void> {
+  const sid   = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from  = process.env.TWILIO_PHONE_NUMBER;
+  if (!sid || !token || !from) return;
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64'),
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ From: from, To: to, Body: body }).toString(),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Twilio error ${res.status}: ${err}`);
+  }
+}
+
+export async function sendSmsDigest(deals: EbayItem[], toPhone: string): Promise<void> {
+  if (!deals.length || !toPhone) return;
+  const top = deals[0];
+  const savings = top.marketPrice ? top.marketPrice - top.price : 0;
+  const msg = [
+    `Brad's Bargains top deal:`,
+    safe(top.title).slice(0, 70),
+    `$${top.price.toFixed(0)}${top.discountPct ? ` (${top.discountPct}% off)` : ''}${savings > 0 ? ` — save $${savings.toFixed(0)}` : ''}`,
+    top.itemUrl,
+  ].join('\n');
+  await twilioSend(toPhone, msg);
+}
+
+export async function sendSmsPriceDrop(
+  drops: { title: string; oldPrice: number; newPrice: number; url: string }[],
+  toPhone: string,
+): Promise<void> {
+  if (!drops.length || !toPhone) return;
+  const d = drops[0];
+  const extra = drops.length > 1 ? ` (+${drops.length - 1} more)` : '';
+  const msg = [
+    `Brad's Bargains price drop${extra}:`,
+    safe(d.title).slice(0, 70),
+    `$${d.oldPrice.toFixed(0)} → $${d.newPrice.toFixed(0)}`,
+    d.url,
+  ].join('\n');
+  await twilioSend(toPhone, msg);
+}

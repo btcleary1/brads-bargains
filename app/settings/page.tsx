@@ -31,6 +31,10 @@ export default function SettingsPage() {
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifMessage, setNotifMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [notifPhone, setNotifPhone] = useState('');
+  const [notifPhoneLoading, setNotifPhoneLoading] = useState(false);
+  const [notifPhoneMessage, setNotifPhoneMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [watchlistInput, setWatchlistInput] = useState('');
   const [watchlistLoading, setWatchlistLoading] = useState(false);
@@ -70,6 +74,7 @@ export default function SettingsPage() {
       if (me.googleAuth) setIsGoogleAuth(true);
       fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
         setNotifEmail(p.notificationEmail || me.email || '');
+        if (p.notificationPhone) setNotifPhone(p.notificationPhone);
         if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
         if (p.digestCount) setDigestCount(p.digestCount);
         if (p.digestCategories) setDigestCategories(p.digestCategories);
@@ -168,6 +173,28 @@ export default function SettingsPage() {
       setCpMessage({ type: 'error', text: data.error || 'Failed to update password.' });
     }
     setCpLoading(false);
+  };
+
+  const handleSaveNotifPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setNotifPhoneLoading(true);
+    setNotifPhoneMessage(null);
+    try {
+      const res = await fetch('/api/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationPhone: notifPhone.trim() || null }),
+      });
+      if (res.ok) {
+        setNotifPhoneMessage({ type: 'success', text: 'Phone number saved.' });
+      } else {
+        const d = await res.json();
+        setNotifPhoneMessage({ type: 'error', text: d.error || 'Failed to save.' });
+      }
+    } catch {
+      setNotifPhoneMessage({ type: 'error', text: 'Network error.' });
+    }
+    setNotifPhoneLoading(false);
   };
 
   const handleSaveNotifEmail = async (e: React.FormEvent) => {
@@ -452,6 +479,38 @@ export default function SettingsPage() {
               style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
             >
               {notifLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            </button>
+          </form>
+        </div>
+
+        {/* SMS Alerts */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Bell className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">SMS Alerts</h2>
+          </div>
+          <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Get a text with the top deal of the day and price drop alerts. Use E.164 format (e.g. +12125551234).</p>
+          {notifPhoneMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: notifPhoneMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${notifPhoneMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: notifPhoneMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {notifPhoneMessage.text}
+            </div>
+          )}
+          <form onSubmit={handleSaveNotifPhone} className="flex gap-2">
+            <input
+              type="tel"
+              value={notifPhone}
+              onChange={e => setNotifPhone(e.target.value)}
+              placeholder="+12125551234"
+              className="flex-1 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <button
+              type="submit"
+              disabled={notifPhoneLoading}
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
+            >
+              {notifPhoneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
             </button>
           </form>
         </div>
