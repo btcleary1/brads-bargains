@@ -213,11 +213,18 @@ function SettingsContent() {
         userVisibleOnly: true,
         applicationServerKey: 'BOuoW_7q_n1PHvl-GsSmqYpOd9P9Gqxfe51zfuvO84r_CaRVU9A529QivYvBUy6Ml7MahUX_S2lBOzS1ObjeM08',
       });
-      await fetch('/api/push-subscribe', {
+      const saveRes = await fetch('/api/push-subscribe', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: sub }),
+        body: JSON.stringify({ subscription: sub.toJSON() }),
       });
+      if (!saveRes.ok) {
+        const d = await saveRes.json().catch(() => ({}));
+        setPushMessage({ type: 'error', text: d.error || `Save failed (${saveRes.status}) — try signing out and back in.` });
+        setPushLoading(false);
+        return;
+      }
       setPushEnabled(true);
       setPushMessage({ type: 'success', text: 'Deal notifications enabled!' });
     } catch (err: any) {
@@ -254,13 +261,14 @@ function SettingsContent() {
     try {
       const res = await fetch('/api/push-send', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: "Brad's Bargains", body: "🔥 Test notification — deal alerts are working!", url: '/deals' }),
       });
       const d = await res.json();
       if (res.ok) setPushMessage({ type: 'success', text: 'Test notification sent!' });
-      else setPushMessage({ type: 'error', text: d.error || 'Failed to send.' });
-    } catch { setPushMessage({ type: 'error', text: 'Network error.' }); }
+      else setPushMessage({ type: 'error', text: d.error || `Error ${res.status}` });
+    } catch (err: any) { setPushMessage({ type: 'error', text: err?.message || 'Network error — check your connection.' }); }
     setPushLoading(false);
   };
 
