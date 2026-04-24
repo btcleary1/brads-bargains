@@ -11,7 +11,7 @@ const MIN_PRICE = 50;
 const MAX_PRICE = 2000;
 
 // Minimum seller requirements
-const MIN_FEEDBACK_PERCENT = 97;  // below this = skip entirely
+const MIN_FEEDBACK_PERCENT = 95;  // below this = skip entirely
 const MIN_FEEDBACK_COUNT   = 10;  // new sellers with few ratings = skip
 
 // Title keywords that indicate junk listings
@@ -29,8 +29,11 @@ const BAD_CONDITIONS = /acceptable|for parts|parts only|refurbished|poor/i;
 // Tech categories where device age matters
 const TECH_PATTERNS = /iphone|ipad|macbook|laptop|samsung|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
 
+// Sealed/unopened items command a resale premium — especially collectibles, games, LEGO, cards
+const SEALED_PATTERNS = /\bsealed\b|factory.?sealed|unopened|shrink.?wrap|\bNIB\b|\bMISB\b|\bMIB\b|new.?in.?box|new.?in.?package|deadstock|new.?old.?stock|\bNOS\b/i;
+
 // Max items per category in the final result (prevents all-iPhone digests)
-const MAX_PER_CATEGORY = 2;
+const MAX_PER_CATEGORY = 4;
 
 // Condition quality — affects resale price and ease of sale
 const CONDITION_SCORE: Record<string, number> = {
@@ -120,6 +123,26 @@ function appleModelYear(title: string): number | null {
   }
 
   return null;
+}
+
+// Sealed/factory-new items sell faster and at a higher premium — especially collectibles and LEGO
+function sealedBonus(item: EbayItem): number {
+  const text = `${item.title} ${item.condition}`;
+  if (!SEALED_PATTERNS.test(text)) return 0;
+  // Higher bonus for collectible categories where sealed = significant price multiplier
+  const isCollectible = /lego|pokemon|trading card|sports card|video game|nintendo|ps5|xbox|figure|funko|sneaker|jordan|dunk/i.test(text);
+  return isCollectible ? 18 : 10;
+}
+
+// Boost recently listed items — fresh listings sell faster
+function recencyBonus(listingDate: string | null): number {
+  if (!listingDate) return 0;
+  const ageHours = (Date.now() - new Date(listingDate).getTime()) / 3_600_000;
+  if (ageHours <= 6)   return 20;
+  if (ageHours <= 24)  return 15;
+  if (ageHours <= 72)  return 8;
+  if (ageHours <= 168) return 3; // up to 1 week
+  return 0;
 }
 
 // Penalize old tech — old iPhones/iPads are hard to resell regardless of discount
@@ -250,7 +273,17 @@ export function sellabilityScore(item: EbayItem, allItems: EbayItem[]): number {
 
   const agePenalty = techAgePenalty(item.title);
 
-  return Math.max(0, quantityScore + demandScore + discountScore + uniquenessScore - agePenalty);
+  return Math.max(0, quantityScore + demandScore + discountScore + uniquenessScore - agePenalty + recencyBonus(item.listingDate) + sealedBonus(item));
+}
+
+/**
+ * Returns the model release year for an item, or null if unknown.
+ * Checks explicit year in title first, then Apple model number mapping.
+ */
+export function modelYear(title: string): number | null {
+  const yearMatch = title.match(/\b(20\d{2})\b/);
+  if (yearMatch) return parseInt(yearMatch[1]);
+  return appleModelYear(title);
 }
 
 export function sellabilityLabel(score: number): { label: string; color: string; bg: string; border: string } {
@@ -272,7 +305,7 @@ export function scoreDeal(item: EbayItem): number {
   const discountComponent  = Math.min(item.discountPct, 100) * 0.05;
 
   const raw = profitComponent + sellerComponent + conditionComponent + liquidityComponent + discountComponent;
-  return Math.max(0, raw - techAgePenalty(item.title));
+  return Math.max(0, raw - techAgePenalty(item.title) + recencyBonus(item.listingDate) + sealedBonus(item));
 }
 
 /**

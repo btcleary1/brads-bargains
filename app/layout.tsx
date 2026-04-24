@@ -1,12 +1,20 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  minimumScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: { default: "Brad's Bargains", template: "%s | Brad's Bargains" },
   description: "Find the best eBay deals and track your flips.",
   applicationName: "Brad's Bargains",
-  appleWebApp: { capable: true, title: "Brad's Bargains", statusBarStyle: 'default' },
+  appleWebApp: { capable: true, title: "Brad's Bargains", statusBarStyle: 'black-translucent' },
+  other: { 'mobile-web-app-capable': 'yes' },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

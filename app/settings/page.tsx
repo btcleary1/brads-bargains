@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus, SlidersHorizontal } from 'lucide-react';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus, SlidersHorizontal, Link, Link2Off } from 'lucide-react';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import Header from '@/components/Header';
 
-export default function SettingsPage() {
+function SettingsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [registered, setRegistered] = useState<boolean | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
@@ -31,6 +32,13 @@ export default function SettingsPage() {
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifMessage, setNotifMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [notifPhone, setNotifPhone] = useState('');
+  const [notifCarrier, setNotifCarrier] = useState('att');
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [phoneMessage, setPhoneMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [testSmsLoading, setTestSmsLoading] = useState(false);
+  const [savedSmsEmail, setSavedSmsEmail] = useState<string | null>(null);
+
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [watchlistInput, setWatchlistInput] = useState('');
   const [watchlistLoading, setWatchlistLoading] = useState(false);
@@ -40,18 +48,48 @@ export default function SettingsPage() {
   const [digestCategories, setDigestCategories] = useState<string[]>([]);
   const [emailPrefsLoading, setEmailPrefsLoading] = useState(false);
   const [emailPrefsMessage, setEmailPrefsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [ebayConnected, setEbayConnected] = useState<boolean | null>(null);
+  const [ebayMessage, setEbayMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [priceMin, setPriceMin] = useState<number | ''>('');
+  const [priceMax, setPriceMax] = useState<number | ''>('');
+  const [priceRangeLoading, setPriceRangeLoading] = useState(false);
+  const [priceRangeMessage, setPriceRangeMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [defaultMinProfit, setDefaultMinProfit] = useState<number | ''>('');
+  const [defaultMinDiscount, setDefaultMinDiscount] = useState<number | ''>('');
+  const [defaultSingleQtyOnly, setDefaultSingleQtyOnly] = useState(false);
+  const [dealFiltersLoading, setDealFiltersLoading] = useState(false);
+  const [dealFiltersMessage, setDealFiltersMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.ok ? r.json() : Promise.reject()).then((me: any) => {
+    fetch('/api/auth/me').then(r => {
+      if (r.status === 401) { router.replace('/login'); return Promise.reject('unauth'); }
+      return r.json();
+    }).then((me: any) => {
       if (me.googleAuth) setIsGoogleAuth(true);
       // Pre-populate notification email with Gmail if not already saved
       fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
         setNotifEmail(p.notificationEmail || me.email || '');
+        if (p.notificationPhone) { setNotifPhone(p.notificationPhone); setSavedSmsEmail(p.notificationPhone); }
         if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
         if (p.digestCount) setDigestCount(p.digestCount);
         if (p.digestCategories) setDigestCategories(p.digestCategories);
+        if (p.defaultPriceMin != null) setPriceMin(p.defaultPriceMin);
+        if (p.defaultPriceMax != null) setPriceMax(p.defaultPriceMax);
+        if (p.defaultMinProfit != null) setDefaultMinProfit(p.defaultMinProfit);
+        if (p.defaultMinDiscount != null) setDefaultMinDiscount(p.defaultMinDiscount);
+        if (p.defaultSingleQtyOnly != null) setDefaultSingleQtyOnly(p.defaultSingleQtyOnly);
       }).catch(() => {});
-    }).catch(() => router.replace('/login'));
+      fetch('/api/auth/ebay/status').then(r => r.ok ? r.json() : {}).then((d: any) => setEbayConnected(!!d.connected)).catch(() => setEbayConnected(false));
+    }).catch((e) => { if (e !== 'unauth') { /* network error — stay on page */ } });
+
+    const ebayParam = searchParams.get('ebay');
+    if (ebayParam === 'connected') setEbayMessage({ type: 'success', text: 'eBay account connected! Your purchase history will now personalize your recommendations.' });
+    else if (ebayParam === 'error') {
+      const reason = searchParams.get('reason');
+      setEbayMessage({ type: 'error', text: reason ? `eBay error: ${reason}` : 'eBay connection failed. Please try again.' });
+    }
     setSupportsWebAuthn(browserSupportsWebAuthn());
     const ua = navigator.userAgent;
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Face ID');
@@ -152,6 +190,43 @@ export default function SettingsPage() {
     setNotifLoading(false);
   };
 
+  const CARRIER_GATEWAYS: Record<string, string> = {
+    att: 'txt.att.net', verizon: 'vtext.com', tmobile: 'tmomail.net',
+    sprint: 'messaging.sprintpcs.com', cricket: 'sms.cricketwireless.net',
+    boost: 'sms.myboostmobile.com', metro: 'mymetropcs.com', uscellular: 'email.uscc.net',
+  };
+
+  const handleSavePhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPhoneLoading(true);
+    setPhoneMessage(null);
+    try {
+      const digits = notifPhone.trim().replace(/\D/g, '').slice(-10);
+      const gateway = CARRIER_GATEWAYS[notifCarrier];
+      const smsEmail = digits.length === 10 && gateway ? `${digits}@${gateway}` : null;
+      const res = await fetch('/api/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationPhone: smsEmail }),
+      });
+      if (res.ok) { setSavedSmsEmail(smsEmail); setPhoneMessage({ type: 'success', text: `Saved — texts will go to ${smsEmail ?? 'none'}.` }); }
+      else setPhoneMessage({ type: 'error', text: 'Failed to save.' });
+    } catch { setPhoneMessage({ type: 'error', text: 'Network error.' }); }
+    setPhoneLoading(false);
+  };
+
+  const handleSendTestSms = async () => {
+    setTestSmsLoading(true);
+    setPhoneMessage(null);
+    try {
+      const res = await fetch('/api/test-sms', { method: 'POST' });
+      const d = await res.json();
+      if (res.ok) setPhoneMessage({ type: 'success', text: 'Test message sent! Check your phone.' });
+      else setPhoneMessage({ type: 'error', text: d.error || 'Failed to send test message.' });
+    } catch { setPhoneMessage({ type: 'error', text: 'Network error.' }); }
+    setTestSmsLoading(false);
+  };
+
   const saveWatchlist = async (updated: string[]) => {
     setWatchlistLoading(true);
     setWatchlistMessage(null);
@@ -207,6 +282,55 @@ export default function SettingsPage() {
 
   const removeWatchlistItem = (term: string) => saveWatchlist(watchlist.filter(t => t !== term));
 
+  const saveDealFilters = async () => {
+    setDealFiltersLoading(true);
+    setDealFiltersMessage(null);
+    try {
+      const res = await fetch('/api/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          defaultMinProfit: defaultMinProfit === '' ? null : defaultMinProfit,
+          defaultMinDiscount: defaultMinDiscount === '' ? null : defaultMinDiscount,
+          defaultSingleQtyOnly,
+        }),
+      });
+      if (res.ok) {
+        setDealFiltersMessage({ type: 'success', text: 'Default deal filters saved.' });
+        setTimeout(() => setDealFiltersMessage(null), 3000);
+      } else {
+        setDealFiltersMessage({ type: 'error', text: 'Failed to save.' });
+      }
+    } catch {
+      setDealFiltersMessage({ type: 'error', text: 'Network error.' });
+    }
+    setDealFiltersLoading(false);
+  };
+
+  const savePriceRange = async () => {
+    setPriceRangeLoading(true);
+    setPriceRangeMessage(null);
+    try {
+      const res = await fetch('/api/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          defaultPriceMin: priceMin === '' ? null : priceMin,
+          defaultPriceMax: priceMax === '' ? null : priceMax,
+        }),
+      });
+      if (res.ok) {
+        setPriceRangeMessage({ type: 'success', text: 'Default price range saved.' });
+        setTimeout(() => setPriceRangeMessage(null), 3000);
+      } else {
+        setPriceRangeMessage({ type: 'error', text: 'Failed to save.' });
+      }
+    } catch {
+      setPriceRangeMessage({ type: 'error', text: 'Network error.' });
+    }
+    setPriceRangeLoading(false);
+  };
+
   const handleDeleteAccount = async () => {
     if (!confirm('Permanently delete your account and all your data? This cannot be undone.')) return;
     if (!confirm('Are you absolutely sure?')) return;
@@ -255,15 +379,10 @@ export default function SettingsPage() {
               <div className="flex justify-center py-2"><Loader2 className="w-4 h-4 animate-spin" style={{ color: '#6B7280' }} /></div>
             ) : registered ? (
               <div className="flex flex-col gap-2">
-                <button
-                  onClick={handleEnable}
-                  disabled={authLoading}
-                  className="w-full py-2.5 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 2px 12px rgba(99,102,241,0.3)' }}
-                >
-                  {authLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
-                  Register this device
-                </button>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#4ADE80' }}>
+                  <Fingerprint className="w-3.5 h-3.5 shrink-0" />
+                  {biometricLabel} enabled on this device
+                </div>
                 <button
                   onClick={handleDisable}
                   disabled={authLoading}
@@ -300,10 +419,10 @@ export default function SettingsPage() {
           )}
           <form onSubmit={handleChangePassword} className="space-y-3">
             {[
-              { label: 'Current Password', value: cpCurrent, onChange: setCpCurrent, show: showCurrent, toggle: () => setShowCurrent(v => !v) },
-              { label: 'New Password', value: cpNew, onChange: setCpNew, show: showNew, toggle: () => setShowNew(v => !v) },
-              { label: 'Confirm New Password', value: cpConfirm, onChange: setCpConfirm, show: showNew, toggle: () => setShowNew(v => !v) },
-            ].map(({ label, value, onChange, show, toggle }) => (
+              { label: 'Current Password', value: cpCurrent, onChange: setCpCurrent, show: showCurrent, toggle: () => setShowCurrent(v => !v), autoComplete: 'current-password' },
+              { label: 'New Password', value: cpNew, onChange: setCpNew, show: showNew, toggle: () => setShowNew(v => !v), autoComplete: 'new-password' },
+              { label: 'Confirm New Password', value: cpConfirm, onChange: setCpConfirm, show: showNew, toggle: () => setShowNew(v => !v), autoComplete: 'new-password' },
+            ].map(({ label, value, onChange, show, toggle, autoComplete }) => (
               <div key={label}>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: '#9CA3AF' }}>{label}</label>
                 <div className="relative">
@@ -311,6 +430,7 @@ export default function SettingsPage() {
                     type={show ? 'text' : 'password'}
                     value={value}
                     onChange={e => onChange(e.target.value)}
+                    autoComplete={autoComplete}
                     required
                     className="w-full px-3.5 py-2.5 pr-10 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                     style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
@@ -332,6 +452,49 @@ export default function SettingsPage() {
             </button>
           </form>
         </div>}
+
+        {/* eBay Account */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Link className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">Connect eBay Account</h2>
+          </div>
+          <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Link your eBay account to personalize Today&apos;s Picks and your daily email based on your purchase history.</p>
+          {ebayMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: ebayMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${ebayMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: ebayMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {ebayMessage.text}
+            </div>
+          )}
+          {ebayConnected === null ? (
+            <div className="flex items-center gap-2 py-1"><Loader2 className="w-4 h-4 animate-spin" style={{ color: '#6B7280' }} /></div>
+          ) : ebayConnected ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm" style={{ color: '#4ADE80' }}>
+                <Link className="w-4 h-4" />
+                eBay account connected
+              </div>
+              <button
+                onClick={async () => {
+                  const res = await fetch('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ebayAccessToken: null, ebayRefreshToken: null, ebayTokenExpiresAt: null }) });
+                  if (res.ok) { setEbayConnected(false); setEbayMessage({ type: 'success', text: 'eBay account disconnected.' }); }
+                }}
+                className="text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1"
+                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#F87171' }}
+              >
+                <Link2Off className="w-3 h-3" /> Disconnect
+              </button>
+            </div>
+          ) : (
+            <a
+              href="/api/auth/ebay"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 2px 12px rgba(99,102,241,0.3)' }}
+            >
+              <Link className="w-4 h-4" />
+              Connect eBay Account
+            </a>
+          )}
+        </div>
 
         {/* Deal alerts */}
         <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -363,6 +526,67 @@ export default function SettingsPage() {
               {notifLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
             </button>
           </form>
+        </div>
+
+        {/* SMS Alerts */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Bell className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">Daily Text Alert</h2>
+          </div>
+          <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Get a daily text with today&apos;s top 5 deals. Enter your 10-digit number and select your carrier.</p>
+          {phoneMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: phoneMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${phoneMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: phoneMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {phoneMessage.text}
+            </div>
+          )}
+          <form onSubmit={handleSavePhone} className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                type="tel"
+                value={notifPhone}
+                onChange={e => setNotifPhone(e.target.value)}
+                placeholder="2053938026"
+                autoComplete="tel"
+                className="flex-1 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+              <select
+                value={notifCarrier}
+                onChange={e => setNotifCarrier(e.target.value)}
+                className="px-3 py-2.5 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                <option value="att">AT&amp;T</option>
+                <option value="verizon">Verizon</option>
+                <option value="tmobile">T-Mobile</option>
+                <option value="sprint">Sprint</option>
+                <option value="cricket">Cricket</option>
+                <option value="boost">Boost</option>
+                <option value="metro">Metro</option>
+                <option value="uscellular">US Cellular</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={phoneLoading}
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
+            >
+              {phoneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            </button>
+          </form>
+          {savedSmsEmail && (
+            <button
+              onClick={handleSendTestSms}
+              disabled={testSmsLoading}
+              className="mt-3 w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60A5FA' }}
+            >
+              {testSmsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+              Send Test Message
+            </button>
+          )}
         </div>
 
         {/* Daily Watchlist */}
@@ -485,6 +709,131 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Default Price Range */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <SlidersHorizontal className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">Default Price Range</h2>
+          </div>
+          <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Pre-fill min/max price in Find Deals on every search.</p>
+          {priceRangeMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: priceRangeMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${priceRangeMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: priceRangeMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {priceRangeMessage.text}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              value={priceMin}
+              onChange={e => setPriceMin(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+              placeholder="$ min"
+              className="w-28 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <span className="text-sm" style={{ color: '#6B7280' }}>–</span>
+            <input
+              type="number"
+              min={0}
+              value={priceMax}
+              onChange={e => setPriceMax(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+              placeholder="$ max"
+              className="w-28 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <button
+              onClick={savePriceRange}
+              disabled={priceRangeLoading}
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
+            >
+              {priceRangeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            </button>
+            {(priceMin !== '' || priceMax !== '') && (
+              <button
+                onClick={() => { setPriceMin(''); setPriceMax(''); }}
+                className="text-xs px-2 py-1 rounded-lg"
+                style={{ color: '#6B7280', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Default Deal Filters */}
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <SlidersHorizontal className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">Default Deal Filters</h2>
+          </div>
+          <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Pre-fill min profit and min % off in Find Deals on every search.</p>
+          {dealFiltersMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: dealFiltersMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${dealFiltersMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: dealFiltersMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {dealFiltersMessage.text}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>Min profit $:</span>
+            <input
+              type="number"
+              min={0}
+              value={defaultMinProfit}
+              onChange={e => setDefaultMinProfit(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+              placeholder="any"
+              className="w-24 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <span className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>Min % off:</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={defaultMinDiscount}
+              onChange={e => setDefaultMinDiscount(e.target.value === '' ? '' : Math.min(100, Math.max(0, Number(e.target.value))))}
+              placeholder="any"
+              className="w-24 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <button
+              onClick={saveDealFilters}
+              disabled={dealFiltersLoading}
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
+            >
+              {dealFiltersLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            </button>
+            <button
+              onClick={() => setDefaultSingleQtyOnly(v => !v)}
+              className="text-xs px-3 py-2.5 rounded-xl font-medium transition-all"
+              style={{
+                background: defaultSingleQtyOnly ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.04)',
+                border: defaultSingleQtyOnly ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                color: defaultSingleQtyOnly ? '#4ADE80' : '#9CA3AF',
+              }}
+            >
+              {defaultSingleQtyOnly ? '✓ ' : ''}Single qty only
+            </button>
+            <button
+              onClick={saveDealFilters}
+              disabled={dealFiltersLoading}
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
+            >
+              {dealFiltersLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            </button>
+            {(defaultMinProfit !== '' || defaultMinDiscount !== '' || defaultSingleQtyOnly) && (
+              <button
+                onClick={() => { setDefaultMinProfit(''); setDefaultMinDiscount(''); setDefaultSingleQtyOnly(false); }}
+                className="text-xs px-2 py-1 rounded-lg"
+                style={{ color: '#6B7280', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Danger zone */}
         <div className="rounded-2xl p-5" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
           <div className="flex items-center gap-2 mb-3">
@@ -503,5 +852,13 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsContent />
+    </Suspense>
   );
 }

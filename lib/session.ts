@@ -2,7 +2,7 @@ import { createHmac, randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 const COOKIE_NAME = 'health_session';
-const SESSION_TTL = 60 * 60 * 24 * 7; // 7 days
+const SESSION_TTL = 60 * 60 * 24 * 30; // 30 days
 
 function getSecret(): string {
   const secret = process.env.SESSION_SECRET;

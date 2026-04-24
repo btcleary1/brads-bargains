@@ -7,6 +7,9 @@ import { sendDailyDigest } from '@/lib/notify';
 import { getUserPrefs } from '@/lib/tracker-data';
 import { checkRequestLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/audit';
+import Anthropic from '@anthropic-ai/sdk';
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export const runtime = 'nodejs';
 
@@ -43,7 +46,7 @@ export async function GET(req: NextRequest) {
       raw = MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '');
     } else {
       try {
-        raw = await searchDeals(query, 50);
+        raw = await searchDeals(query, 200);
       } catch {
         raw = MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '');
       }
@@ -55,11 +58,28 @@ export async function GET(req: NextRequest) {
     if (notify && hotDeals.length > 0) {
       const prefs = await getUserPrefs(session.userId);
       const alertEmail = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
-      if (alertEmail) {
-        // Send top 5 hot deals sorted by discount — skip strict seller filter so email always sends
-        const top5 = [...hotDeals].sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0)).slice(0, 5);
-        sendDailyDigest(top5, alertEmail).catch(() => {});
+      if (!alertEmail) {
+        return NextResponse.json({ error: 'No alert email configured. Add one in Settings.' }, { status: 400 });
       }
+      const top5 = [...hotDeals].sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0)).slice(0, 5);
+
+      // Generate AI Pick for the email
+      let aiPick: string | undefined;
+      try {
+        const topDesc = top5.map((i, idx) => {
+          const net = i.marketPrice ? Math.round(i.marketPrice * 0.85 - i.price - (i.shippingCost ?? 0)) : null;
+          return `#${idx + 1} ${i.title} — buy $${i.price}, market $${i.marketPrice ?? 'unknown'}, ~$${net ?? '?'} net profit. Condition: ${i.condition}.`;
+        }).join('\n');
+        const msg = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 200,
+          messages: [{ role: 'user', content: `You are a sharp eBay flip advisor. Net profit already accounts for eBay fees. Recommend the single best item to buy for resale profit. Name it directly. Reference net profit. Under 50 words. No markdown.\n\n${topDesc}` }],
+        });
+        const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
+        if (text) aiPick = text;
+      } catch { /* send without AI pick if it fails */ }
+
+      await sendDailyDigest(top5, alertEmail, aiPick);
     }
 
     return NextResponse.json({

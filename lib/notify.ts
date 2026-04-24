@@ -1,5 +1,13 @@
 import { EbayItem } from './ebay';
-import { sellabilityScore, sellabilityLabel } from './deal-score';
+import { sellabilityScore, sellabilityLabel, modelYear } from './deal-score';
+
+export interface FlipData {
+  verdict: 'buy' | 'maybe' | 'skip';
+  netProfit: number;
+  avgSoldPrice: number;
+  soldCount: number;
+  marginPct: number;
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
 
@@ -58,7 +66,20 @@ function listingAgeBadge(listingDate: string | null): string {
   return `<span style="font-size:10px;color:#94A3B8;background:#F8FAFC;border:1px solid #E2E8F0;padding:2px 7px;border-radius:4px;">Listed ${days}d ago</span>`;
 }
 
-function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
+function flipRow(flip: FlipData): string {
+  const verdictColor = flip.verdict === 'buy' ? '#16A34A' : flip.verdict === 'maybe' ? '#D97706' : '#DC2626';
+  const verdictBg    = flip.verdict === 'buy' ? '#F0FDF4' : flip.verdict === 'maybe' ? '#FFFBEB' : '#FEF2F2';
+  const verdictBorder= flip.verdict === 'buy' ? '#BBF7D0' : flip.verdict === 'maybe' ? '#FDE68A' : '#FECACA';
+  const label        = flip.verdict === 'buy' ? '✓ BUY' : flip.verdict === 'maybe' ? '~ MAYBE' : '✗ SKIP';
+  return `<div style="margin-top:8px;padding:8px 10px;background:${verdictBg};border:1px solid ${verdictBorder};border-radius:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:${verdictColor};">${label}</span>
+    <span style="font-size:11px;color:#475569;">Avg sold <strong>$${flip.avgSoldPrice.toFixed(0)}</strong> (${flip.soldCount} comps)</span>
+    ${flip.netProfit > 0 ? `<span style="font-size:11px;font-weight:700;color:#16A34A;">~$${flip.netProfit} net profit</span>` : `<span style="font-size:11px;color:#DC2626;">Low margin</span>`}
+    <span style="font-size:11px;color:#94A3B8;">${flip.marginPct}% margin</span>
+  </div>`;
+}
+
+function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: FlipData): string {
   const title    = safe(deal.title);
   const location = safe(deal.location);
   const condition = safe(deal.condition);
@@ -69,6 +90,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
   const sellScore = sellabilityScore(deal, allDeals);
   const sell = sellabilityLabel(sellScore);
   const ageBadge = listingAgeBadge(deal.listingDate);
+  const year = modelYear(deal.title);
   const shipping = deal.shippingCost === 0
     ? 'Free shipping'
     : deal.shippingCost
@@ -98,7 +120,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
             <a href="${deal.itemUrl}"
               style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;line-height:1.4;display:block;margin-bottom:5px;">${title}</a>
             <div style="font-size:12px;color:#64748B;">
-              ${condition} &middot; ${location}${shipping ? ' &middot; ' + shipping : ''}
+              ${condition}${year ? ` &middot; <span style="font-weight:600;color:#475569;">${year}</span>` : ''} &middot; ${location}${shipping ? ' &middot; ' + shipping : ''}
             </div>
             ${deal.sellerFeedbackPercent !== null
               ? `<div style="font-size:11px;color:#64748B;margin-top:3px;">
@@ -106,21 +128,19 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
                   &middot; ${deal.sellerFeedbackPercent}% (${deal.sellerFeedbackScore?.toLocaleString()} ratings)
                  </div>`
               : ''}
+            ${flip ? flipRow(flip) : ''}
           </td>
 
           <!-- Price -->
-          <td width="100" style="padding:14px 14px;text-align:right;vertical-align:top;white-space:nowrap;">
-            <div style="font-size:22px;font-weight:800;color:#0F172A;line-height:1;">$${deal.price.toFixed(0)}</div>
-            ${deal.marketPrice
-              ? `<div style="font-size:12px;color:#94A3B8;text-decoration:line-through;margin-top:2px;">$${deal.marketPrice.toFixed(0)}</div>`
-              : ''}
-            ${deal.discountPct ? `<div style="font-size:13px;font-weight:700;color:#16A34A;margin-top:2px;">${deal.discountPct}% off</div>` : ''}
-            ${savings > 0
-              ? `<div style="font-size:11px;color:#64748B;margin-top:1px;">Save $${savings.toFixed(0)}</div>`
-              : ''}
+          <td width="110" style="padding:14px 14px;text-align:right;vertical-align:top;white-space:nowrap;">
             ${netProfit !== null && netProfit > 0
-              ? `<div style="font-size:12px;font-weight:700;color:#16A34A;margin-top:3px;">~$${netProfit} profit</div>`
+              ? `<div style="font-size:18px;font-weight:900;color:#16A34A;line-height:1;">+$${netProfit} profit</div>`
               : ''}
+            <div style="font-size:${netProfit !== null && netProfit > 0 ? '14px' : '22px'};font-weight:800;color:#0F172A;margin-top:${netProfit !== null && netProfit > 0 ? '4px' : '0'};">$${deal.price.toFixed(0)}</div>
+            ${deal.marketPrice
+              ? `<div style="font-size:11px;color:#94A3B8;text-decoration:line-through;margin-top:1px;">$${deal.marketPrice.toFixed(0)}</div>`
+              : ''}
+            ${deal.discountPct ? `<div style="font-size:11px;color:#94A3B8;margin-top:1px;">${deal.discountPct}% off</div>` : ''}
             <a href="${deal.itemUrl}"
               style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View</a>
             <a href="${buildTrackUrl(deal)}"
@@ -133,13 +153,13 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
   </tr>`;
 }
 
-export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick?: string): Promise<void> {
+export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick?: string, flipMap?: Map<string, FlipData>): Promise<void> {
   if (deals.length === 0 || !toEmail) return;
 
   const apiKey = (process.env.SENDGRID_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
   const top5 = deals.slice(0, 5);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const rows = top5.map((d, i) => dealRow(d, i + 1, top5)).join('');
+  const rows = top5.map((d, i) => dealRow(d, i + 1, top5, flipMap?.get(d.itemId))).join('');
 
   const aiPickHtml = aiPick ? `
   <!-- AI Pick -->

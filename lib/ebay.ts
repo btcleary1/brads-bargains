@@ -151,6 +151,14 @@ export async function searchDeals(query: string, maxResults = 20): Promise<EbayI
   return items;
 }
 
+// Filter items to only those still live on eBay — removes sold/expired listings
+export async function filterLiveItems(items: EbayItem[]): Promise<EbayItem[]> {
+  const results = await Promise.allSettled(
+    items.map(item => getItemDetail(item.itemId))
+  );
+  return items.filter((_, i) => results[i].status === 'fulfilled' && results[i].value !== null);
+}
+
 export async function getItemDetail(itemId: string): Promise<EbayItem | null> {
   const token = await getEbayToken();
 

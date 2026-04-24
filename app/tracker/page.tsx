@@ -5,8 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import {
   BarChart2, Loader2, ShoppingCart, Tag, TrendingUp, DollarSign,
-  ClipboardCopy, Check, ExternalLink, X, ChevronDown,
+  ClipboardCopy, Check, ExternalLink, X, ChevronDown, AlertCircle, Lightbulb,
 } from 'lucide-react';
+
+interface CoachResult {
+  diagnosis: string;
+  actions: string[];
+  priceDropSuggestion: number | null;
+  switchPlatform: boolean;
+  switchPlatformReason: string | null;
+}
 
 type DealStatus = 'watching' | 'purchased' | 'listed' | 'sold';
 
@@ -109,6 +117,9 @@ function DealCard({
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localDeal, setLocalDeal] = useState(deal);
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [coach, setCoach] = useState<CoachResult | null>(null);
+  const [coachError, setCoachError] = useState('');
 
   const profit = localDeal.sellActualPrice && localDeal.ebayPrice
     ? (localDeal.sellActualPrice * 0.85 - localDeal.ebayPrice - (localDeal.shippingCost ?? 0))
@@ -164,6 +175,37 @@ function DealCard({
     onDelete(localDeal.id);
   };
 
+  const listedDaysAgo = localDeal.purchasedAt
+    ? Math.floor((Date.now() - new Date(localDeal.purchasedAt).getTime()) / 86_400_000)
+    : null;
+  const isStale = localDeal.status === 'listed' && listedDaysAgo != null && listedDaysAgo >= 14;
+
+  const runCoach = async () => {
+    setCoachLoading(true);
+    setCoachError('');
+    setCoach(null);
+    try {
+      const res = await fetch('/api/stale-coach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: localDeal.title,
+          ebayPrice: localDeal.sellTargetPrice ?? localDeal.ebayPrice,
+          listedDaysAgo,
+          condition: localDeal.condition,
+          category: localDeal.category,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Coach failed');
+      setCoach(data);
+    } catch (e: any) {
+      setCoachError(e.message);
+    } finally {
+      setCoachLoading(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
       {/* Card header */}
@@ -196,7 +238,7 @@ function DealCard({
           {localDeal.priceHistory && localDeal.priceHistory.length >= 2 && (
             <PriceSparkline history={localDeal.priceHistory} />
           )}
-          <div className="flex gap-2 mt-2">
+          <div className="flex flex-wrap gap-2 mt-2">
             <a
               href={localDeal.ebayUrl}
               target="_blank"
@@ -214,7 +256,56 @@ function DealCard({
               <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
               {expanded ? 'Less' : 'Manage'}
             </button>
+            {isStale && (
+              <button
+                onClick={runCoach}
+                disabled={coachLoading}
+                className="text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-all disabled:opacity-60"
+                style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#FCD34D' }}
+              >
+                {coachLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Lightbulb className="w-3 h-3" />}
+                Why isn&apos;t this selling?
+              </button>
+            )}
           </div>
+
+          {/* Stale coach result */}
+          {coachLoading && (
+            <div className="mt-3 rounded-xl px-3 py-2.5 flex items-center gap-2 text-xs" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#FCD34D' }}>
+              <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+              Agent analyzing competition and pricing…
+            </div>
+          )}
+          {coachError && (
+            <div className="mt-3 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#FCA5A5' }}>
+              {coachError}
+            </div>
+          )}
+          {coach && (
+            <div className="mt-3 rounded-xl p-3 space-y-2" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: '#FCD34D' }} />
+                <p className="text-xs font-medium" style={{ color: '#FCD34D' }}>{coach.diagnosis}</p>
+              </div>
+              <ul className="space-y-1">
+                {coach.actions.map((action, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-xs" style={{ color: '#D1D5DB' }}>
+                    <span style={{ color: '#6B7280' }}>→</span> {action}
+                  </li>
+                ))}
+              </ul>
+              {coach.priceDropSuggestion != null && (
+                <div className="text-xs font-semibold" style={{ color: '#4ADE80' }}>
+                  Suggested price: ${coach.priceDropSuggestion.toFixed(2)}
+                </div>
+              )}
+              {coach.switchPlatform && coach.switchPlatformReason && (
+                <div className="text-xs" style={{ color: '#A78BFA' }}>
+                  💡 Try Facebook Marketplace: {coach.switchPlatformReason}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -335,7 +426,7 @@ function TrackerInner() {
   const [addedBanner, setAddedBanner] = useState('');
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => { if (!r.ok) router.replace('/login'); }).catch(() => router.replace('/login'));
+    fetch('/api/auth/me').then(r => { if (r.status === 401) router.replace('/login'); }).catch(() => { /* network error — don't log out */ });
     fetch('/api/tracker')
       .then(r => r.json())
       .then(async d => {
@@ -395,25 +486,84 @@ function TrackerInner() {
           </div>
         </div>
 
-        {/* Stats */}
-        {deals.length > 0 && (
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="rounded-2xl p-3 text-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="text-xs mb-1" style={{ color: '#6B7280' }}>Spent</div>
-              <div className="font-bold text-white text-sm">${totalSpent.toFixed(0)}</div>
-            </div>
-            <div className="rounded-2xl p-3 text-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="text-xs mb-1" style={{ color: '#6B7280' }}>Revenue</div>
-              <div className="font-bold text-sm" style={{ color: '#34D399' }}>${totalSold.toFixed(0)}</div>
-            </div>
-            <div className="rounded-2xl p-3 text-center" style={{ background: totalProfit > 0 ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.04)', border: totalProfit > 0 ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="text-xs mb-1" style={{ color: '#6B7280' }}>Profit</div>
-              <div className="font-bold text-sm" style={{ color: totalProfit > 0 ? '#4ADE80' : totalProfit < 0 ? '#F87171' : 'white' }}>
-                {totalProfit >= 0 ? '+' : ''}${totalProfit.toFixed(0)}
+        {/* P&L Dashboard */}
+        {deals.length > 0 && (() => {
+          const soldDeals = deals.filter(d => d.status === 'sold' && d.sellActualPrice);
+          const activeDeals = deals.filter(d => d.status === 'purchased' || d.status === 'listed');
+          const activeCap = activeDeals.reduce((s, d) => s + d.ebayPrice, 0);
+          const winCount = soldDeals.filter(d => d.sellActualPrice! * 0.85 - d.ebayPrice - (d.shippingCost ?? 0) > 0).length;
+          const winRate = soldDeals.length > 0 ? Math.round((winCount / soldDeals.length) * 100) : null;
+
+          const holdTimes = soldDeals
+            .filter(d => d.purchasedAt && d.soldAt)
+            .map(d => Math.max(1, Math.round((new Date(d.soldAt!).getTime() - new Date(d.purchasedAt!).getTime()) / 86400000)));
+          const avgHold = holdTimes.length > 0 ? Math.round(holdTimes.reduce((a, b) => a + b, 0) / holdTimes.length) : null;
+
+          const profits = soldDeals.map(d => ({ title: d.title, profit: d.sellActualPrice! * 0.85 - d.ebayPrice - (d.shippingCost ?? 0) }));
+          const bestFlip = profits.length > 0 ? profits.reduce((a, b) => b.profit > a.profit ? b : a) : null;
+
+          const roi = totalSpent > 0 && totalProfit !== 0 ? Math.round((totalProfit / totalSpent) * 100) : null;
+
+          return (
+            <div className="rounded-2xl p-4 mb-5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="w-4 h-4" style={{ color: totalProfit >= 0 ? '#4ADE80' : '#F87171' }} />
+                <span className="text-sm font-semibold text-white">P&amp;L Summary</span>
               </div>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="rounded-xl p-2.5 text-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                  <div className="text-[10px] mb-0.5" style={{ color: '#6B7280' }}>Spent</div>
+                  <div className="font-bold text-white text-sm">${totalSpent.toFixed(0)}</div>
+                </div>
+                <div className="rounded-xl p-2.5 text-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                  <div className="text-[10px] mb-0.5" style={{ color: '#6B7280' }}>Revenue</div>
+                  <div className="font-bold text-sm" style={{ color: '#34D399' }}>${totalSold.toFixed(0)}</div>
+                </div>
+                <div className="rounded-xl p-2.5 text-center" style={{ background: totalProfit > 0 ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.04)' }}>
+                  <div className="text-[10px] mb-0.5" style={{ color: '#6B7280' }}>Net Profit</div>
+                  <div className="font-bold text-sm" style={{ color: totalProfit > 0 ? '#4ADE80' : totalProfit < 0 ? '#F87171' : 'white' }}>
+                    {totalProfit >= 0 ? '+' : ''}${totalProfit.toFixed(0)}
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {activeCap > 0 && (
+                  <div className="rounded-xl p-2.5" style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.15)' }}>
+                    <div className="text-[10px]" style={{ color: '#6B7280' }}>Active Capital</div>
+                    <div className="font-bold text-sm" style={{ color: '#FB923C' }}>${activeCap.toFixed(0)}</div>
+                    <div className="text-[10px]" style={{ color: '#6B7280' }}>{activeDeals.length} item{activeDeals.length !== 1 ? 's' : ''} at risk</div>
+                  </div>
+                )}
+                {winRate !== null && (
+                  <div className="rounded-xl p-2.5" style={{ background: winRate >= 70 ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.04)', border: `1px solid ${winRate >= 70 ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.08)'}` }}>
+                    <div className="text-[10px]" style={{ color: '#6B7280' }}>Win Rate</div>
+                    <div className="font-bold text-sm" style={{ color: winRate >= 70 ? '#4ADE80' : winRate >= 50 ? '#FCD34D' : '#F87171' }}>{winRate}%</div>
+                    <div className="text-[10px]" style={{ color: '#6B7280' }}>{winCount}/{soldDeals.length} profitable</div>
+                  </div>
+                )}
+                {roi !== null && (
+                  <div className="rounded-xl p-2.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <div className="text-[10px]" style={{ color: '#6B7280' }}>ROI</div>
+                    <div className="font-bold text-sm" style={{ color: roi > 0 ? '#4ADE80' : '#F87171' }}>{roi > 0 ? '+' : ''}{roi}%</div>
+                  </div>
+                )}
+                {avgHold !== null && (
+                  <div className="rounded-xl p-2.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <div className="text-[10px]" style={{ color: '#6B7280' }}>Avg Hold</div>
+                    <div className="font-bold text-sm text-white">{avgHold}d</div>
+                  </div>
+                )}
+              </div>
+              {bestFlip && bestFlip.profit > 0 && (
+                <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                  <div className="text-[10px] mb-0.5" style={{ color: '#818CF8' }}>🏆 Best Flip</div>
+                  <div className="text-xs font-medium text-white line-clamp-1">{bestFlip.title}</div>
+                  <div className="text-xs font-bold" style={{ color: '#4ADE80' }}>+${bestFlip.profit.toFixed(0)} profit</div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Filter tabs */}
         {deals.length > 0 && (

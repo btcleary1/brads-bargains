@@ -20,23 +20,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ recommendation: null });
   }
 
-  const top = items.slice(0, 10).map((i: any, idx: number) =>
-    `#${idx + 1} ${i.title} — $${i.price}${i.discountPct ? ` (${i.discountPct}% off)` : ''}${i.marketPrice ? `, market $${i.marketPrice}` : ''}. Condition: ${i.condition}.`
-  ).join('\n');
+  const top = items.slice(0, 10).map((i: any) => {
+    const netProfit = i.marketPrice ? Math.round(i.marketPrice * 0.85 - i.price - (i.shippingCost ?? 0)) : null;
+    return `[id:${i.itemId}] ${i.title} — buy $${i.price}, market $${i.marketPrice ?? 'unknown'}${netProfit != null ? `, ~$${netProfit} net profit` : ''}. Condition: ${i.condition}.`;
+  }).join('\n');
 
   try {
     const msg = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 100,
+      max_tokens: 200,
       messages: [{
         role: 'user',
-        content: `You are a sharp eBay flip advisor. Given these listings, recommend the single best one to buy today for resale profit. Be direct, specific, and under 50 words. No disclaimers.\n\n${top}`,
+        content: `You are a sharp eBay flip advisor. Net profit already accounts for eBay fees. Recommend the single best item to buy today for resale profit.\n\nRespond with ONLY a JSON object:\n{"recommendation": "<name the item directly, reference net profit, under 50 words, no markdown>", "pickedItemId": "<the exact id: value from the chosen item>"}\n\n${top}`,
       }],
     });
 
-    const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : null;
-    return NextResponse.json({ recommendation: text });
+    const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start !== -1 && end !== -1) {
+      const parsed = JSON.parse(raw.slice(start, end + 1));
+      return NextResponse.json({ recommendation: parsed.recommendation ?? null, pickedItemId: parsed.pickedItemId ?? null });
+    }
+    return NextResponse.json({ recommendation: raw || null, pickedItemId: null });
   } catch {
-    return NextResponse.json({ recommendation: null });
+    return NextResponse.json({ recommendation: null, pickedItemId: null });
   }
 }
