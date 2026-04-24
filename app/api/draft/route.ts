@@ -43,7 +43,7 @@ ${deal.title} in ${condition.toLowerCase()} condition. ${deal.notes ? deal.notes
 
   // Save draft back to the deal
   const updatedDeals = deals.map(d =>
-    d.id === dealId ? { ...d, listingDraft: draft, status: d.status === 'watching' ? 'purchased' : d.status } : d
+    d.id === dealId ? { ...d, listingDraft: draft } : d
   );
   await saveDeals(session.userId, updatedDeals as any);
 
