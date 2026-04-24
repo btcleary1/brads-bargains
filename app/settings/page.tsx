@@ -32,11 +32,10 @@ function SettingsContent() {
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifMessage, setNotifMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [notifPhone, setNotifPhone] = useState('');
-  const [phoneLoading, setPhoneLoading] = useState(false);
-  const [phoneMessage, setPhoneMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [testSmsLoading, setTestSmsLoading] = useState(false);
-  const [savedSmsEmail, setSavedSmsEmail] = useState<string | null>(null);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushMessage, setPushMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [watchlistInput, setWatchlistInput] = useState('');
@@ -70,7 +69,6 @@ function SettingsContent() {
       // Pre-populate notification email with Gmail if not already saved
       fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
         setNotifEmail(p.notificationEmail || me.email || '');
-        if (p.notificationPhone) { const d = p.notificationPhone.replace(/\D/g, '').slice(-10); setNotifPhone(d); setSavedSmsEmail(d); }
         if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
         if (p.digestCount) setDigestCount(p.digestCount);
         if (p.digestCategories) setDigestCategories(p.digestCategories);
@@ -94,6 +92,16 @@ function SettingsContent() {
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Face ID');
     else if (/Mac/.test(ua) || /CrOS/.test(ua) || /Win/.test(ua)) setBiometricLabel('Fingerprint / Touch ID');
     fetchStatus();
+
+    // Check push notification support and current permission
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      setPushSupported(true);
+      if (Notification.permission === 'granted') {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.pushManager.getSubscription().then(sub => setPushEnabled(!!sub));
+        });
+      }
+    }
   }, [router]);
 
   const fetchStatus = async () => {
@@ -189,34 +197,71 @@ function SettingsContent() {
     setNotifLoading(false);
   };
 
-  const handleSavePhone = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPhoneLoading(true);
-    setPhoneMessage(null);
+  const handleEnablePush = async () => {
+    setPushLoading(true);
+    setPushMessage(null);
     try {
-      const digits = notifPhone.trim().replace(/\D/g, '').slice(-10);
-      const phone = digits.length === 10 ? digits : null;
-      const res = await fetch('/api/prefs', {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPushMessage({ type: 'error', text: 'Permission denied. Enable notifications in your browser settings.' });
+        setPushLoading(false);
+        return;
+      }
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: 'BOuoW_7q_n1PHvl-GsSmqYpOd9P9Gqxfe51zfuvO84r_CaRVU9A529QivYvBUy6Ml7MahUX_S2lBOzS1ObjeM08',
+      });
+      await fetch('/api/push-subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationPhone: phone }),
+        body: JSON.stringify({ subscription: sub }),
       });
-      if (res.ok) { setSavedSmsEmail(phone); setPhoneMessage({ type: 'success', text: phone ? 'Phone number saved.' : 'Phone number removed.' }); }
-      else setPhoneMessage({ type: 'error', text: 'Failed to save.' });
-    } catch { setPhoneMessage({ type: 'error', text: 'Network error.' }); }
-    setPhoneLoading(false);
+      setPushEnabled(true);
+      setPushMessage({ type: 'success', text: 'Deal notifications enabled!' });
+    } catch (err: any) {
+      setPushMessage({ type: 'error', text: err.message || 'Failed to enable notifications.' });
+    }
+    setPushLoading(false);
   };
 
-  const handleSendTestSms = async () => {
-    setTestSmsLoading(true);
-    setPhoneMessage(null);
+  const handleDisablePush = async () => {
+    setPushLoading(true);
+    setPushMessage(null);
     try {
-      const res = await fetch('/api/test-sms', { method: 'POST' });
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch('/api/push-subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      setPushEnabled(false);
+      setPushMessage({ type: 'success', text: 'Notifications disabled.' });
+    } catch (err: any) {
+      setPushMessage({ type: 'error', text: err.message || 'Failed to disable notifications.' });
+    }
+    setPushLoading(false);
+  };
+
+  const handleTestPush = async () => {
+    setPushLoading(true);
+    setPushMessage(null);
+    try {
+      const res = await fetch('/api/push-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: "Brad's Bargains", body: "🔥 Test notification — deal alerts are working!", url: '/deals' }),
+      });
       const d = await res.json();
-      if (res.ok) setPhoneMessage({ type: 'success', text: 'Test message sent! Check your phone.' });
-      else setPhoneMessage({ type: 'error', text: d.error || 'Failed to send test message.' });
-    } catch { setPhoneMessage({ type: 'error', text: 'Network error.' }); }
-    setTestSmsLoading(false);
+      if (res.ok) setPushMessage({ type: 'success', text: 'Test notification sent!' });
+      else setPushMessage({ type: 'error', text: d.error || 'Failed to send.' });
+    } catch { setPushMessage({ type: 'error', text: 'Network error.' }); }
+    setPushLoading(false);
   };
 
   const saveWatchlist = async (updated: string[]) => {
@@ -520,51 +565,56 @@ function SettingsContent() {
           </form>
         </div>
 
-        {/* SMS Alerts */}
-        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <div className="flex items-center gap-2 mb-1">
-            <Bell className="w-5 h-5" style={{ color: '#60A5FA' }} />
-            <h2 className="font-semibold text-white text-[15px]">Daily Text Alert</h2>
+        {/* Push Notifications */}
+        {pushSupported && (
+          <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <Bell className="w-5 h-5" style={{ color: '#60A5FA' }} />
+              <h2 className="font-semibold text-white text-[15px]">Deal Notifications</h2>
+            </div>
+            <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Get instant push notifications for hot deals — works on your phone and desktop.</p>
+            {pushMessage && (
+              <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: pushMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${pushMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: pushMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+                {pushMessage.text}
+              </div>
+            )}
+            {pushEnabled ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#4ADE80' }}>
+                  <Bell className="w-3.5 h-3.5 shrink-0" />
+                  Notifications enabled on this device
+                </div>
+                <button
+                  onClick={handleTestPush}
+                  disabled={pushLoading}
+                  className="w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                  style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60A5FA' }}
+                >
+                  {pushLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                  Send Test Notification
+                </button>
+                <button
+                  onClick={handleDisablePush}
+                  disabled={pushLoading}
+                  className="w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                  style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#F87171' }}
+                >
+                  Disable Notifications
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleEnablePush}
+                disabled={pushLoading}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 2px 12px rgba(99,102,241,0.3)' }}
+              >
+                {pushLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                Enable Deal Notifications
+              </button>
+            )}
           </div>
-          <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Get a daily text with today&apos;s top 5 deals. Enter your 10-digit US number.</p>
-          {phoneMessage && (
-            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: phoneMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${phoneMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: phoneMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
-              {phoneMessage.text}
-            </div>
-          )}
-          <form onSubmit={handleSavePhone} className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <input
-                type="tel"
-                value={notifPhone}
-                onChange={e => setNotifPhone(e.target.value)}
-                placeholder="2053938026"
-                autoComplete="tel"
-                className="flex-1 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={phoneLoading}
-              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}
-            >
-              {phoneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
-            </button>
-          </form>
-          {savedSmsEmail && (
-            <button
-              onClick={handleSendTestSms}
-              disabled={testSmsLoading}
-              className="mt-3 w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-              style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60A5FA' }}
-            >
-              {testSmsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
-              Send Test Message
-            </button>
-          )}
-        </div>
+        )}
 
         {/* Daily Watchlist */}
         <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>

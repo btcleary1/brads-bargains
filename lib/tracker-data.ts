@@ -85,6 +85,7 @@ export interface UserPrefs {
   defaultMinDiscount?: number;
   defaultSingleQtyOnly?: boolean;
   notificationPhone?: string;
+  pushSubscriptions?: object[];
 }
 
 export async function getUserPrefs(userId: string): Promise<UserPrefs> {
