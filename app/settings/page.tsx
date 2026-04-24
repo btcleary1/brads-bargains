@@ -33,7 +33,6 @@ function SettingsContent() {
   const [notifMessage, setNotifMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [notifPhone, setNotifPhone] = useState('');
-  const [notifCarrier, setNotifCarrier] = useState('att');
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [phoneMessage, setPhoneMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [testSmsLoading, setTestSmsLoading] = useState(false);
@@ -71,7 +70,7 @@ function SettingsContent() {
       // Pre-populate notification email with Gmail if not already saved
       fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {
         setNotifEmail(p.notificationEmail || me.email || '');
-        if (p.notificationPhone) { setNotifPhone(p.notificationPhone); setSavedSmsEmail(p.notificationPhone); }
+        if (p.notificationPhone) { const d = p.notificationPhone.replace(/\D/g, '').slice(-10); setNotifPhone(d); setSavedSmsEmail(d); }
         if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
         if (p.digestCount) setDigestCount(p.digestCount);
         if (p.digestCategories) setDigestCategories(p.digestCategories);
@@ -190,26 +189,19 @@ function SettingsContent() {
     setNotifLoading(false);
   };
 
-  const CARRIER_GATEWAYS: Record<string, string> = {
-    att: 'txt.att.net', verizon: 'vtext.com', tmobile: 'tmomail.net',
-    sprint: 'messaging.sprintpcs.com', cricket: 'sms.cricketwireless.net',
-    boost: 'sms.myboostmobile.com', metro: 'mymetropcs.com', uscellular: 'email.uscc.net',
-  };
-
   const handleSavePhone = async (e: React.FormEvent) => {
     e.preventDefault();
     setPhoneLoading(true);
     setPhoneMessage(null);
     try {
       const digits = notifPhone.trim().replace(/\D/g, '').slice(-10);
-      const gateway = CARRIER_GATEWAYS[notifCarrier];
-      const smsEmail = digits.length === 10 && gateway ? `${digits}@${gateway}` : null;
+      const phone = digits.length === 10 ? digits : null;
       const res = await fetch('/api/prefs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationPhone: smsEmail }),
+        body: JSON.stringify({ notificationPhone: phone }),
       });
-      if (res.ok) { setSavedSmsEmail(smsEmail); setPhoneMessage({ type: 'success', text: `Saved — texts will go to ${smsEmail ?? 'none'}.` }); }
+      if (res.ok) { setSavedSmsEmail(phone); setPhoneMessage({ type: 'success', text: phone ? 'Phone number saved.' : 'Phone number removed.' }); }
       else setPhoneMessage({ type: 'error', text: 'Failed to save.' });
     } catch { setPhoneMessage({ type: 'error', text: 'Network error.' }); }
     setPhoneLoading(false);
@@ -534,7 +526,7 @@ function SettingsContent() {
             <Bell className="w-5 h-5" style={{ color: '#60A5FA' }} />
             <h2 className="font-semibold text-white text-[15px]">Daily Text Alert</h2>
           </div>
-          <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Get a daily text with today&apos;s top 5 deals. Enter your 10-digit number and select your carrier.</p>
+          <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Get a daily text with today&apos;s top 5 deals. Enter your 10-digit US number.</p>
           {phoneMessage && (
             <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: phoneMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${phoneMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: phoneMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
               {phoneMessage.text}
@@ -551,21 +543,6 @@ function SettingsContent() {
                 className="flex-1 px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
               />
-              <select
-                value={notifCarrier}
-                onChange={e => setNotifCarrier(e.target.value)}
-                className="px-3 py-2.5 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-              >
-                <option value="att">AT&amp;T</option>
-                <option value="verizon">Verizon</option>
-                <option value="tmobile">T-Mobile</option>
-                <option value="sprint">Sprint</option>
-                <option value="cricket">Cricket</option>
-                <option value="boost">Boost</option>
-                <option value="metro">Metro</option>
-                <option value="uscellular">US Cellular</option>
-              </select>
             </div>
             <button
               type="submit"
