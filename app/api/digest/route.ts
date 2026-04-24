@@ -23,6 +23,27 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
+async function generateAiPick(deals: EbayItem[]): Promise<string | undefined> {
+  try {
+    const top = deals.slice(0, 5).map((item, idx) => {
+      const netProfit = item.marketPrice ? Math.round(item.marketPrice * 0.85 - item.price - (item.shippingCost ?? 0)) : null;
+      return `#${idx + 1} ${item.title} — buy $${item.price}, market $${item.marketPrice ?? 'unknown'}, net profit after fees ~$${netProfit ?? '?'}. Condition: ${item.condition}.`;
+    }).join('\n');
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 100,
+      messages: [{
+        role: 'user',
+        content: `You are a sharp eBay flip advisor. Net profit figures already account for eBay fees. Given these listings, recommend the single best one to buy today for resale profit. Reference the net profit figure. Be direct, specific, and under 50 words. No disclaimers. No markdown formatting.\n\n${top}`,
+      }],
+    });
+    return msg.content[0].type === 'text' ? msg.content[0].text.trim() : undefined;
+  } catch (e) {
+    console.error('AI pick failed:', e);
+    return undefined;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
   const force  = req.nextUrl.searchParams.get('force') === '1';
@@ -88,11 +109,12 @@ export async function GET(req: NextRequest) {
     best5 = [...best5].sort((a, b) => sellabilityScore(b, best5) - sellabilityScore(a, best5));
 
     // Build recipient list with personalized deals per user
-    type UserDigest = { email: string; phone?: string; deals: typeof best5 };
+    type UserDigest = { email: string; phone?: string; deals: typeof best5; aiPick?: string };
     let userDigests: UserDigest[] = [];
 
     if (toOverride) {
-      userDigests = [{ email: toOverride, deals: best5 }];
+      const aiPick = await generateAiPick(best5);
+      userDigests = [{ email: toOverride, deals: best5, aiPick }];
     } else {
       const users = await getAllUsers();
       const prefsResults = await Promise.allSettled(users.map(u => getUserPrefs(u.userId)));
@@ -141,11 +163,13 @@ export async function GET(req: NextRequest) {
         }
 
         const sortedDeals = [...userDeals].sort((a, b) => sellabilityScore(b, userDeals) - sellabilityScore(a, userDeals));
-        userDigests.push({ email: prefs.notificationEmail ?? '', phone: prefs.notificationPhone, deals: sortedDeals });
+        const aiPick = await generateAiPick(sortedDeals);
+        userDigests.push({ email: prefs.notificationEmail ?? '', phone: prefs.notificationPhone, deals: sortedDeals, aiPick });
       }
 
       if (userDigests.length === 0 && process.env.NOTIFICATION_EMAIL) {
-        userDigests = [{ email: process.env.NOTIFICATION_EMAIL, deals: best5 }];
+        const aiPick = await generateAiPick(best5);
+        userDigests = [{ email: process.env.NOTIFICATION_EMAIL, deals: best5, aiPick }];
       }
     }
 
@@ -153,26 +177,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'No recipients configured' });
     }
 
-    // Generate AI Pick of the Day from best5
-    let aiPick: string | undefined;
-    try {
-      const top = best5.slice(0, 5).map((i, idx) => {
-        const netProfit = i.marketPrice ? Math.round(i.marketPrice * 0.85 - i.price - (i.shippingCost ?? 0)) : null;
-        return `#${idx + 1} ${i.title} — buy $${i.price}, market $${i.marketPrice ?? 'unknown'}, net profit after fees ~$${netProfit ?? '?'}. Condition: ${i.condition}.`;
-      }).join('\n');
-      const msg = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 100,
-        messages: [{
-          role: 'user',
-          content: `You are a sharp eBay flip advisor. Net profit figures already account for eBay fees. Given these listings, recommend the single best one to buy today for resale profit. Reference the net profit figure. Be direct, specific, and under 50 words. No disclaimers. No markdown formatting.\n\n${top}`,
-        }],
-      });
-      aiPick = msg.content[0].type === 'text' ? msg.content[0].text.trim() : undefined;
-    } catch (e) { console.error('AI pick failed:', e); }
-
-    // Send to all recipients — collect results to surface any errors
-    const sendResults = await Promise.allSettled(userDigests.map(({ email, phone, deals }) =>
+    // Send to all recipients — AI pick is already personalized per user in userDigests
+    const sendResults = await Promise.allSettled(userDigests.map(({ email, phone, deals, aiPick }) =>
       Promise.all([
         email ? sendDailyDigest(deals, email, aiPick) : Promise.resolve(),
         phone ? sendSmsDigest(deals, phone) : Promise.resolve(),
@@ -196,7 +202,7 @@ export async function GET(req: NextRequest) {
       recipients: successCount,
       rawItemCount: allItems.length,
       nonRefurbCount: nonRefurb.length,
-      aiPick: aiPick ?? null,
+      aiPick: userDigests[0]?.aiPick ?? null,
       errors: errors.length > 0 ? errors : undefined,
       deals: best5.map(d => ({
         title: d.title,
