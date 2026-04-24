@@ -566,55 +566,57 @@ function SettingsContent() {
         </div>
 
         {/* Push Notifications */}
-        {pushSupported && (
-          <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="flex items-center gap-2 mb-1">
-              <Bell className="w-5 h-5" style={{ color: '#60A5FA' }} />
-              <h2 className="font-semibold text-white text-[15px]">Deal Notifications</h2>
+        <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Bell className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">Deal Notifications</h2>
+          </div>
+          <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Get instant push notifications for hot deals — works on Chrome, Android, and desktop.</p>
+          {pushMessage && (
+            <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: pushMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${pushMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: pushMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {pushMessage.text}
             </div>
-            <p className="text-xs mb-3" style={{ color: '#6B7280' }}>Get instant push notifications for hot deals — works on your phone and desktop.</p>
-            {pushMessage && (
-              <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: pushMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${pushMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: pushMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
-                {pushMessage.text}
+          )}
+          {!pushSupported ? (
+            <div className="rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#6B7280' }}>
+              Push notifications aren&apos;t supported in this browser. Try Chrome or add this site to your home screen on iOS.
+            </div>
+          ) : pushEnabled ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#4ADE80' }}>
+                <Bell className="w-3.5 h-3.5 shrink-0" />
+                Notifications enabled on this device
               </div>
-            )}
-            {pushEnabled ? (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', color: '#4ADE80' }}>
-                  <Bell className="w-3.5 h-3.5 shrink-0" />
-                  Notifications enabled on this device
-                </div>
-                <button
-                  onClick={handleTestPush}
-                  disabled={pushLoading}
-                  className="w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-                  style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60A5FA' }}
-                >
-                  {pushLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
-                  Send Test Notification
-                </button>
-                <button
-                  onClick={handleDisablePush}
-                  disabled={pushLoading}
-                  className="w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
-                  style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#F87171' }}
-                >
-                  Disable Notifications
-                </button>
-              </div>
-            ) : (
               <button
-                onClick={handleEnablePush}
+                onClick={handleTestPush}
                 disabled={pushLoading}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-                style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 2px 12px rgba(99,102,241,0.3)' }}
+                className="w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60A5FA' }}
               >
                 {pushLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
-                Enable Deal Notifications
+                Send Test Notification
               </button>
-            )}
-          </div>
-        )}
+              <button
+                onClick={handleDisablePush}
+                disabled={pushLoading}
+                className="w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#F87171' }}
+              >
+                Disable Notifications
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleEnablePush}
+              disabled={pushLoading}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 2px 12px rgba(99,102,241,0.3)' }}
+            >
+              {pushLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+              Enable Deal Notifications
+            </button>
+          )}
+        </div>
 
         {/* Daily Watchlist */}
         <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
