@@ -209,9 +209,11 @@ function SettingsContent() {
       }
       const reg = await navigator.serviceWorker.register('/sw.js');
       await navigator.serviceWorker.ready;
+      const vapidKey = 'BOuoW_7q_n1PHvl-GsSmqYpOd9P9Gqxfe51zfuvO84r_CaRVU9A529QivYvBUy6Ml7MahUX_S2lBOzS1ObjeM08';
+      const keyBytes = Uint8Array.from(atob(vapidKey.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: 'BOuoW_7q_n1PHvl-GsSmqYpOd9P9Gqxfe51zfuvO84r_CaRVU9A529QivYvBUy6Ml7MahUX_S2lBOzS1ObjeM08',
+        applicationServerKey: keyBytes,
       });
       const saveRes = await fetch('/api/push-subscribe', {
         method: 'POST',
