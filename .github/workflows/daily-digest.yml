@@ -1,0 +1,20 @@
+name: Daily Digest
+
+on:
+  schedule:
+    - cron: '10 21 * * *'   # 9:10 PM UTC = 4:10 PM EST / 5:10 PM EDT
+  workflow_dispatch:         # allows manual trigger from GitHub Actions tab
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger digest
+        run: |
+          STATUS=$(curl -s -o /tmp/body.txt -w "%{http_code}" \
+            "https://brads-bargains.vercel.app/api/digest?secret=digest-2026")
+          cat /tmp/body.txt
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "Digest endpoint returned HTTP $STATUS — failing job"
+            exit 1
+          fi
