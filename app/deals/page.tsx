@@ -27,6 +27,7 @@ interface EbayItem {
   quantity: number | null;
   isHotDeal: boolean;
   sellScore?: number;
+  grade?: 'BUY' | 'SKIP';
 }
 
 interface SearchResult {
@@ -37,19 +38,20 @@ interface SearchResult {
   items: EbayItem[];
 }
 
-function SellBadge({ score }: { score: number }) {
-  const label = score >= 70 ? 'High Confidence' : score >= 45 ? 'Med Confidence' : 'Lower Confidence';
-  const color = score >= 70 ? '#4ADE80' : score >= 45 ? '#FCD34D' : '#F87171';
-  const bg    = score >= 70 ? 'rgba(34,197,94,0.12)' : score >= 45 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)';
-  const border= score >= 70 ? 'rgba(34,197,94,0.3)'  : score >= 45 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)';
-  const tooltip = `Sell Confidence Score: ${score}/100\n\n🟢 High (70+): Single item, fast-moving category, deep discount, unique price\n🟡 Medium (45–69): Some competition or moderate discount\n🔴 Lower (<45): Multi-quantity, slow category, or modest discount`;
+function GradeBadge({ grade, score }: { grade?: 'BUY' | 'SKIP'; score?: number }) {
+  const isBuy = grade === 'BUY' || (grade === undefined && (score ?? 0) >= 45);
+  const tooltip = score !== undefined
+    ? `Auto-grade: ${isBuy ? 'BUY' : 'SKIP'} (sell confidence ${score}/100)\n\n🟢 BUY (45+): Good sell confidence — single item, fast-moving category, decent discount\n🔴 SKIP (<45): Low sell confidence — old tech, heavy competition, or thin margin`
+    : '';
   return (
     <span
-      className="text-xs font-semibold px-2 py-1 rounded-lg cursor-help"
-      style={{ background: bg, border: `1px solid ${border}`, color }}
+      className="text-xs font-bold px-2 py-1 rounded-lg cursor-help"
+      style={isBuy
+        ? { background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ADE80' }
+        : { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}
       title={tooltip}
     >
-      {label}
+      {isBuy ? '👍 BUY' : '👎 SKIP'}
     </span>
   );
 }
@@ -81,7 +83,7 @@ function soldCompsUrl(title: string): string {
   return `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Complete=1&LH_Sold=1`;
 }
 
-function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem) => void }) {
+function ItemCard({ item, onTrack, highlighted }: { item: EbayItem; onTrack: (item: EbayItem) => void; highlighted?: boolean }) {
   const [tracking, setTracking] = useState(false);
   const [tracked, setTracked] = useState(false);
 
@@ -117,7 +119,7 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
     : null;
 
   return (
-    <div className="rounded-2xl overflow-hidden transition-all" style={{ background: 'rgba(255,255,255,0.04)', border: item.isHotDeal ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
+    <div id={item.itemId} className="rounded-2xl overflow-hidden transition-all" style={{ background: 'rgba(255,255,255,0.04)', border: highlighted ? '2px solid rgba(99,102,241,0.6)' : item.isHotDeal ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
       <div className="flex">
         {item.isHotDeal && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#F87171' }}>
@@ -145,7 +147,9 @@ function ItemCard({ item, onTrack }: { item: EbayItem; onTrack: (item: EbayItem)
               <span className="text-sm line-through" style={{ color: '#4B5563' }}>${item.marketPrice.toFixed(2)}</span>
             )}
             {item.discountPct !== null && <DealBadge pct={item.discountPct} />}
-            {item.sellScore !== undefined && <SellBadge score={item.sellScore} />}
+            {(item.grade !== undefined || item.sellScore !== undefined) && (
+              <GradeBadge grade={item.grade} score={item.sellScore} />
+            )}
           </div>
           <div className="flex flex-wrap gap-3 text-xs mb-2" style={{ color: '#6B7280' }}>
             <span className="flex items-center gap-1"><Package className="w-3 h-3" />{item.condition}</span>
@@ -210,6 +214,7 @@ export default function DealsPage() {
   const [filterSingleQty, setFilterSingleQty] = useState(false);
   const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [recommendation, setRecommendation] = useState<string | null>(null);
+  const [pickedItemId, setPickedItemId] = useState<string | null>(null);
   const [recLoading, setRecLoading] = useState(false);
   const [personalizedRecs, setPersonalizedRecs] = useState<EbayItem[] | null>(null);
   const [recsLoading, setRecsLoading] = useState(false);
@@ -243,19 +248,28 @@ export default function DealsPage() {
     setShowAll(false);
     setEmailState('idle');
     setRecommendation(null);
+    setPickedItemId(null);
     try {
       const res = await fetch(`/api/deals?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Search failed.');
       setResults(data);
-      // Fetch AI recommendation in background after results load
-      if (data.items?.length > 0) {
+      // Fetch AI recommendation in background — only from hot deals the auto-grader rates BUY
+      const buyHotDeals = (data.items ?? []).filter((i: any) => i.isHotDeal && i.grade === 'BUY');
+      if (buyHotDeals.length > 0) {
         setRecLoading(true);
         fetch('/api/deal-rec', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: data.items.filter((i: any) => i.isHotDeal).slice(0, 10) }),
-        }).then(r => r.json()).then(d => setRecommendation(d.recommendation ?? null)).catch(() => {}).finally(() => setRecLoading(false));
+          body: JSON.stringify({ items: buyHotDeals.slice(0, 10) }),
+        })
+          .then(r => r.json())
+          .then(d => {
+            setRecommendation(d.recommendation ?? null);
+            setPickedItemId(d.pickedItemId ?? null);
+          })
+          .catch(() => {})
+          .finally(() => setRecLoading(false));
       }
     } catch (e: any) {
       setError(e.message);
@@ -303,59 +317,17 @@ export default function DealsPage() {
         }
         if (activeFilter !== null) pool = pool.filter(i => i.discountPct !== null && i.discountPct >= activeFilter);
         if (filterSingleQty) pool = pool.filter(i => i.quantity === null || i.quantity <= 1);
-        // Compute blended score: 50% eBay relevance rank + 50% sellability
+        // Blend 50% eBay relevance rank (position in raw results) + 50% server sell score
         const totalItems = results.items.length;
         return pool
           .map((i, idx) => {
             const ebayRank = Math.round((1 - idx / Math.max(totalItems - 1, 1)) * 100);
-            const sell = computeSellScore(i, results.items);
-            return { ...i, sellScore: sell, blendScore: Math.round(ebayRank * 0.5 + sell * 0.5) };
+            const sell = i.sellScore ?? 0;
+            return { ...i, blendScore: Math.round(ebayRank * 0.5 + sell * 0.5) };
           })
           .sort((a, b) => (b as any).blendScore - (a as any).blendScore);
       })()
     : [];
-
-  function computeSellScore(item: EbayItem, allItems: EbayItem[]): number {
-    const qty = item.quantity ?? 1;
-    const quantityScore = qty <= 1 ? 30 : qty <= 3 ? 20 : qty <= 10 ? 10 : 0;
-    const pct = item.discountPct ?? 0;
-    const discountScore = pct >= 80 ? 25 : pct >= 70 ? 20 : pct >= 60 ? 14 : pct >= 50 ? 8 : 3;
-    const liquidityMap: Record<string, number> = { phone: 100, laptop: 95, gaming: 90, tablet: 85, audio: 80, watch: 80, camera: 70, cards: 75, lego: 65, comic: 50, vintage: 40 };
-    const text = `${item.title} ${item.category}`.toLowerCase();
-    let liq = 55;
-    if (/iphone|samsung.*phone|pixel/.test(text)) liq = 100;
-    else if (/macbook|laptop/.test(text)) liq = 95;
-    else if (/playstation|ps5|xbox/.test(text)) liq = 90;
-    else if (/ipad|tablet/.test(text)) liq = 85;
-    else if (/airpods|headphone/.test(text)) liq = 80;
-    else if (/nintendo|switch/.test(text)) liq = 80;
-    else if (/apple watch|smartwatch/.test(text)) liq = 80;
-    else if (/drone|camera/.test(text)) liq = 70;
-    else if (/pokemon|sports card/.test(text)) liq = 75;
-    else if (/lego/.test(text)) liq = 65;
-    const demandScore = Math.round((liq / 100) * 25);
-    const similar = allItems.filter(i => i.itemId !== item.itemId && i.title.toLowerCase().split(' ').slice(0, 3).join(' ') === item.title.toLowerCase().split(' ').slice(0, 3).join(' '));
-    const cheaperCount = similar.filter(i => i.price <= item.price).length;
-    const uniquenessScore = similar.length === 0 ? 20 : cheaperCount === 0 ? 20 : cheaperCount <= 1 ? 12 : 4;
-    // Tech age penalty — checks explicit year OR Apple model number
-    const techPatterns = /iphone|ipad|macbook|laptop|samsung|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
-    let agePenalty = 0;
-    if (techPatterns.test(item.title)) {
-      const yearMatch = item.title.match(/\b(20\d{2})\b/);
-      let releaseYear: number | null = yearMatch ? parseInt(yearMatch[1]) : null;
-      if (!releaseYear) {
-        const iphone = item.title.match(/iPhone\s+(\d+)/i);
-        if (iphone) { const n = parseInt(iphone[1]); releaseYear = n >= 16 ? 2024 : n === 15 ? 2023 : n === 14 ? 2022 : n === 13 ? 2021 : n === 12 ? 2020 : n === 11 ? 2019 : 2017; }
-        const ipad = !releaseYear && item.title.match(/iPad\s+(?:Pro|Air|Mini)?\s*(\d+)/i);
-        if (ipad) { const n = parseInt(ipad[1]); releaseYear = n >= 10 ? 2022 : n === 9 ? 2021 : n === 8 ? 2020 : n === 7 ? 2019 : 2018; }
-      }
-      if (releaseYear) {
-        const age = 2026 - releaseYear;
-        agePenalty = age <= 2 ? 0 : age <= 3 ? 10 : age <= 4 ? 20 : age <= 5 ? 30 : age <= 7 ? 45 : 60;
-      }
-    }
-    return Math.max(0, quantityScore + demandScore + discountScore + uniquenessScore - agePenalty);
-  }
 
   const hotCount = results?.items.filter(i => i.isHotDeal).length ?? 0;
   const minDiscount = results?.minDiscount ?? 60;
@@ -481,24 +453,53 @@ export default function DealsPage() {
             </div>
 
             {/* AI Recommendation */}
-            {(recLoading || recommendation) && (
-              <div className="rounded-xl p-4 mb-4 flex gap-3 items-start" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
-                <div className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-sm" style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}>🤖</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold mb-1" style={{ color: '#818CF8' }}>AI Pick of the Day</div>
-                  {recLoading
-                    ? <div className="flex items-center gap-2 text-xs" style={{ color: '#6B7280' }}><Loader2 className="w-3 h-3 animate-spin" /> Analyzing deals…</div>
-                    : <p className="text-sm leading-relaxed" style={{ color: '#E2E8F0' }}>{recommendation}</p>
-                  }
+            {(recLoading || recommendation) && (() => {
+              const pickedItem = pickedItemId ? results?.items.find(i => i.itemId === pickedItemId) : null;
+              const profit = pickedItem?.marketPrice
+                ? Math.round((pickedItem.marketPrice * 0.85 - pickedItem.price - (pickedItem.shippingCost ?? 0)) * 100) / 100
+                : null;
+              return (
+                <div className="rounded-xl p-4 mb-4 flex gap-3 items-start" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
+                  <div className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-sm" style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}>🤖</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold" style={{ color: '#818CF8' }}>AI Pick of the Day</span>
+                        {recommendation && !recLoading && (
+                          <GradeBadge grade="BUY" />
+                        )}
+                      </div>
+                      {pickedItemId && !recLoading && (
+                        <button
+                          onClick={() => document.getElementById(pickedItemId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                          className="text-xs px-2 py-1 rounded-lg shrink-0"
+                          style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818CF8' }}
+                        >
+                          Jump to item ↓
+                        </button>
+                      )}
+                    </div>
+                    {recLoading
+                      ? <div className="flex items-center gap-2 text-xs" style={{ color: '#6B7280' }}><Loader2 className="w-3 h-3 animate-spin" /> Analyzing deals…</div>
+                      : (
+                        <>
+                          <p className="text-sm leading-relaxed mb-2" style={{ color: '#E2E8F0' }}>{recommendation}</p>
+                          {profit !== null && profit > 0 && (
+                            <div className="text-xs font-semibold" style={{ color: '#4ADE80' }}>~${profit.toFixed(0)} net profit after eBay fees</div>
+                          )}
+                        </>
+                      )
+                    }
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Items */}
             {displayItems.length > 0 && (
               <div className="space-y-3 mb-5">
                 {displayItems.map(item => (
-                  <ItemCard key={item.itemId} item={item} onTrack={() => {}} />
+                  <ItemCard key={item.itemId} item={item} onTrack={() => {}} highlighted={item.itemId === pickedItemId} />
                 ))}
               </div>
             )}

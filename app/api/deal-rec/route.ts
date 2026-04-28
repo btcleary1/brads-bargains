@@ -17,12 +17,26 @@ export async function POST(req: NextRequest) {
 
   const { items } = await req.json();
   if (!Array.isArray(items) || items.length === 0) {
-    return NextResponse.json({ recommendation: null });
+    return NextResponse.json({ recommendation: null, pickedItemId: null });
   }
 
-  const top = items.slice(0, 10).map((i: any, idx: number) =>
-    `#${idx + 1} ${i.title} — $${i.price}${i.discountPct ? ` (${i.discountPct}% off)` : ''}${i.marketPrice ? `, market $${i.marketPrice}` : ''}. Condition: ${i.condition}.`
-  ).join('\n');
+  // Only consider items the auto-grader rates as BUY (sellScore >= 45)
+  const buyItems = items.filter((i: any) => i.grade === 'BUY' || (typeof i.sellScore === 'number' && i.sellScore >= 45));
+  if (buyItems.length === 0) {
+    return NextResponse.json({ recommendation: null, pickedItemId: null });
+  }
+
+  // Sort by sell score so Claude sees the most promising items first
+  const sorted = [...buyItems].sort((a: any, b: any) => (b.sellScore ?? 0) - (a.sellScore ?? 0));
+  const top = sorted.slice(0, 5);
+  const best = sorted[0];
+
+  const topList = top.map((i: any, idx: number) => {
+    const profit = i.marketPrice
+      ? Math.round((i.marketPrice * 0.85 - i.price - (i.shippingCost ?? 0)) * 100) / 100
+      : null;
+    return `#${idx + 1} ${i.title} — Buy: $${i.price}${i.discountPct ? ` (${i.discountPct}% off)` : ''}${i.marketPrice ? `, avg resale: $${i.marketPrice}` : ''}${profit !== null ? `, net profit after eBay fees: ~$${profit}` : ''}. Condition: ${i.condition}.`;
+  }).join('\n');
 
   try {
     const msg = await client.messages.create({
@@ -30,13 +44,13 @@ export async function POST(req: NextRequest) {
       max_tokens: 100,
       messages: [{
         role: 'user',
-        content: `You are a sharp eBay flip advisor. Given these listings, recommend the single best one to buy today for resale profit. Be direct, specific, and under 50 words. No disclaimers.\n\n${top}`,
+        content: `You are a sharp eBay flip advisor. Given these pre-screened BUY-rated listings, recommend the single best one to flip today for resale profit. Be direct, specific, and under 50 words. No disclaimers.\n\n${topList}`,
       }],
     });
 
     const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : null;
-    return NextResponse.json({ recommendation: text });
+    return NextResponse.json({ recommendation: text, pickedItemId: best.itemId });
   } catch {
-    return NextResponse.json({ recommendation: null });
+    return NextResponse.json({ recommendation: null, pickedItemId: null });
   }
 }
