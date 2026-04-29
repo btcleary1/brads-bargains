@@ -332,6 +332,14 @@ export default function DealsPage() {
   const hotCount = results?.items.filter(i => i.isHotDeal).length ?? 0;
   const minDiscount = results?.minDiscount ?? 60;
 
+  // Compute AI Pick item and profit at render level (avoids IIFE-in-JSX narrowing issues)
+  const pickedItem = (pickedItemId && results)
+    ? (results.items.find(i => i.itemId === pickedItemId) ?? null)
+    : null;
+  const aiPickProfit = pickedItem?.marketPrice
+    ? Math.round((pickedItem.marketPrice * 0.85 - pickedItem.price - (pickedItem.shippingCost ?? 0)) * 100) / 100
+    : null;
+
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }}>
       <Header />
@@ -453,47 +461,41 @@ export default function DealsPage() {
             </div>
 
             {/* AI Recommendation */}
-            {(recLoading || recommendation) && (() => {
-              const pickedItem = pickedItemId ? results?.items.find(i => i.itemId === pickedItemId) : null;
-              const profit = pickedItem?.marketPrice
-                ? Math.round((pickedItem.marketPrice * 0.85 - pickedItem.price - (pickedItem.shippingCost ?? 0)) * 100) / 100
-                : null;
-              return (
-                <div className="rounded-xl p-4 mb-4 flex gap-3 items-start" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
-                  <div className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-sm" style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}>🤖</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold" style={{ color: '#818CF8' }}>AI Pick of the Day</span>
-                        {recommendation && !recLoading && (
-                          <GradeBadge grade="BUY" />
-                        )}
-                      </div>
-                      {pickedItemId && !recLoading && (
-                        <button
-                          onClick={() => document.getElementById(pickedItemId!)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-                          className="text-xs px-2 py-1 rounded-lg shrink-0"
-                          style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818CF8' }}
-                        >
-                          Jump to item ↓
-                        </button>
+            {(recLoading || recommendation) && (
+              <div className="rounded-xl p-4 mb-4 flex gap-3 items-start" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
+                <div className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-sm" style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}>🤖</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold" style={{ color: '#818CF8' }}>AI Pick of the Day</span>
+                      {recommendation && !recLoading && (
+                        <GradeBadge grade="BUY" />
                       )}
                     </div>
-                    {recLoading
-                      ? <div className="flex items-center gap-2 text-xs" style={{ color: '#6B7280' }}><Loader2 className="w-3 h-3 animate-spin" /> Analyzing deals…</div>
-                      : (
-                        <>
-                          <p className="text-sm leading-relaxed mb-2" style={{ color: '#E2E8F0' }}>{recommendation}</p>
-                          {profit !== null && profit > 0 && (
-                            <div className="text-xs font-semibold" style={{ color: '#4ADE80' }}>~${profit.toFixed(0)} net profit after eBay fees</div>
-                          )}
-                        </>
-                      )
-                    }
+                    {pickedItemId && !recLoading && (
+                      <button
+                        onClick={() => document.getElementById(pickedItemId!)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                        className="text-xs px-2 py-1 rounded-lg shrink-0"
+                        style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818CF8' }}
+                      >
+                        Jump to item ↓
+                      </button>
+                    )}
                   </div>
+                  {recLoading
+                    ? <div className="flex items-center gap-2 text-xs" style={{ color: '#6B7280' }}><Loader2 className="w-3 h-3 animate-spin" /> Analyzing deals…</div>
+                    : (
+                      <>
+                        <p className="text-sm leading-relaxed mb-2" style={{ color: '#E2E8F0' }}>{recommendation}</p>
+                        {aiPickProfit !== null && aiPickProfit > 0 && (
+                          <div className="text-xs font-semibold" style={{ color: '#4ADE80' }}>~${aiPickProfit.toFixed(0)} net profit after eBay fees</div>
+                        )}
+                      </>
+                    )
+                  }
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
             {/* Items */}
             {displayItems.length > 0 && (
