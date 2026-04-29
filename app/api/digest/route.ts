@@ -198,7 +198,7 @@ export async function GET(req: NextRequest) {
     console.log(`[digest] best5 AI profits: ${best5.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
 
     // Build recipient list with personalized deals per user
-    type UserDigest = { userId: string; email: string; deals: typeof best5; aiPick?: string; maxDaysToSell: number };
+    type UserDigest = { userId: string; email: string; deals: typeof best5; aiPick?: string; aiPickItemId?: string | null; maxDaysToSell: number };
     let userDigests: UserDigest[] = [];
 
     if (toOverride) {
@@ -318,13 +318,23 @@ export async function GET(req: NextRequest) {
     });
 
     // Generate per-user AI pick from their actual deal list
-    const generateAiPick = async (deals: typeof best5): Promise<string> => {
+    const generateAiPick = async (deals: typeof best5): Promise<{ text: string; itemId: string | null }> => {
       const eligible = deals.filter(i => { const f = flipMap.get(i.itemId); return !f || f.verdict !== 'skip'; });
-      const pool = eligible.length > 0 ? eligible : deals; // fall back to all deals if everything is skip
+      const pool = eligible.length > 0 ? eligible : deals;
       console.log(`[digest] generateAiPick: ${deals.length} deals, ${eligible.length} eligible, hasApiKey=${!!process.env.ANTHROPIC_API_KEY}`);
 
-      // Deterministic fallback — highest net profit among buy verdicts first, then all
-      const deterministicPick = (): string => {
+      // Match AI text to the pool item whose title shares the most words
+      const matchItemId = (text: string): string | null => {
+        const words = new Set(text.toLowerCase().split(/\W+/).filter(w => w.length > 3));
+        let best = 0, bestId: string | null = null;
+        for (const item of pool) {
+          const overlap = item.title.toLowerCase().split(/\W+/).filter(w => words.has(w)).length;
+          if (overlap > best) { best = overlap; bestId = item.itemId; }
+        }
+        return best >= 2 ? bestId : pool[0]?.itemId ?? null;
+      };
+
+      const deterministicPick = (): { text: string; itemId: string | null } => {
         const buyItems = pool.filter(i => flipMap.get(i.itemId)?.verdict === 'buy');
         const ranked = [...(buyItems.length > 0 ? buyItems : pool)].sort((a, b) => {
           const af = flipMap.get(a.itemId); const bf = flipMap.get(b.itemId);
@@ -333,11 +343,11 @@ export async function GET(req: NextRequest) {
           return bp - ap;
         });
         const top = ranked[0];
-        if (!top) return "Check today's deals for great flip opportunities.";
+        if (!top) return { text: "Check today's deals for great flip opportunities.", itemId: null };
         const flip = flipMap.get(top.itemId);
         const net = flip?.netProfit ?? (top.marketPrice ? Math.round(top.marketPrice * 0.85 - top.price - (top.shippingCost ?? 0)) : null);
         const comps = flip ? ` ${flip.soldCount} recent sold comps at avg $${flip.avgSoldPrice}.` : '';
-        return `Go with the ${top.title} — buy at $${top.price}${net != null ? `, ~$${net} net profit` : ''}.${comps}`;
+        return { text: `Go with the ${top.title} — buy at $${top.price}${net != null ? `, ~$${net} net profit` : ''}.${comps}`, itemId: top.itemId };
       };
 
       const topLines = pool.slice(0, 5).map(i => {
@@ -353,12 +363,12 @@ export async function GET(req: NextRequest) {
           const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: prompt }] });
           const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
           console.log(`[digest] AI pick attempt ${attempt} result: "${text.slice(0, 80)}"`);
-          if (text) return text;
+          if (text) return { text, itemId: matchItemId(text) };
         } catch (e) { console.error('[digest] AI pick attempt failed:', e); }
       }
 
       const fallback = deterministicPick();
-      console.log(`[digest] AI pick using deterministic fallback: "${fallback.slice(0, 80)}"`);
+      console.log(`[digest] AI pick using deterministic fallback: "${fallback.text.slice(0, 80)}"`);
       return fallback;
     };
 
@@ -366,11 +376,12 @@ export async function GET(req: NextRequest) {
     const aiPickResults = await Promise.allSettled(userDigests.map(d => generateAiPick(d.deals)));
     aiPickResults.forEach((r, i) => {
       if (r.status === 'rejected') console.error(`[digest] AI pick ${i} rejected:`, r.reason);
-      else console.log(`[digest] AI pick ${i}: "${r.value?.slice(0, 80)}"`);
+      else console.log(`[digest] AI pick ${i}: "${r.value?.text?.slice(0, 80)}" itemId=${r.value?.itemId}`);
     });
     userDigests = userDigests.map((d, i) => ({
       ...d,
-      aiPick: aiPickResults[i].status === 'fulfilled' ? (aiPickResults[i] as PromiseFulfilledResult<string>).value : undefined,
+      aiPick: aiPickResults[i].status === 'fulfilled' ? (aiPickResults[i] as PromiseFulfilledResult<{ text: string; itemId: string | null }>).value?.text : undefined,
+      aiPickItemId: aiPickResults[i].status === 'fulfilled' ? (aiPickResults[i] as PromiseFulfilledResult<{ text: string; itemId: string | null }>).value?.itemId ?? null : null,
     }));
 
     // Send emails with per-user AI pick — retry once on transient failure
@@ -410,9 +421,9 @@ export async function GET(req: NextRequest) {
     });
     // Save per-user cache and send push — both use the same personalized deals
     const userMap = new Map(userDigests.map(d => [d.userId, d]));
-    await Promise.allSettled(userDigests.map(async ({ userId, deals, aiPick: userAiPick }) => {
+    await Promise.allSettled(userDigests.map(async ({ userId, deals, aiPick: userAiPick, aiPickItemId: userPickItemId }) => {
       if (!userId) return;
-      const cache = { generatedAt: new Date().toISOString(), aiPick: userAiPick ?? null, items: toDigestItems(deals) };
+      const cache = { generatedAt: new Date().toISOString(), aiPick: userAiPick ?? null, aiPickItemId: userPickItemId ?? null, items: toDigestItems(deals) };
       await r2Put(`deal-wiz/digest-user-${userId}.json`, JSON.stringify(cache));
     }));
 

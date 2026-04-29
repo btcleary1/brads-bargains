@@ -733,6 +733,7 @@ function DealsPageContent() {
   const searchParams = useSearchParams();
   const [digestItems, setDigestItems] = useState<BrowseDeal[]>([]);
   const [digestAiPick, setDigestAiPick] = useState<string | null>(null);
+  const [digestAiPickItemId, setDigestAiPickItemId] = useState<string | null>(null);
   const [digestGeneratedAt, setDigestGeneratedAt] = useState<string | null>(null);
   const [digestLoading, setDigestLoading] = useState(false);
   const digestRef = useRef<HTMLDivElement>(null);
@@ -865,6 +866,7 @@ function DealsPageContent() {
       .then(d => {
         setDigestItems(d.items ?? []);
         setDigestAiPick(d.aiPick ?? null);
+        setDigestAiPickItemId(d.aiPickItemId ?? null);
         setDigestGeneratedAt(d.generatedAt ?? null);
         const targetId = digestItemId ? `item-${digestItemId}` : null;
         const tryScroll = (attemptsLeft: number) => {
@@ -1459,9 +1461,28 @@ function DealsPageContent() {
             </div>
             {digestAiPick && (
               <div className="rounded-2xl p-4 mb-3" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <Sparkles className="w-3.5 h-3.5" style={{ color: '#818CF8' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#818CF8' }}>AI Pick of the Day</span>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5" style={{ color: '#818CF8' }} />
+                    <span className="text-xs font-semibold" style={{ color: '#818CF8' }}>AI Pick of the Day</span>
+                  </div>
+                  {digestAiPickItemId && (
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById(`item-${digestAiPickItemId}`);
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          el.style.outline = '2px solid #818CF8';
+                          el.style.borderRadius = '16px';
+                          setTimeout(() => { el.style.outline = ''; el.style.borderRadius = ''; }, 2500);
+                        }
+                      }}
+                      className="text-xs font-medium flex items-center gap-1 px-2 py-0.5 rounded-lg transition-colors"
+                      style={{ background: 'rgba(99,102,241,0.2)', color: '#A5B4FC', border: '1px solid rgba(99,102,241,0.35)' }}
+                    >
+                      Jump to item ↓
+                    </button>
+                  )}
                 </div>
                 <p className="text-sm" style={{ color: '#C7D2FE' }}>{digestAiPick}</p>
               </div>
