@@ -159,7 +159,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
             ${deal.discountPct ? `<div style="font-size:11px;color:#94A3B8;margin-top:1px;">${deal.discountPct}% off</div>` : ''}
             <a href="${deal.itemUrl}"
               style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View on eBay</a>
-            <a href="${APP_URL}/deals?view=digest#item-${deal.itemId}"
+            <a href="${APP_URL}/deals?view=digest&item=${deal.itemId}"
               style="display:inline-block;margin-top:4px;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View on Brad's Bargains</a>
             <a href="${buildTrackUrl(deal)}"
               style="display:inline-block;margin-top:4px;background:#1D4ED8;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">Track Deal</a>

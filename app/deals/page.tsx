@@ -737,6 +737,7 @@ function DealsPageContent() {
   const [digestLoading, setDigestLoading] = useState(false);
   const digestRef = useRef<HTMLDivElement>(null);
   const viewDigest = searchParams.get('view') === 'digest';
+  const digestItemId = searchParams.get('item');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -865,20 +866,25 @@ function DealsPageContent() {
         setDigestItems(d.items ?? []);
         setDigestAiPick(d.aiPick ?? null);
         setDigestGeneratedAt(d.generatedAt ?? null);
-        const hash = window.location.hash.replace('#', '');
-        setTimeout(() => {
-          const target = hash ? document.getElementById(hash) : digestRef.current;
-          target?.scrollIntoView({ behavior: 'smooth', block: hash ? 'center' : 'start' });
-          if (hash && target) {
-            target.style.outline = '2px solid #818CF8';
-            target.style.borderRadius = '16px';
-            setTimeout(() => { target.style.outline = ''; target.style.borderRadius = ''; }, 2500);
+        const targetId = digestItemId ? `item-${digestItemId}` : null;
+        const tryScroll = (attemptsLeft: number) => {
+          const target = targetId ? document.getElementById(targetId) : digestRef.current;
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: targetId ? 'center' : 'start' });
+            if (targetId) {
+              target.style.outline = '2px solid #818CF8';
+              target.style.borderRadius = '16px';
+              setTimeout(() => { target.style.outline = ''; target.style.borderRadius = ''; }, 2500);
+            }
+          } else if (attemptsLeft > 0) {
+            setTimeout(() => tryScroll(attemptsLeft - 1), 120);
           }
-        }, 150);
+        };
+        setTimeout(() => tryScroll(8), 100);
       })
       .catch(() => {})
       .finally(() => setDigestLoading(false));
-  }, [viewDigest]);
+  }, [viewDigest, digestItemId]);
 
   const search = async (e?: React.FormEvent) => {
     e?.preventDefault();
