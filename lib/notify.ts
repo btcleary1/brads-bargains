@@ -118,7 +118,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
             ${savings > 0
               ? `<div style="font-size:11px;color:#64748B;margin-top:1px;">Save $${savings.toFixed(0)}</div>`
               : ''}
-            ${netProfit !== null && netProfit > 0
+            ${netProfit !== null && netProfit > 0 && (deal.discountPct ?? 0) >= 40
               ? `<div style="font-size:12px;font-weight:700;color:#16A34A;margin-top:3px;">~$${netProfit} profit</div>`
               : ''}
             <a href="${deal.itemUrl}"

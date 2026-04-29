@@ -156,15 +156,17 @@ export async function GET(req: NextRequest) {
     let aiPick: string | undefined;
     try {
       const top = best5.slice(0, 5).map((i, idx) => {
-        const netProfit = i.marketPrice ? Math.round(i.marketPrice * 0.85 - i.price - (i.shippingCost ?? 0)) : null;
-        return `#${idx + 1} ${i.title} — buy $${i.price}, market $${i.marketPrice ?? 'unknown'}, net profit after fees ~$${netProfit ?? '?'}. Condition: ${i.condition}.`;
+        const wasPrice = i.marketPrice ? `, seller was $${i.marketPrice}` : '';
+        const discount = i.discountPct ? ` (${i.discountPct}% off)` : '';
+        const ship = i.shippingCost === 0 ? ', free shipping' : i.shippingCost ? `, +$${i.shippingCost} shipping` : '';
+        return `#${idx + 1} ${i.title} — buy $${i.price}${discount}${wasPrice}${ship}. Condition: ${i.condition}.`;
       }).join('\n');
       const msg = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 100,
         messages: [{
           role: 'user',
-          content: `You are a sharp eBay flip advisor. Net profit figures already account for eBay fees. Given these listings, recommend the single best one to buy today for resale profit. Reference the net profit figure. Be direct, specific, and under 50 words. No disclaimers. No markdown formatting.\n\n${top}`,
+          content: `You are a sharp eBay flip advisor. Given these eBay listings, recommend the single best one to buy today for resale profit. Consider the buy price, discount depth, and condition. Be direct, specific, and under 50 words. No disclaimers. No markdown formatting.\n\n${top}`,
         }],
       });
       aiPick = msg.content[0].type === 'text' ? msg.content[0].text.trim() : undefined;
