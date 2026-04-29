@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const redirectUri = process.env.EBAY_REDIRECT_URI
+    const redirectUri = process.env.EBAY_OAUTH_REDIRECT_URI
+      ?? process.env.EBAY_REDIRECT_URI
       ?? `${req.nextUrl.protocol}//${req.nextUrl.host}/api/auth/ebay/callback`;
 
     const tokens = await exchangeEbayCode(code, redirectUri);
