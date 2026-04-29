@@ -119,52 +119,65 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
         <tr>
 
           <!-- Rank + category -->
-          <td width="52" style="background:#F8FAFC;padding:16px 8px;text-align:center;vertical-align:top;border-right:1px solid #F1F5F9;">
-            <div style="font-size:18px;font-weight:800;color:#0F172A;line-height:1;">#${rank}</div>
+          <td width="44" style="background:#F8FAFC;padding:14px 6px;text-align:center;vertical-align:top;border-right:1px solid #F1F5F9;">
+            <div style="font-size:17px;font-weight:800;color:#0F172A;line-height:1;">#${rank}</div>
             <div style="font-size:9px;font-weight:700;color:#94A3B8;margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;">${cat}</div>
           </td>
 
-          <!-- Item info -->
-          <td style="padding:14px 14px;vertical-align:top;">
-            <div style="margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap;">
-              <span style="font-size:10px;font-weight:800;letter-spacing:0.07em;color:${tier.color};background:${tier.bg};border:1px solid ${tier.border};padding:2px 7px;border-radius:4px;">${tier.label}</span>
-              <span style="font-size:10px;font-weight:700;color:${sell.color};background:${sell.bg};border:1px solid ${sell.border};padding:2px 7px;border-radius:4px;">${sell.label}</span>
-              ${ageBadge}
+          <!-- All content: badges, title, meta, price row, buttons -->
+          <td style="padding:14px 14px 12px 14px;vertical-align:top;">
+
+            <!-- Badges -->
+            <div style="margin-bottom:7px;">
+              <span style="font-size:10px;font-weight:800;letter-spacing:0.07em;color:${tier.color};background:${tier.bg};border:1px solid ${tier.border};padding:2px 7px;border-radius:4px;display:inline-block;margin-right:4px;margin-bottom:4px;">${tier.label}</span>
+              <span style="font-size:10px;font-weight:700;color:${sell.color};background:${sell.bg};border:1px solid ${sell.border};padding:2px 7px;border-radius:4px;display:inline-block;margin-right:4px;margin-bottom:4px;">${sell.label}</span>
+              ${ageBadge ? `<span style="display:inline-block;margin-bottom:4px;">${ageBadge}</span>` : ''}
             </div>
+
+            <!-- Title -->
             <a href="${deal.itemUrl}"
-              style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;line-height:1.4;display:block;margin-bottom:5px;">${title}</a>
-            <div style="font-size:12px;color:#64748B;">
+              style="font-size:14px;font-weight:700;color:#0F172A;text-decoration:none;line-height:1.4;display:block;margin-bottom:5px;">${title}</a>
+
+            <!-- Meta -->
+            <div style="font-size:12px;color:#64748B;margin-bottom:4px;">
               ${condition}${year ? ` &middot; <span style="font-weight:600;color:#475569;">${year}</span>` : ''} &middot; ${location}${shipping ? ' &middot; ' + shipping : ''}
             </div>
             ${deal.sellerFeedbackPercent !== null
-              ? `<div style="font-size:11px;color:#64748B;margin-top:3px;">
-                  Seller: ${safe(deal.seller)}
-                  &middot; ${deal.sellerFeedbackPercent}% (${deal.sellerFeedbackScore?.toLocaleString()} ratings)
+              ? `<div style="font-size:11px;color:#64748B;margin-bottom:6px;">
+                  Seller: ${safe(deal.seller)} &middot; ${deal.sellerFeedbackPercent}% (${deal.sellerFeedbackScore?.toLocaleString()} ratings)
                  </div>`
               : ''}
+
+            <!-- Price + profit row -->
+            <div style="margin:8px 0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+              <span style="font-size:22px;font-weight:800;color:#0F172A;line-height:1;">$${deal.price.toFixed(0)}</span>
+              ${deal.marketPrice ? `<span style="font-size:13px;color:#94A3B8;text-decoration:line-through;">$${deal.marketPrice.toFixed(0)}</span>` : ''}
+              ${deal.discountPct ? `<span style="font-size:12px;font-weight:700;color:#94A3B8;">${deal.discountPct}% off</span>` : ''}
+              ${netProfit !== null && netProfit > 0 ? `<span style="font-size:13px;font-weight:800;color:#16A34A;">+$${netProfit} profit</span>` : ''}
+            </div>
+
+            <!-- Flip data -->
             ${flip ? flipRow(flip, annROI) : ''}
-          </td>
 
-          <!-- Price -->
-          <td width="110" style="padding:14px 14px;text-align:right;vertical-align:top;white-space:nowrap;">
-            ${netProfit !== null
-              ? netProfit > 0
-                ? `<div style="font-size:18px;font-weight:900;color:#16A34A;line-height:1;">+$${netProfit} net profit</div>`
-                : `<div style="font-size:13px;font-weight:700;color:#DC2626;line-height:1;">-$${Math.abs(netProfit)} loss</div>`
-              : ''}
-            <div style="font-size:${netProfit !== null ? '14px' : '22px'};font-weight:800;color:#0F172A;margin-top:${netProfit !== null ? '4px' : '0'};">$${deal.price.toFixed(0)}</div>
-            ${deal.marketPrice
-              ? `<div style="font-size:11px;color:#94A3B8;text-decoration:line-through;margin-top:1px;">$${deal.marketPrice.toFixed(0)}</div>`
-              : ''}
-            ${deal.discountPct ? `<div style="font-size:11px;color:#94A3B8;margin-top:1px;">${deal.discountPct}% off</div>` : ''}
-            <a href="${deal.itemUrl}"
-              style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View on eBay</a>
-            <a href="${APP_URL}/deals?view=digest&item=${deal.itemId}"
-              style="display:inline-block;margin-top:4px;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View on Brad's Bargains</a>
-            <a href="${buildTrackUrl(deal)}"
-              style="display:inline-block;margin-top:4px;background:#1D4ED8;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">Track Deal</a>
-          </td>
+            <!-- CTA buttons — 3-up row, each block fills equal width -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">
+              <tr>
+                <td width="33%" style="padding-right:3px;">
+                  <a href="${deal.itemUrl}"
+                    style="display:block;text-align:center;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">View on eBay</a>
+                </td>
+                <td width="34%" style="padding:0 2px;">
+                  <a href="${APP_URL}/deals?view=digest&item=${deal.itemId}"
+                    style="display:block;text-align:center;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">Brad's Bargains</a>
+                </td>
+                <td width="33%" style="padding-left:3px;">
+                  <a href="${buildTrackUrl(deal)}"
+                    style="display:block;text-align:center;background:#1D4ED8;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">Track Deal</a>
+                </td>
+              </tr>
+            </table>
 
+          </td>
         </tr>
       </table>
     </td>
