@@ -75,11 +75,15 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
     ? '+$' + deal.shippingCost.toFixed(2) + ' ship'
     : '';
 
+  const appSearchUrl = `${APP_URL}/deals?q=${encodeURIComponent(title.split(' ').slice(0, 6).join(' '))}`;
+
   return `
   <tr>
     <td style="padding:0 0 14px 0;">
       <table width="100%" cellpadding="0" cellspacing="0"
         style="background:#FFFFFF;border-radius:10px;border:1px solid #E2E8F0;overflow:hidden;">
+
+        <!-- Main content row -->
         <tr>
 
           <!-- Rank + category -->
@@ -89,11 +93,11 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
           </td>
 
           <!-- Item info -->
-          <td style="padding:14px 14px;vertical-align:top;">
-            <div style="margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap;">
-              <span style="font-size:10px;font-weight:800;letter-spacing:0.07em;color:${tier.color};background:${tier.bg};border:1px solid ${tier.border};padding:2px 7px;border-radius:4px;">${tier.label}</span>
-              <span style="font-size:10px;font-weight:700;color:${sell.color};background:${sell.bg};border:1px solid ${sell.border};padding:2px 7px;border-radius:4px;">${sell.label}</span>
-              ${ageBadge}
+          <td style="padding:14px 14px 10px;vertical-align:top;">
+            <div style="margin-bottom:6px;">
+              <span style="font-size:10px;font-weight:800;letter-spacing:0.07em;color:${tier.color};background:${tier.bg};border:1px solid ${tier.border};padding:2px 7px;border-radius:4px;display:inline-block;margin-right:4px;margin-bottom:4px;">${tier.label}</span>
+              <span style="font-size:10px;font-weight:700;color:${sell.color};background:${sell.bg};border:1px solid ${sell.border};padding:2px 7px;border-radius:4px;display:inline-block;margin-right:4px;margin-bottom:4px;">${sell.label}</span>
+              ${ageBadge ? `<span style="display:inline-block;margin-bottom:4px;">${ageBadge}</span>` : ''}
             </div>
             <a href="${deal.itemUrl}"
               style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;line-height:1.4;display:block;margin-bottom:5px;">${title}</a>
@@ -109,25 +113,41 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[]): string {
           </td>
 
           <!-- Price -->
-          <td width="100" style="padding:14px 14px;text-align:right;vertical-align:top;white-space:nowrap;">
+          <td width="90" style="padding:14px 12px 10px;text-align:right;vertical-align:top;white-space:nowrap;">
             <div style="font-size:22px;font-weight:800;color:#0F172A;line-height:1;">$${deal.price.toFixed(0)}</div>
             ${deal.marketPrice
               ? `<div style="font-size:12px;color:#94A3B8;text-decoration:line-through;margin-top:2px;">$${deal.marketPrice.toFixed(0)}</div>`
               : ''}
             ${deal.discountPct ? `<div style="font-size:13px;font-weight:700;color:#16A34A;margin-top:2px;">${deal.discountPct}% off</div>` : ''}
-            ${savings > 0
-              ? `<div style="font-size:11px;color:#64748B;margin-top:1px;">Save $${savings.toFixed(0)}</div>`
-              : ''}
             ${netProfit !== null && netProfit > 0
-              ? `<div style="font-size:12px;font-weight:700;color:#16A34A;margin-top:3px;">~$${netProfit} profit</div>`
+              ? `<div style="font-size:12px;font-weight:700;color:#16A34A;margin-top:3px;">+$${netProfit} profit</div>`
               : ''}
-            <a href="${deal.itemUrl}"
-              style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View</a>
-            <a href="${buildTrackUrl(deal)}"
-              style="display:inline-block;margin-top:4px;background:#1D4ED8;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">Track Deal</a>
           </td>
 
         </tr>
+
+        <!-- Action buttons row -->
+        <tr>
+          <td colspan="3" style="padding:0 12px 12px;border-top:1px solid #F1F5F9;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding-top:10px;padding-right:4px;">
+                  <a href="${deal.itemUrl}"
+                    style="display:block;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:6px;text-align:center;">View on eBay</a>
+                </td>
+                <td style="padding-top:10px;padding-right:4px;padding-left:4px;">
+                  <a href="${appSearchUrl}"
+                    style="display:block;background:#7C3AED;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:6px;text-align:center;">View on Brad's</a>
+                </td>
+                <td style="padding-top:10px;padding-left:4px;">
+                  <a href="${buildTrackUrl(deal)}"
+                    style="display:block;background:#1D4ED8;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:6px;text-align:center;">Track Deal</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
       </table>
     </td>
   </tr>`;
