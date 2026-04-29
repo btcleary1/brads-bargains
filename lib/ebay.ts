@@ -118,15 +118,17 @@ function toEbayItem(raw: any): EbayItem {
   };
 }
 
-export async function searchDeals(query: string, maxResults = 20): Promise<EbayItem[]> {
+export async function searchDeals(query: string, maxResults = 20, categoryId?: string): Promise<EbayItem[]> {
   const token = await getEbayToken();
 
   // Build base params without filter (URLSearchParams encodes {|} which breaks eBay filter syntax)
-  const params = new URLSearchParams({
+  const paramObj: Record<string, string> = {
     q: query,
     limit: String(maxResults),
     sort: 'bestMatch',
-  });
+  };
+  if (categoryId) paramObj.category_ids = categoryId;
+  const params = new URLSearchParams(paramObj);
   // Append filter unencoded — eBay requires literal {|} characters
   // Condition IDs: 1000=New, 1500=Open Box, 3000=Used, 4000=Very Good, 5000=Good
   // Excludes refurbished (2000-2500 range)

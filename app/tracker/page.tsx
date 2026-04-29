@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import {
   BarChart2, Loader2, ShoppingCart, Tag, TrendingUp, DollarSign,
-  ClipboardCopy, Check, ExternalLink, X, ChevronDown, AlertCircle, Lightbulb,
+  ClipboardCopy, Check, ExternalLink, X, ChevronDown, AlertCircle, Lightbulb, FlaskConical,
 } from 'lucide-react';
 
 interface CoachResult {
@@ -120,6 +120,26 @@ function DealCard({
   const [coachLoading, setCoachLoading] = useState(false);
   const [coach, setCoach] = useState<CoachResult | null>(null);
   const [coachError, setCoachError] = useState('');
+  const [flipLoading, setFlipLoading] = useState(false);
+  const [flip, setFlip] = useState<{ noData?: boolean; verdict?: 'buy'|'skip'|'maybe'; netProfit?: number; avgSoldPrice?: number; soldCount?: number; reasoning?: string; daysToSell?: number | null; sourcesCount?: number | null; capitalEfficiency?: number | null } | null>(null);
+
+  const checkFlip = async () => {
+    setFlipLoading(true);
+    setFlip(null);
+    try {
+      const res = await fetch('/api/sold-comps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: localDeal.title, price: localDeal.ebayPrice, shippingCost: localDeal.shippingCost, marketPrice: localDeal.marketPrice, condition: localDeal.condition }),
+      });
+      const data = await res.json();
+      setFlip(data.noData ? { noData: true } : data);
+    } catch {
+      setFlip({ noData: true });
+    } finally {
+      setFlipLoading(false);
+    }
+  };
 
   const profit = localDeal.sellActualPrice && localDeal.ebayPrice
     ? (localDeal.sellActualPrice * 0.85 - localDeal.ebayPrice - (localDeal.shippingCost ?? 0))
@@ -238,7 +258,47 @@ function DealCard({
           {localDeal.priceHistory && localDeal.priceHistory.length >= 2 && (
             <PriceSparkline history={localDeal.priceHistory} />
           )}
+          {/* Check Flip result */}
+          {flip && (
+            <div className="mt-2 mb-2 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              {flip.noData ? (
+                <p className="text-xs" style={{ color: '#6B7280' }}>No sold comps available — N/A</p>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="text-xs font-bold px-2 py-1 rounded-lg" style={flip.verdict === 'buy' ? { background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.35)', color: '#4ADE80' } : flip.verdict === 'skip' ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#F87171' } : { background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: '#FCD34D' }}>
+                      {flip.verdict === 'buy' ? '✓ BUY' : flip.verdict === 'skip' ? '✗ SKIP' : '~ MAYBE'}
+                    </span>
+                  </div>
+                  <div className="mb-2 space-y-0.5">
+                    <div className="text-xs" style={{ color: '#9CA3AF' }}>
+                      Avg sold <strong style={{ color: '#34D399' }}>${flip.avgSoldPrice?.toFixed(0)}</strong>
+                      {' '}&middot; {flip.soldCount} comps{flip.sourcesCount != null ? ` · ${flip.sourcesCount} ${flip.sourcesCount === 1 ? 'site' : 'sites'}` : ''}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 text-xs">
+                      {flip.netProfit != null && flip.netProfit > 0 && <span style={{ color: '#4ADE80', fontWeight: 600 }}>+${flip.netProfit} Net Profit</span>}
+                      {flip.daysToSell != null && flip.daysToSell >= 1 && <span style={{ color: '#6B7280' }}>Est. {flip.daysToSell}d to sell</span>}
+                      {flip.capitalEfficiency != null && flip.capitalEfficiency > 0 && flip.capitalEfficiency <= 2000 && (
+                        <span style={{ color: flip.capitalEfficiency >= 200 ? '#4ADE80' : flip.capitalEfficiency >= 100 ? '#FCD34D' : '#9CA3AF' }}>
+                          {Math.round(flip.capitalEfficiency)}% ann. ROI
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {flip.reasoning && <p className="text-xs leading-relaxed" style={{ color: '#9CA3AF' }}>{flip.reasoning}</p>}
+                </>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2 mt-2">
+            <a
+              href={`/deals?q=${encodeURIComponent(localDeal.title.split(' ').slice(0, 5).join(' '))}`}
+              className="text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+              style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#A5B4FC' }}
+            >
+              <Tag className="w-3 h-3" /> Find Deal
+            </a>
             <a
               href={localDeal.ebayUrl}
               target="_blank"
@@ -248,6 +308,20 @@ function DealCard({
             >
               <ExternalLink className="w-3 h-3" /> eBay
             </a>
+            <button
+              onClick={checkFlip}
+              disabled={flipLoading}
+              className="text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-all disabled:opacity-60"
+              style={flip
+                ? flip.noData ? { border: '1px solid rgba(255,255,255,0.12)', color: '#6B7280' }
+                : flip.verdict === 'buy' ? { background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ADE80' }
+                : flip.verdict === 'skip' ? { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#FCA5A5' }
+                : { background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: '#FCD34D' }
+                : { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.35)', color: '#C4B5FD' }}
+            >
+              {flipLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FlaskConical className="w-3 h-3" />}
+              {flipLoading ? 'Checking…' : flip ? (flip.noData ? 'N/A' : flip.verdict === 'buy' ? 'BUY' : flip.verdict === 'skip' ? 'SKIP' : 'MAYBE') : 'Check Flip'}
+            </button>
             <button
               onClick={() => setExpanded(v => !v)}
               className="text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
@@ -558,7 +632,7 @@ function TrackerInner() {
                 <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
                   <div className="text-[10px] mb-0.5" style={{ color: '#818CF8' }}>🏆 Best Flip</div>
                   <div className="text-xs font-medium text-white line-clamp-1">{bestFlip.title}</div>
-                  <div className="text-xs font-bold" style={{ color: '#4ADE80' }}>+${bestFlip.profit.toFixed(0)} profit</div>
+                  <div className="text-xs font-bold" style={{ color: '#4ADE80' }}>+${bestFlip.profit.toFixed(0)} net profit</div>
                 </div>
               )}
             </div>

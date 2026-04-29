@@ -12,5 +12,17 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(clients.openWindow(event.notification.data?.url || '/deals'));
+  const rawUrl = event.notification.data?.url || '/deals';
+  // iOS requires an absolute URL for clients.openWindow
+  const targetUrl = rawUrl.startsWith('http') ? rawUrl : `${self.location.origin}${rawUrl}`;
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if ('navigate' in client) {
+          return client.navigate(targetUrl).then(c => c?.focus());
+        }
+      }
+      return clients.openWindow(targetUrl);
+    })
+  );
 });

@@ -2,7 +2,7 @@ name: Daily Digest
 
 on:
   schedule:
-    - cron: '10 21 * * *'   # 9:10 PM UTC = 4:10 PM EST / 5:10 PM EDT
+    - cron: '0 14 * * *'    # 9:00 AM EST / 10:00 AM EDT
   workflow_dispatch:         # allows manual trigger from GitHub Actions tab
 
 jobs:

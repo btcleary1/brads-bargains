@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { searchDeals, EbayItem } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
-import { topDeals } from '@/lib/deal-score';
+import { isJunk } from '@/lib/deal-score';
 import { sendDailyDigest } from '@/lib/notify';
 import { getUserPrefs } from '@/lib/tracker-data';
 import { checkRequestLimit } from '@/lib/rate-limit';
@@ -16,9 +16,9 @@ export const runtime = 'nodejs';
 const START_DISCOUNT = 60; // start at 60%, flex down until 5 hot deals found
 
 // Find the lowest discount threshold that yields at least 5 qualifying items.
-// Drops 1% per attempt from START_DISCOUNT down to 0.
-function flexDiscount(items: EbayItem[], target = 5): { hotDeals: EbayItem[]; minDiscount: number } {
-  for (let pct = START_DISCOUNT; pct >= 0; pct--) {
+// Drops 1% per attempt from startDiscount down to 0.
+function flexDiscount(items: EbayItem[], target = 5, startDiscount = START_DISCOUNT): { hotDeals: EbayItem[]; minDiscount: number } {
+  for (let pct = startDiscount; pct >= 0; pct--) {
     const hot = items.filter(i => i.discountPct !== null && i.discountPct >= pct);
     if (hot.length >= target) return { hotDeals: hot, minDiscount: pct };
   }
@@ -40,6 +40,10 @@ export async function GET(req: NextRequest) {
   if (!query.trim()) return NextResponse.json({ error: 'Search query required.' }, { status: 400 });
 
   try {
+    const prefs = await getUserPrefs(session.userId);
+    const filterPrefs = prefs.filterPrefs;
+    const startDiscount = filterPrefs?.minDiscountPct ?? START_DISCOUNT;
+
     const isMock = process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID;
     let raw: EbayItem[];
     if (isMock) {
@@ -52,11 +56,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const items: EbayItem[] = raw;
-    const { hotDeals, minDiscount } = flexDiscount(items);
+    // Apply user's filter criteria before computing hot deals
+    const items: EbayItem[] = raw.filter(i => !isJunk(i, filterPrefs));
+    const { hotDeals, minDiscount } = flexDiscount(items, 5, startDiscount);
 
     if (notify && hotDeals.length > 0) {
-      const prefs = await getUserPrefs(session.userId);
       const alertEmail = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
       if (!alertEmail) {
         return NextResponse.json({ error: 'No alert email configured. Add one in Settings.' }, { status: 400 });

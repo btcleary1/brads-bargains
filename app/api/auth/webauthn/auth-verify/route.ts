@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
-import { findCredentialById, updateCredentialCounter } from '@/lib/webauthn-store';
-import { getUserById } from '@/lib/users';
+import { findCredentialById, updateCredentialCounter, getCredentialsForUser, saveCredentialsForUser } from '@/lib/webauthn-store';
+import { getUserById, getUserByEmail } from '@/lib/users';
 import { setSessionCookie } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
-const RP_ID = process.env.WEBAUTHN_RP_ID || 'healthwiz.vercel.app';
-const ORIGIN = process.env.WEBAUTHN_ORIGIN || `https://${RP_ID}`;
+const RP_ID = process.env.WEBAUTHN_RP_ID ||
+  (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : 'localhost');
+const ORIGIN = process.env.WEBAUTHN_ORIGIN || process.env.NEXT_PUBLIC_APP_URL || `https://${RP_ID}`;
 
 export async function POST(req: NextRequest) {
   const challenge = req.cookies.get('webauthn_challenge')?.value;
@@ -43,9 +44,25 @@ export async function POST(req: NextRequest) {
     await updateCredentialCounter(stored.id, verification.authenticationInfo.newCounter);
 
     // Look up the user who owns this credential
-    const user = await getUserById(stored.userId);
+    let user = await getUserById(stored.userId);
     if (!user) {
       return NextResponse.json({ error: 'User account not found.' }, { status: 400 });
+    }
+
+    // If the credential is linked to a different userId than the canonical account for
+    // this email (e.g. passkey was registered against an empty duplicate account),
+    // migrate the credential to the canonical userId so both login methods stay in sync.
+    const canonicalUser = await getUserByEmail(user.email);
+    if (canonicalUser && canonicalUser.userId !== user.userId) {
+      const oldCreds = await getCredentialsForUser(user.userId);
+      const migratedCreds = oldCreds.map(c =>
+        c.id === stored.id ? { ...c, userId: canonicalUser.userId } : c
+      );
+      await saveCredentialsForUser(canonicalUser.userId, [
+        ...await getCredentialsForUser(canonicalUser.userId),
+        ...migratedCreds.filter(c => c.id === stored.id),
+      ]);
+      user = canonicalUser;
     }
 
     const res = NextResponse.json({ success: true });

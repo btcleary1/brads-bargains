@@ -2,27 +2,51 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as webpush from 'web-push';
 import { getSessionFromRequest } from '@/lib/session';
 import { getUserPrefs } from '@/lib/tracker-data';
+import { getAllUsers } from '@/lib/users';
 
 export const runtime = 'nodejs';
 
+const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
+
 export async function POST(req: NextRequest) {
-  webpush.setVapidDetails(
-    `mailto:${process.env.VAPID_EMAIL}`,
-    process.env.VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!,
-  );
-  const session = await getSessionFromRequest(req);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    webpush.setVapidDetails(
+      `mailto:${process.env.VAPID_EMAIL?.trim()}`,
+      process.env.VAPID_PUBLIC_KEY!.trim(),
+      process.env.VAPID_PRIVATE_KEY!.trim(),
+    );
 
-  const { title, body, url } = await req.json();
-  const prefs = await getUserPrefs(session.userId);
-  const subscriptions: any[] = (prefs.pushSubscriptions as any[] | undefined) ?? [];
+    const body = await req.json();
+    const { title, body: msgBody, url, secret } = body;
 
-  if (subscriptions.length === 0) return NextResponse.json({ error: 'No push subscriptions found.' }, { status: 400 });
+    // Secret-based bypass — sends to all users' subscriptions
+    if (secret === DIGEST_SECRET) {
+      const users = await getAllUsers();
+      const payload = JSON.stringify({ title: title || "Brad's Bargains", body: msgBody, url: url || '/deals' });
+      let sent = 0;
+      await Promise.allSettled(users.map(async u => {
+        const prefs = await getUserPrefs(u.userId);
+        const subs: any[] = (prefs.pushSubscriptions as any[] | undefined) ?? [];
+        const results = await Promise.allSettled(subs.map(sub => webpush.sendNotification(sub, payload)));
+        sent += results.filter(r => r.status === 'fulfilled').length;
+      }));
+      return NextResponse.json({ sent });
+    }
 
-  const payload = JSON.stringify({ title: title || "Brad's Bargains", body, url: url || '/deals' });
-  const results = await Promise.allSettled(subscriptions.map(sub => webpush.sendNotification(sub, payload)));
-  const sent = results.filter(r => r.status === 'fulfilled').length;
+    const session = await getSessionFromRequest(req);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  return NextResponse.json({ sent, total: subscriptions.length });
+    const prefs = await getUserPrefs(session.userId);
+    const subscriptions: any[] = (prefs.pushSubscriptions as any[] | undefined) ?? [];
+
+    if (subscriptions.length === 0) return NextResponse.json({ error: 'No push subscriptions found.' }, { status: 400 });
+
+    const payload = JSON.stringify({ title: title || "Brad's Bargains", body: msgBody, url: url || '/deals' });
+    const results = await Promise.allSettled(subscriptions.map(sub => webpush.sendNotification(sub, payload)));
+    const sent = results.filter(r => r.status === 'fulfilled').length;
+
+    return NextResponse.json({ sent, total: subscriptions.length });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || 'Internal server error' }, { status: 500 });
+  }
 }

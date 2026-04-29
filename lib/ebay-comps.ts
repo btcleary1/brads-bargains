@@ -16,6 +16,19 @@ export interface CompsResult {
   minSoldPrice: number;
   maxSoldPrice: number;
   count: number;
+  estDaysToSell: number | null;
+}
+
+// Average days between sales = how fast a buyer appears. Requires 2+ dated comps.
+function computeDaysToSell(comps: SoldComp[]): number | null {
+  const dates = comps
+    .map(c => c.soldDate ? new Date(c.soldDate).getTime() : null)
+    .filter((d): d is number => d !== null && !isNaN(d))
+    .sort((a, b) => a - b);
+  if (dates.length < 2) return null;
+  const rangeDays = (dates[dates.length - 1] - dates[0]) / 86_400_000;
+  const avg = rangeDays / (dates.length - 1);
+  return Math.min(60, Math.max(1, Math.round(avg)));
 }
 
 function parsePrice(priceObj: any): number {
@@ -54,7 +67,7 @@ export async function searchSoldComps(query: string, maxResults = 20): Promise<C
     soldDate: raw.itemEndDate ?? raw.itemCreationDate ?? null,
   })).filter((i: SoldComp) => i.soldPrice > 0);
 
-  if (items.length === 0) return { comps: [], avgSoldPrice: 0, medianSoldPrice: 0, minSoldPrice: 0, maxSoldPrice: 0, count: 0 };
+  if (items.length === 0) return { comps: [], avgSoldPrice: 0, medianSoldPrice: 0, minSoldPrice: 0, maxSoldPrice: 0, count: 0, estDaysToSell: null };
 
   const prices = items.map(i => i.soldPrice).sort((a, b) => a - b);
   const avg = prices.reduce((s, p) => s + p, 0) / prices.length;
@@ -68,5 +81,6 @@ export async function searchSoldComps(query: string, maxResults = 20): Promise<C
     minSoldPrice: prices[0],
     maxSoldPrice: prices[prices.length - 1],
     count: items.length,
+    estDaysToSell: computeDaysToSell(items),
   };
 }

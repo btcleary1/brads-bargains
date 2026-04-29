@@ -2,11 +2,7 @@
   "crons": [
     {
       "path": "/api/digest?secret=digest-2026",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/price-check?secret=digest-2026",
-      "schedule": "0 15 * * *"
+      "schedule": "0 14 * * *"
     },
     {
       "path": "/api/watchlist-check?secret=digest-2026",

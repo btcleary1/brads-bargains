@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
-import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, TrendingUp, Package, AlertCircle, Mail, CheckCircle, Clock, FlaskConical, ThumbsUp, ThumbsDown, Minus, Flame, Sparkles } from 'lucide-react';
+import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, TrendingUp, Package, AlertCircle, Mail, CheckCircle, Clock, FlaskConical, ThumbsUp, ThumbsDown, Minus, Flame, Sparkles, ShoppingBag, Smartphone, X } from 'lucide-react';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 
 interface EbayItem {
@@ -55,6 +55,8 @@ interface CompsVerdict {
   amazonPrice?: number | null;
   discountQuality?: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   discountQualityReason?: string | null;
+  sourcesCount?: number | null;
+  noData?: boolean;
 }
 
 interface WatcherVelocity {
@@ -83,6 +85,8 @@ interface BrowseDeal {
   soldCount: number;
   flipNetProfit: number;
   flipMarginPct: number;
+  estDaysToSell?: number | null;
+  sourcesCount?: number | null;
   watcherVelocity?: WatcherVelocity | null;
   discountQuality?: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   discountQualityReason?: string | null;
@@ -103,6 +107,24 @@ interface TrendingItem {
   category: string;
   demandScore: number;
   trendSignal: string;
+}
+
+function estDaysFromTitle(title: string, category = ''): number {
+  const t = `${title} ${category}`.toLowerCase();
+  if (/iphone|samsung.*phone|pixel/.test(t)) return 4;
+  if (/macbook|laptop/.test(t)) return 10;
+  if (/playstation|ps5|xbox/.test(t)) return 7;
+  if (/ipad|tablet/.test(t)) return 10;
+  if (/airpods|headphone|earbuds/.test(t)) return 8;
+  if (/nintendo|switch/.test(t)) return 8;
+  if (/apple watch|smartwatch/.test(t)) return 10;
+  if (/drone|camera/.test(t)) return 14;
+  if (/pokemon|sports card|trading card/.test(t)) return 7;
+  if (/lego/.test(t)) return 18;
+  if (/comic/.test(t)) return 21;
+  if (/tv|television/.test(t)) return 28;
+  if (/vintage|antique/.test(t)) return 35;
+  return 18;
 }
 
 function SellBadge({ score }: { score: number }) {
@@ -255,6 +277,93 @@ function DiscountQualityBadge({ quality, reason }: { quality?: string; reason?: 
   return null;
 }
 
+function StatsCluster({
+  avgSoldPrice, soldCount, sourcesCount, netProfit, estDaysToSell, annROI,
+}: {
+  avgSoldPrice?: number | null;
+  soldCount?: number | null;
+  sourcesCount?: number | null;
+  netProfit?: number | null;
+  estDaysToSell?: number | null;
+  annROI?: number | null;
+}) {
+  const hasLine1 = avgSoldPrice != null;
+  const line2: { text: string; color: string; bold?: boolean }[] = [];
+  if (netProfit != null) line2.push({ text: `${netProfit >= 0 ? '+' : ''}$${Math.abs(netProfit).toFixed(0)} Net Profit`, color: netProfit > 0 ? '#4ADE80' : '#F87171', bold: true });
+  if (estDaysToSell != null && estDaysToSell >= 1) line2.push({ text: `Est. ${estDaysToSell}d to sell`, color: '#6B7280' });
+  if (annROI != null && annROI > 0 && annROI <= 2000) line2.push({ text: `${Math.round(annROI)}% ann. ROI`, color: annROI >= 200 ? '#4ADE80' : annROI >= 100 ? '#FCD34D' : '#9CA3AF' });
+  if (!hasLine1 && line2.length === 0) return null;
+  return (
+    <div className="space-y-0.5">
+      {hasLine1 && (
+        <div className="text-xs" style={{ color: '#9CA3AF' }}>
+          Avg sold <strong style={{ color: '#E5E7EB' }}>${avgSoldPrice!.toFixed(0)}</strong>
+          {soldCount != null && <> &middot; {soldCount} comps{sourcesCount != null ? ` · ${sourcesCount} ${sourcesCount === 1 ? 'site' : 'sites'}` : ''}</>}
+        </div>
+      )}
+      {line2.length > 0 && (
+        <div className="flex flex-wrap gap-x-3 text-xs">
+          {line2.map((f, i) => (
+            <span key={i} style={{ color: f.color, fontWeight: f.bold ? 600 : 400 }}>{f.text}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PwaBanner({ onDismiss }: { onDismiss: () => void }) {
+  const [os, setOs] = useState<'ios' | 'android' | 'other'>('other');
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    if (/iphone|ipad|ipod/i.test(ua)) setOs('ios');
+    else if (/android/i.test(ua)) setOs('android');
+  }, []);
+  return (
+    <div className="rounded-2xl p-4 mb-5" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)' }}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <Smartphone className="w-4 h-4 shrink-0" style={{ color: '#60A5FA' }} />
+          <span className="text-sm font-semibold text-white">Add to your home screen</span>
+        </div>
+        <button onClick={onDismiss} className="shrink-0 transition-colors hover:text-white" style={{ color: '#4B5563' }}>
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <p className="text-xs mb-3" style={{ color: '#93C5FD' }}>
+        Install Brad&apos;s Bargains as an app for instant access and deal notifications — no App Store needed.
+      </p>
+      {os === 'ios' && (
+        <div className="text-xs space-y-1" style={{ color: '#CBD5E1' }}>
+          <div>1. Tap the <strong style={{ color: 'white' }}>Share</strong> button at the bottom of Safari</div>
+          <div>2. Scroll down and tap <strong style={{ color: 'white' }}>Add to Home Screen</strong></div>
+          <div>3. Tap <strong style={{ color: 'white' }}>Add</strong> — done!</div>
+        </div>
+      )}
+      {os === 'android' && (
+        <div className="text-xs space-y-1" style={{ color: '#CBD5E1' }}>
+          <div>1. Tap the <strong style={{ color: 'white' }}>⋮ menu</strong> in Chrome</div>
+          <div>2. Tap <strong style={{ color: 'white' }}>Add to Home screen</strong></div>
+          <div>3. Tap <strong style={{ color: 'white' }}>Add</strong> — done!</div>
+        </div>
+      )}
+      {os === 'other' && (
+        <div className="text-xs" style={{ color: '#CBD5E1' }}>
+          On <strong style={{ color: 'white' }}>iPhone</strong>: Safari → Share → Add to Home Screen<br />
+          On <strong style={{ color: 'white' }}>Android</strong>: Chrome → ⋮ menu → Add to Home Screen
+        </div>
+      )}
+      <button
+        onClick={onDismiss}
+        className="mt-3 text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+        style={{ background: 'rgba(59,130,246,0.2)', border: '1px solid rgba(59,130,246,0.4)', color: '#93C5FD' }}
+      >
+        Got it!
+      </button>
+    </div>
+  );
+}
+
 function BrowseTrackButton({ deal }: { deal: BrowseDeal }) {
   const [tracking, setTracking] = useState(false);
   const [tracked, setTracked] = useState(false);
@@ -295,20 +404,19 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
   const activeLoading = compsLoading || (!comps && !!preFlipLoading);
 
   const checkFlip = async () => {
+    if (comps && !compsError) return; // already have a valid result — no credit burn
     setCompsLoading(true);
     setCompsError('');
-    setComps(null);
     try {
       const res = await fetch('/api/sold-comps', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: item.title, price: item.price, shippingCost: item.shippingCost, marketPrice: item.marketPrice, discountPct: item.discountPct }),
+        body: JSON.stringify({ title: item.title, price: item.price, shippingCost: item.shippingCost, marketPrice: item.marketPrice, discountPct: item.discountPct, condition: item.condition }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Agent failed');
-      setComps(data);
-    } catch (e: any) {
-      setCompsError(e.message);
+      setComps(data); // noData:true is handled in render as N/A
+    } catch {
+      setComps({ noData: true } as any);
     } finally {
       setCompsLoading(false);
     }
@@ -341,10 +449,8 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
   const isFresh = item.listingDate && (Date.now() - new Date(item.listingDate).getTime()) < 24 * 3_600_000;
   const year = itemModelYear(item.title);
 
-  // Net profit after ~15% eBay fees
-  const profit = item.marketPrice && item.marketPrice > 0
-    ? Math.round((item.marketPrice * 0.85 - item.price - (item.shippingCost ?? 0)) * 100) / 100
-    : null;
+  // Use comp-based profit when available; never show marketPrice estimate (it's unreliable)
+  const compProfit = activeComps?.netProfit ?? null;
 
   return (
     <div className="rounded-2xl overflow-hidden transition-all" style={{ background: 'rgba(255,255,255,0.04)', border: item.isHotDeal ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
@@ -374,9 +480,19 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
             {item.marketPrice && (
               <span className="text-sm line-through" style={{ color: '#4B5563' }}>${item.marketPrice.toFixed(2)}</span>
             )}
-            {profit !== null && profit > 0 && (
+            {activeLoading && !activeComps && (
+              <span className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', color: '#A78BFA' }}>
+                <Loader2 className="w-3 h-3 animate-spin" /> Grading…
+              </span>
+            )}
+            {compProfit !== null && compProfit > 0 && (
               <span className="text-sm font-bold px-2.5 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.35)', color: '#4ADE80' }}>
-                +${profit.toFixed(0)} profit
+                +${compProfit.toFixed(0)} net profit
+              </span>
+            )}
+            {compProfit !== null && compProfit <= 0 && activeComps && (
+              <span className="text-xs px-2.5 py-1 rounded-lg" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#FCA5A5' }}>
+                Low margin
               </span>
             )}
             {item.discountPct !== null && <DealBadge pct={item.discountPct} />}
@@ -457,46 +573,37 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
               Agent searching sold listings on eBay…
             </div>
           )}
-          {compsError && (
-            <div className="mt-3 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#FCA5A5' }}>
-              {compsError}
+          {activeComps?.noData && !compsLoading && (
+            <div className="mt-3 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#6B7280' }}>
+              No sold comps available for this item — N/A
             </div>
           )}
-          {activeComps && activeComps.verdict && activeComps.avgSoldPrice != null && !compsLoading && (
+          {activeComps && activeComps.verdict && activeComps.avgSoldPrice != null && !compsLoading && !activeComps.noData && (
             <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <VerdictBadge verdict={activeComps.verdict} />
                 {preFlip && !comps && <span className="text-xs" style={{ color: '#6B7280' }}>Auto-graded</span>}
                 <MultiSourceBadge confidence={activeComps.multiSourceConfidence} stockx={activeComps.stockxLastSale} mercari={activeComps.mercariAvgSold} amazon={activeComps.amazonPrice} />
-                <span className="text-xs font-medium" style={{ color: '#D1D5DB' }}>
-                  Avg sold: <strong style={{ color: '#34D399' }}>${(activeComps.avgSoldPrice ?? 0).toFixed(2)}</strong>
-                  {' '}({activeComps.soldCount ?? 0} sales)
-                </span>
-                {(activeComps.netProfit ?? 0) > 0 && (
-                  <span className="text-xs font-semibold ml-auto" style={{ color: (activeComps.netProfit ?? 0) >= 30 ? '#4ADE80' : '#FCD34D' }}>
-                    ~${(activeComps.netProfit ?? 0).toFixed(0)} profit
-                  </span>
-                )}
               </div>
+              <div className="mb-2">
+                <StatsCluster
+                  avgSoldPrice={activeComps.avgSoldPrice}
+                  soldCount={activeComps.soldCount}
+                  sourcesCount={activeComps.sourcesCount}
+                  netProfit={activeComps.netProfit}
+                  estDaysToSell={activeComps.daysToSell}
+                  annROI={activeComps.capitalEfficiency}
+                />
+              </div>
+              {activeComps.platformRecommendation && (
+                <div className="text-xs mb-1" style={{ color: '#A78BFA' }}>
+                  Sell on: {activeComps.platformRecommendation === 'either' ? 'eBay or FB' : activeComps.platformRecommendation === 'facebook' ? 'Facebook' : 'eBay'}
+                </div>
+              )}
               {activeComps.discountQualityReason && (
                 <DiscountQualityBadge quality={activeComps.discountQuality} reason={activeComps.discountQualityReason} />
               )}
-              {activeComps.reasoning && <p className="text-xs leading-relaxed mb-2 mt-2" style={{ color: '#9CA3AF' }}>{activeComps.reasoning}</p>}
-              <div className="flex flex-wrap gap-3 text-xs" style={{ color: '#6B7280' }}>
-                {activeComps.daysToSell != null && activeComps.daysToSell >= 1 && (
-                  <span>~{activeComps.daysToSell}d to sell</span>
-                )}
-                {activeComps.capitalEfficiency != null && activeComps.daysToSell != null && activeComps.daysToSell >= 7 && activeComps.capitalEfficiency <= 2000 && (
-                  <span style={{ color: activeComps.capitalEfficiency >= 200 ? '#4ADE80' : activeComps.capitalEfficiency >= 100 ? '#FCD34D' : '#9CA3AF' }}>
-                    {activeComps.capitalEfficiency.toFixed(0)}% ann. ROI
-                  </span>
-                )}
-                {activeComps.platformRecommendation && (
-                  <span style={{ color: '#A78BFA' }}>
-                    Sell on: {activeComps.platformRecommendation === 'either' ? 'eBay or FB' : activeComps.platformRecommendation === 'facebook' ? 'Facebook' : 'eBay'}
-                  </span>
-                )}
-              </div>
+              {activeComps.reasoning && <p className="text-xs leading-relaxed mt-2" style={{ color: '#9CA3AF' }}>{activeComps.reasoning}</p>}
             </div>
           )}
         </div>
@@ -505,8 +612,131 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
   );
 }
 
-export default function DealsPage() {
+function DigestDealCard({ deal }: { deal: BrowseDeal }) {
+  const [comps, setComps] = useState<CompsVerdict | null>(null);
+  const [compsLoading, setCompsLoading] = useState(false);
+
+  const checkFlip = async () => {
+    if (comps) return; // already have a result — no credit burn
+    setCompsLoading(true);
+    try {
+      const res = await fetch('/api/sold-comps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: deal.title, price: deal.price, shippingCost: deal.shippingCost, marketPrice: deal.marketPrice, discountPct: deal.discountPct, condition: deal.condition }),
+      });
+      const data = await res.json();
+      setComps(data);
+    } catch {
+      setComps({ noData: true } as any);
+    } finally {
+      setCompsLoading(false);
+    }
+  };
+
+  const activeVerdict = comps?.verdict ?? deal.flipVerdict;
+  const activeBorder = activeVerdict === 'buy' ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(251,191,36,0.2)';
+
+  return (
+    <div id={`item-${deal.itemId}`} className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: activeBorder, scrollMarginTop: '80px' }}>
+      <div className="flex gap-3 p-4">
+        {deal.imageUrl && (
+          <div className="shrink-0 w-20 h-20 rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={deal.imageUrl} alt={deal.title} className="w-full h-full object-cover" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-white text-sm leading-snug line-clamp-2 mb-1">{deal.title}</p>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <VerdictBadge verdict={activeVerdict} />
+            <span className="text-lg font-bold" style={{ color: '#34D399' }}>${deal.price.toFixed(2)}</span>
+            {deal.marketPrice && <span className="text-sm line-through" style={{ color: '#4B5563' }}>${deal.marketPrice.toFixed(0)}</span>}
+            {deal.discountPct != null && <DealBadge pct={deal.discountPct} />}
+            {(comps?.netProfit ?? deal.flipNetProfit) > 0 && (
+              <span className="text-sm font-bold px-2.5 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.35)', color: '#4ADE80' }}>
+                +${comps?.netProfit ?? deal.flipNetProfit} Net Profit
+              </span>
+            )}
+          </div>
+          {/* Pre-computed flip data */}
+          {!comps && (
+            <div className="rounded-xl px-3 py-2 mb-2" style={{ background: deal.flipVerdict === 'buy' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(251,191,36,0.2)' }}>
+              <span className="text-xs font-bold block mb-1" style={{ color: deal.flipVerdict === 'buy' ? '#4ADE80' : '#FCD34D' }}>{deal.flipVerdict === 'buy' ? '✓ BUY' : '~ MAYBE'}</span>
+              <StatsCluster
+                avgSoldPrice={deal.avgSoldPrice > 0 ? deal.avgSoldPrice : null}
+                soldCount={deal.soldCount}
+                sourcesCount={deal.sourcesCount}
+                netProfit={deal.flipNetProfit}
+                estDaysToSell={deal.estDaysToSell}
+                annROI={deal.estDaysToSell != null && deal.estDaysToSell >= 1 && deal.flipNetProfit > 0 ? Math.round((deal.flipNetProfit / deal.price / deal.estDaysToSell) * 365 * 100) : null}
+              />
+            </div>
+          )}
+          {/* Live Check Flip result */}
+          {comps && comps.noData && (
+            <div className="mt-2 rounded-xl px-3 py-2 mb-2 text-xs" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#6B7280' }}>
+              No sold comps available — N/A
+            </div>
+          )}
+          {comps && !comps.noData && (
+            <div className="mt-2 rounded-xl p-3 mb-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <VerdictBadge verdict={comps.verdict} />
+              </div>
+              <div className="mb-2">
+                <StatsCluster
+                  avgSoldPrice={comps.avgSoldPrice}
+                  soldCount={comps.soldCount}
+                  sourcesCount={comps.sourcesCount}
+                  netProfit={comps.netProfit}
+                  estDaysToSell={comps.daysToSell}
+                  annROI={comps.capitalEfficiency}
+                />
+              </div>
+              {comps.reasoning && <p className="text-xs leading-relaxed" style={{ color: '#9CA3AF' }}>{comps.reasoning}</p>}
+            </div>
+          )}
+          <div className="text-xs mb-2" style={{ color: '#6B7280' }}>{deal.condition}</div>
+          <div className="flex gap-2 flex-wrap">
+            <a href={deal.itemUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
+              style={{ border: '1px solid rgba(255,255,255,0.12)', color: '#9CA3AF' }}>
+              <ExternalLink className="w-3 h-3" /> View on eBay
+            </a>
+            <BrowseTrackButton deal={deal} />
+            <button
+              onClick={checkFlip}
+              disabled={compsLoading}
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-all disabled:opacity-60"
+              style={comps
+                ? comps.verdict === 'buy'
+                  ? { background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ADE80' }
+                  : comps.verdict === 'skip'
+                  ? { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#FCA5A5' }
+                  : { background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: '#FCD34D' }
+                : { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.35)', color: '#C4B5FD' }
+              }
+            >
+              {compsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FlaskConical className="w-3 h-3" />}
+              {compsLoading ? 'Checking…' : comps ? (comps.verdict === 'buy' ? 'BUY' : comps.verdict === 'skip' ? 'SKIP' : 'MAYBE') : 'Check Flip'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DealsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [digestItems, setDigestItems] = useState<BrowseDeal[]>([]);
+  const [digestAiPick, setDigestAiPick] = useState<string | null>(null);
+  const [digestGeneratedAt, setDigestGeneratedAt] = useState<string | null>(null);
+  const [digestLoading, setDigestLoading] = useState(false);
+  const digestRef = useRef<HTMLDivElement>(null);
+  const viewDigest = searchParams.get('view') === 'digest';
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -517,6 +747,7 @@ export default function DealsPage() {
   const [priceMin, setPriceMin] = useState<number | ''>('');
   const [priceMax, setPriceMax] = useState<number | ''>('');
   const [filterMinProfit, setFilterMinProfit] = useState<number | ''>('');
+  const [maxDaysToSell, setMaxDaysToSell] = useState<number | null>(60);
   const [emailState, setEmailState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [recommendation, setRecommendation] = useState<string | null>(null);
   const [pickedItemId, setPickedItemId] = useState<string | null>(null);
@@ -528,6 +759,8 @@ export default function DealsPage() {
   const [trendingLoading, setTrendingLoading] = useState(false);
   const [trendingError, setTrendingError] = useState('');
   const [trendingTracked, setTrendingTracked] = useState<Set<string>>(new Set());
+  const [trendingFlips, setTrendingFlips] = useState<Record<string, CompsVerdict>>({});
+  const [trendingPending, setTrendingPending] = useState<Set<string>>(new Set());
   const [browseItems, setBrowseItems] = useState<BrowseDeal[]>([]);
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseGeneratedAt, setBrowseGeneratedAt] = useState<string | null>(null);
@@ -536,6 +769,18 @@ export default function DealsPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingCats, setOnboardingCats] = useState<string[]>([]);
   const [onboardingSaving, setOnboardingSaving] = useState(false);
+  const [personalizedRecs, setPersonalizedRecs] = useState<EbayItem[] | null>(null);
+  const [recsLoading, setRecsLoading] = useState(false);
+  const [recsKeywords, setRecsKeywords] = useState<string[]>([]);
+  const [ebayConnected, setEbayConnected] = useState(false);
+  const [showPwaBanner, setShowPwaBanner] = useState(false);
+
+  useEffect(() => {
+    const dismissed = typeof window !== 'undefined' && localStorage.getItem('pwa-banner-dismissed');
+    const isStandalone = typeof window !== 'undefined' &&
+      (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
+    if (!dismissed && !isStandalone) setShowPwaBanner(true);
+  }, []);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => { if (r.status === 401) router.replace('/login'); }).catch(() => { /* network error — don't log out */ });
@@ -547,6 +792,7 @@ export default function DealsPage() {
       if (p.defaultMinProfit != null) setFilterMinProfit(p.defaultMinProfit);
       if (p.defaultMinDiscount != null) setFilterPct(p.defaultMinDiscount);
       if (p.defaultSingleQtyOnly) setFilterSingleQty(true);
+      setMaxDaysToSell(p.maxDaysToSell != null ? p.maxDaysToSell : 60);
       const dismissed = typeof window !== 'undefined' && localStorage.getItem('onboarding-dismissed');
       if (!dismissed && (!p.digestCategories || p.digestCategories.length === 0)) {
         setShowOnboarding(true);
@@ -556,11 +802,49 @@ export default function DealsPage() {
       if (!dismissed) setShowOnboarding(true);
     });
 
+    // Fetch personalized recommendations on page load
+    setRecsLoading(true);
+    fetch('/api/recommendations')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: any) => {
+        if (d?.connected) {
+          setEbayConnected(true);
+          setPersonalizedRecs(d.recommendations ?? []);
+          setRecsKeywords(d.keywords ?? []);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRecsLoading(false));
+
     // Load trending and browse feed on mount in parallel
     setTrendingLoading(true);
     fetch('/api/trending')
       .then(r => r.json())
-      .then(d => { setTrending(d.items ?? []); setTrendingSummary(d.summary ?? ''); })
+      .then(d => {
+        const items: TrendingItem[] = d.items ?? [];
+        setTrending(items);
+        setTrendingSummary(d.summary ?? '');
+        // Bulk grade top 6 trending items via sold-comps (AI, 4hr R2 cache)
+        const top6 = items.slice(0, 6).filter(i => i.itemId);
+        if (top6.length > 0) {
+          setTrendingPending(new Set(top6.map(i => i.itemId)));
+          top6.forEach((item, idx) => {
+            setTimeout(() => {
+              fetch('/api/sold-comps', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: item.title, price: item.price, shippingCost: null, condition: item.condition }),
+              }).then(r => r.json()).then(flip => {
+                if (flip?.verdict && flip?.avgSoldPrice != null && flip?.netProfit != null) {
+                  setTrendingFlips(prev => ({ ...prev, [item.itemId]: flip }));
+                }
+              }).catch(() => {}).finally(() => {
+                setTrendingPending(prev => { const next = new Set(prev); next.delete(item.itemId); return next; });
+              });
+            }, idx * 500);
+          });
+        }
+      })
       .catch(() => setTrendingError('Could not load trending'))
       .finally(() => setTrendingLoading(false));
 
@@ -571,6 +855,30 @@ export default function DealsPage() {
       .catch(() => {})
       .finally(() => setBrowseLoading(false));
   }, [router]);
+
+  useEffect(() => {
+    if (!viewDigest) return;
+    setDigestLoading(true);
+    fetch('/api/digest-deals')
+      .then(r => r.json())
+      .then(d => {
+        setDigestItems(d.items ?? []);
+        setDigestAiPick(d.aiPick ?? null);
+        setDigestGeneratedAt(d.generatedAt ?? null);
+        const hash = window.location.hash.replace('#', '');
+        setTimeout(() => {
+          const target = hash ? document.getElementById(hash) : digestRef.current;
+          target?.scrollIntoView({ behavior: 'smooth', block: hash ? 'center' : 'start' });
+          if (hash && target) {
+            target.style.outline = '2px solid #818CF8';
+            target.style.borderRadius = '16px';
+            setTimeout(() => { target.style.outline = ''; target.style.borderRadius = ''; }, 2500);
+          }
+        }, 150);
+      })
+      .catch(() => {})
+      .finally(() => setDigestLoading(false));
+  }, [viewDigest]);
 
   const search = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -604,7 +912,7 @@ export default function DealsPage() {
           .sort((a, b) => b.blendScore - a.blendScore)
           .slice(0, 10)
           .map(x => x.item);
-        // Bulk grade top 8 items progressively — stagger 400ms apart to avoid rate limits
+        // Bulk grade top 8 items via sold-comps (AI, 4hr R2 cache)
         const top8 = sortedForAI.slice(0, 8);
         setBulkPending(new Set(top8.map(i => i.itemId)));
         top8.forEach((item, idx) => {
@@ -612,11 +920,15 @@ export default function DealsPage() {
             fetch('/api/sold-comps', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title: item.title, price: item.price, shippingCost: item.shippingCost, marketPrice: item.marketPrice, discountPct: item.discountPct }),
+              body: JSON.stringify({ title: item.title, price: item.price, shippingCost: item.shippingCost, condition: item.condition }),
             }).then(r => r.json()).then(flip => {
               // Only store if it's a valid verdict — discard error responses
               if (flip?.verdict && flip?.avgSoldPrice != null && flip?.netProfit != null) {
-                setBulkFlips(prev => ({ ...prev, [item.itemId]: flip }));
+                // Respect maxDaysToSell: keep N/A (null) always, filter items that exceed the limit
+                const dts = flip.daysToSell ?? null;
+                if (dts === null || maxDaysToSell === null || dts <= maxDaysToSell) {
+                  setBulkFlips(prev => ({ ...prev, [item.itemId]: flip }));
+                }
               }
             }).catch(() => {}).finally(() => {
               setBulkPending(prev => { const next = new Set(prev); next.delete(item.itemId); return next; });
@@ -644,7 +956,7 @@ export default function DealsPage() {
             fetch('/api/sold-comps', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title: item.title, price: item.price, shippingCost: item.shippingCost, marketPrice: item.marketPrice, discountPct: item.discountPct }),
+              body: JSON.stringify({ title: item.title, price: item.price, shippingCost: item.shippingCost, marketPrice: item.marketPrice, discountPct: item.discountPct, condition: item.condition }),
             }).then(r => r.json()).then((flip: CompsVerdict) => {
               if (flip.verdict === 'skip' && idx < candidates.length - 1) {
                 tryFlip(candidates, idx + 1, originalRec);
@@ -735,7 +1047,19 @@ export default function DealsPage() {
 
   const displayItems = results
     ? (() => {
-        let pool = showAll ? results.items : results.items.filter(i => i.isHotDeal).length > 0 ? results.items.filter(i => i.isHotDeal) : results.items.slice(0, 20);
+        let pool: EbayItem[];
+        if (showAll) {
+          pool = results.items;
+        } else {
+          const hot = results.items.filter(i => i.isHotDeal);
+          if (hot.length >= 30) {
+            pool = hot;
+          } else {
+            // Fill up to 30 with remaining scored items after hot deals
+            const rest = results.items.filter(i => !i.isHotDeal);
+            pool = [...hot, ...rest].slice(0, 30);
+          }
+        }
         if (activeFilter !== null) pool = pool.filter(i => i.discountPct !== null && i.discountPct >= activeFilter);
         if (filterSingleQty) pool = pool.filter(i => i.quantity === null || i.quantity <= 1);
         if (priceMin !== '') pool = pool.filter(i => i.price >= (priceMin as number));
@@ -841,6 +1165,14 @@ export default function DealsPage() {
           </form>
 
         </div>
+
+        {/* PWA install banner — shown once until dismissed */}
+        {showPwaBanner && (
+          <PwaBanner onDismiss={() => {
+            localStorage.setItem('pwa-banner-dismissed', '1');
+            setShowPwaBanner(false);
+          }} />
+        )}
 
         {/* Error */}
         {error && (
@@ -1005,12 +1337,19 @@ export default function DealsPage() {
                     : <p className="text-sm leading-relaxed mb-2" style={{ color: '#E2E8F0' }}>{recommendation}</p>
                   }
                   {!recLoading && pickedFlip && (
-                    <div className="flex items-center gap-2 flex-wrap mt-1">
-                      <VerdictBadge verdict={pickedFlip.verdict} />
-                      <span className="text-xs" style={{ color: '#9CA3AF' }}>
-                        Avg sold ${pickedFlip.avgSoldPrice.toFixed(0)} · {pickedFlip.soldCount} sales
-                        {pickedFlip.netProfit > 0 && <> · <span style={{ color: '#4ADE80' }}>~${pickedFlip.netProfit.toFixed(0)} profit</span></>}
-                      </span>
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                        <VerdictBadge verdict={pickedFlip.verdict} />
+                        <span className="text-[10px]" style={{ color: '#4B5563' }}>AI-verified at page load · Click Check Flip to refresh</span>
+                      </div>
+                      <StatsCluster
+                        avgSoldPrice={pickedFlip.avgSoldPrice}
+                        soldCount={pickedFlip.soldCount}
+                        sourcesCount={pickedFlip.sourcesCount}
+                        netProfit={pickedFlip.netProfit}
+                        estDaysToSell={pickedFlip.daysToSell}
+                        annROI={pickedFlip.capitalEfficiency}
+                      />
                     </div>
                   )}
                 </div>
@@ -1025,7 +1364,7 @@ export default function DealsPage() {
                     <ItemCard
                       item={item}
                       onTrack={() => {}}
-                      preFlip={bulkFlips[item.itemId] ?? null}
+                      preFlip={(pickedItemId && (item.itemId === pickedItemId || item.itemId.includes(pickedItemId) || pickedItemId.includes(item.itemId)) && pickedFlip) ? pickedFlip : (bulkFlips[item.itemId] ?? null)}
                       preFlipLoading={bulkPending.has(item.itemId)}
                     />
                   </div>
@@ -1097,6 +1436,101 @@ export default function DealsPage() {
           </div>
         )}
 
+        {/* Today's Email Picks — shown when arriving from push notification */}
+        {(viewDigest || digestItems.length > 0) && !results && !loading && (
+          <div className="mt-2 mb-6" ref={digestRef}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center justify-center w-8 h-8 rounded-xl shrink-0" style={{ background: 'linear-gradient(135deg,#6366F1,#8B5CF6)', boxShadow: '0 2px 8px rgba(99,102,241,0.3)' }}>
+                <Mail className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white leading-tight">Today&apos;s Email Picks</h2>
+                <p className="text-xs" style={{ color: '#6B7280' }}>
+                  From this morning&apos;s digest
+                  {digestGeneratedAt && <> · {new Date(digestGeneratedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>}
+                </p>
+              </div>
+            </div>
+            {digestAiPick && (
+              <div className="rounded-2xl p-4 mb-3" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles className="w-3.5 h-3.5" style={{ color: '#818CF8' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#818CF8' }}>AI Pick of the Day</span>
+                </div>
+                <p className="text-sm" style={{ color: '#C7D2FE' }}>{digestAiPick}</p>
+              </div>
+            )}
+            {digestLoading && (
+              <div className="flex items-center gap-2 py-4 text-sm" style={{ color: '#6B7280' }}>
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading today&apos;s deals…
+              </div>
+            )}
+            {!digestLoading && digestItems.length > 0 && (
+              <div className="space-y-3">
+                {digestItems.map(deal => <DigestDealCard key={deal.itemId} deal={deal} />)}
+              </div>
+            )}
+            {!digestLoading && digestItems.length === 0 && (
+              <div className="text-center py-6 text-sm" style={{ color: '#4B5563' }}>No digest deals cached yet — check back after 9 AM.</div>
+            )}
+          </div>
+        )}
+
+        {/* Empty state / Personalized Recommendations */}
+        {!results && !loading && !error && (
+          <div>
+            {(recsLoading || (ebayConnected && personalizedRecs !== null)) && (
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center justify-center w-7 h-7 rounded-lg shrink-0" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
+                    <Sparkles className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-white text-sm">Recommended for You</div>
+                    {recsKeywords.length > 0 && (
+                      <div className="text-xs" style={{ color: '#6B7280' }}>Based on your eBay purchases: {recsKeywords.join(', ')}</div>
+                    )}
+                  </div>
+                </div>
+                {recsLoading ? (
+                  <div className="flex items-center gap-2 py-6 justify-center text-sm" style={{ color: '#6B7280' }}>
+                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#F59E0B' }} /> Finding deals for you…
+                  </div>
+                ) : personalizedRecs && personalizedRecs.length > 0 ? (
+                  <div className="space-y-3">
+                    {personalizedRecs.map(item => <ItemCard key={item.itemId} item={item as any} onTrack={() => {}} />)}
+                  </div>
+                ) : (
+                  <div className="rounded-xl p-4 text-sm text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#4B5563' }}>
+                    No matching deals right now — check back later or search above.
+                  </div>
+                )}
+              </div>
+            )}
+            {!recsLoading && !ebayConnected && (
+              <div className="rounded-2xl p-5 mb-6 flex gap-3 items-start" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                <div className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
+                  <ShoppingBag className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm mb-0.5" style={{ color: '#FCD34D' }}>Get personalized deal recommendations</div>
+                  <div className="text-xs mb-3" style={{ color: '#92400E' }}>Connect your eBay account and we&apos;ll surface deals matching your purchase history — automatically.</div>
+                  <a href="/settings" className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)', color: '#fff' }}>
+                    Connect in Settings →
+                  </a>
+                </div>
+              </div>
+            )}
+            <div className="text-center py-10" style={{ color: '#4B5563' }}>
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <Search className="w-8 h-8" style={{ color: '#374151' }} />
+              </div>
+              <div className="font-medium" style={{ color: '#6B7280' }}>Search eBay for deals</div>
+              <div className="text-sm mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings at {minDiscount}%+ off market price</div>
+            </div>
+          </div>
+        )}
+
         {/* Browse Feed — Today's Picks (shown when no search active) */}
         {!results && !loading && (
           <div className="mt-2">
@@ -1159,20 +1593,19 @@ export default function DealsPage() {
                           <span className="text-lg font-bold" style={{ color: '#34D399' }}>${deal.price.toFixed(2)}</span>
                           {deal.marketPrice && <span className="text-sm line-through" style={{ color: '#4B5563' }}>${deal.marketPrice.toFixed(0)}</span>}
                           {deal.discountPct != null && <DealBadge pct={deal.discountPct} />}
-                          {deal.flipNetProfit > 0 && (
-                            <span className="text-sm font-bold px-2.5 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.35)', color: '#4ADE80' }}>
-                              +${deal.flipNetProfit} profit
-                            </span>
-                          )}
-                          {deal.discountPct != null && <DealBadge pct={deal.discountPct} />}
                           <DiscountQualityBadge quality={deal.discountQuality} reason={deal.discountQualityReason} />
                         </div>
-                        {/* Check Flip inline result */}
-                        <div className="rounded-xl px-3 py-2 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1" style={{ background: deal.flipVerdict === 'buy' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(251,191,36,0.2)' }}>
-                          <span className="text-xs font-bold" style={{ color: deal.flipVerdict === 'buy' ? '#4ADE80' : '#FCD34D' }}>{deal.flipVerdict === 'buy' ? '✓ BUY' : '~ MAYBE'}</span>
-                          <span className="text-xs" style={{ color: '#9CA3AF' }}>Avg sold <strong style={{ color: '#E5E7EB' }}>${deal.avgSoldPrice.toFixed(0)}</strong> ({deal.soldCount} comps)</span>
-                          {deal.flipNetProfit > 0 && <span className="text-xs font-semibold" style={{ color: '#4ADE80' }}>~${deal.flipNetProfit} net</span>}
-                          <span className="text-xs" style={{ color: '#6B7280' }}>{deal.flipMarginPct}% margin</span>
+                        {/* Stats cluster */}
+                        <div className="rounded-xl px-3 py-2 mb-2" style={{ background: deal.flipVerdict === 'buy' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(251,191,36,0.2)' }}>
+                          <span className="text-xs font-bold block mb-1" style={{ color: deal.flipVerdict === 'buy' ? '#4ADE80' : '#FCD34D' }}>{deal.flipVerdict === 'buy' ? '✓ BUY' : '~ MAYBE'}</span>
+                          <StatsCluster
+                            avgSoldPrice={deal.avgSoldPrice}
+                            soldCount={deal.soldCount}
+                            sourcesCount={deal.sourcesCount}
+                            netProfit={deal.flipNetProfit}
+                            estDaysToSell={deal.estDaysToSell}
+                            annROI={deal.estDaysToSell != null && deal.estDaysToSell >= 1 && deal.flipNetProfit > 0 ? Math.round((deal.flipNetProfit / deal.price / deal.estDaysToSell) * 365 * 100) : null}
+                          />
                         </div>
                         <div className="text-xs mb-2" style={{ color: '#6B7280' }}>{deal.condition}</div>
                         <div className="flex gap-2 flex-wrap">
@@ -1226,7 +1659,7 @@ export default function DealsPage() {
           {trending.length > 0 && !trendingLoading && (
             <div className="space-y-2">
               {trending.slice(0, 8).map((item, idx) => {
-                const net = item.marketPrice ? Math.round(item.marketPrice * 0.85 - item.price) : null;
+                // No marketPrice estimate — profit shown only after Check Flip runs
                 const tracked = trendingTracked.has(item.itemId || item.title);
                 const trackItem = async () => {
                   const key = item.itemId || item.title;
@@ -1256,18 +1689,36 @@ export default function DealsPage() {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-white leading-snug line-clamp-1 mb-0.5">{item.title}</p>
-                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
                           <span className="text-sm font-bold" style={{ color: '#34D399' }}>${item.price.toFixed(2)}</span>
-                          {net !== null && net > 0 && (
-                            <span className="text-sm font-bold px-2 py-0.5 rounded-lg" style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ADE80' }}>+${net} profit</span>
-                          )}
                           {item.discountPct != null && item.discountPct >= 10 && (
                             <span className="text-xs" style={{ color: '#60A5FA', opacity: 0.75 }}>{item.discountPct}% off</span>
                           )}
                           <span className="text-xs font-bold" style={{ color: item.demandScore >= 70 ? '#F87171' : item.demandScore >= 40 ? '#FCD34D' : '#9CA3AF' }}>
                             {item.demandScore >= 70 ? '🔥 Hot' : item.demandScore >= 40 ? '📈 Rising' : '👀 Watch'}
                           </span>
+                          {trendingPending.has(item.itemId) && !trendingFlips[item.itemId] && (
+                            <span className="text-xs px-2 py-0.5 rounded-lg flex items-center gap-1" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', color: '#A78BFA' }}>
+                              <Loader2 className="w-3 h-3 animate-spin" /> Grading…
+                            </span>
+                          )}
                         </div>
+                        {trendingFlips[item.itemId] ? (
+                          <div className="mb-2">
+                            <StatsCluster
+                              avgSoldPrice={trendingFlips[item.itemId].avgSoldPrice}
+                              soldCount={trendingFlips[item.itemId].soldCount}
+                              sourcesCount={trendingFlips[item.itemId].sourcesCount}
+                              netProfit={trendingFlips[item.itemId].netProfit}
+                              estDaysToSell={trendingFlips[item.itemId].daysToSell}
+                              annROI={trendingFlips[item.itemId].capitalEfficiency}
+                            />
+                          </div>
+                        ) : (
+                          <div className="mb-2 text-xs" style={{ color: '#6B7280' }}>
+                            Est. {estDaysFromTitle(item.title, item.category)}d to sell
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <button
                             onClick={trackItem}
@@ -1317,5 +1768,13 @@ export default function DealsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DealsPage() {
+  return (
+    <Suspense>
+      <DealsPageContent />
+    </Suspense>
   );
 }

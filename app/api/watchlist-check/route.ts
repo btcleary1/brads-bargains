@@ -3,6 +3,7 @@ import { searchDeals, EbayItem } from '@/lib/ebay';
 import { topDeals, sellabilityScore, modelYear } from '@/lib/deal-score';
 import { getAllUsers } from '@/lib/users';
 import { getSavedSearches, saveSavedSearches, getUserPrefs } from '@/lib/tracker-data';
+import { sendPushToSubscriptions } from '@/lib/push-notify';
 import { getSessionFromRequest as _unused } from '@/lib/session'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export const runtime = 'nodejs';
@@ -142,6 +143,14 @@ export async function GET(req: NextRequest) {
 
     if (alerts.length > 0) {
       await sendWatchlistAlert(email, alerts).catch(() => {});
+      const subs = (prefs.pushSubscriptions as object[] | undefined) ?? [];
+      if (subs.length) {
+        const topDeal = alerts[0]?.deals[0];
+        const body = topDeal
+          ? `${topDeal.title.slice(0, 60)} — $${topDeal.price} (${topDeal.discountPct ?? 0}% off)`
+          : 'New watchlist deals found.';
+        await sendPushToSubscriptions(subs, "Brad's Bargains — Watchlist Alert", body, '/deals').catch(() => {});
+      }
       summary.push({ userId: user.userId, alerts: alerts.reduce((n, a) => n + a.deals.length, 0) });
     }
   }

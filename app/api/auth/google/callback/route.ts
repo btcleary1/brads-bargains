@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
     await markGoogleAuth(user.userId);
 
     const safeName = user.name.replace(/[^\u0000-\u00FF]/g, '').trim() || user.email;
-    const res = NextResponse.redirect(`${APP_URL}/deals`);
+    const res = NextResponse.redirect(`${APP_URL}/login?setup-passkey=1`);
     setSessionCookie(res, {
       userId: user.userId,
       email: user.email,

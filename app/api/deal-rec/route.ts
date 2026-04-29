@@ -7,6 +7,9 @@ export const runtime = 'nodejs';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+const recCache = new Map<string, { value: { recommendation: string | null; pickedItemId: string | null }; ts: number }>();
+const CACHE_TTL = 30 * 60_000;
+
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,6 +21,12 @@ export async function POST(req: NextRequest) {
   const { items } = await req.json();
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ recommendation: null });
+  }
+
+  const cacheKey = items.slice(0, 10).map((i: any) => i.itemId).sort().join(',');
+  const cached = recCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return NextResponse.json(cached.value);
   }
 
   const top = items.slice(0, 10).map((i: any) => {
@@ -38,11 +47,15 @@ export async function POST(req: NextRequest) {
     const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
     const start = raw.indexOf('{');
     const end = raw.lastIndexOf('}');
+    let result: { recommendation: string | null; pickedItemId: string | null };
     if (start !== -1 && end !== -1) {
       const parsed = JSON.parse(raw.slice(start, end + 1));
-      return NextResponse.json({ recommendation: parsed.recommendation ?? null, pickedItemId: parsed.pickedItemId ?? null });
+      result = { recommendation: parsed.recommendation ?? null, pickedItemId: parsed.pickedItemId ?? null };
+    } else {
+      result = { recommendation: raw || null, pickedItemId: null };
     }
-    return NextResponse.json({ recommendation: raw || null, pickedItemId: null });
+    recCache.set(cacheKey, { value: result, ts: Date.now() });
+    return NextResponse.json(result);
   } catch {
     return NextResponse.json({ recommendation: null, pickedItemId: null });
   }

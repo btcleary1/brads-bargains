@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Zap, Loader2, Eye, EyeOff, Fingerprint } from 'lucide-react';
-import { startAuthentication, browserSupportsWebAuthn } from '@simplewebauthn/browser';
+import { startAuthentication, startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import Link from 'next/link';
 
-export default function LoginPage() {
+type Stage = 'login' | 'register-passkey';
+
+function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -17,14 +20,34 @@ export default function LoginPage() {
   const [biometricLabel, setBiometricLabel] = useState('Sign in with Biometrics');
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [biometricError, setBiometricError] = useState('');
+  const [stage, setStage] = useState<Stage>('login');
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
     setSupportsWebAuthn(browserSupportsWebAuthn());
+    setIsStandalone(
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as any).standalone === true
+    );
     const ua = navigator.userAgent;
     if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Sign in with Face ID');
     else if (/Mac/.test(ua) && !/CrOS/.test(ua)) setBiometricLabel('Sign in with Touch ID');
     else if (/CrOS/.test(ua)) setBiometricLabel('Sign in with Screen Lock');
     else if (/Win/.test(ua)) setBiometricLabel('Sign in with Windows Hello');
+
+    // After Google OAuth, check if passkey is already set up — offer setup if not
+    if (searchParams.get('setup-passkey') === '1') {
+      fetch('/api/auth/webauthn/status')
+        .then(r => r.json())
+        .then(d => {
+          if (d.registered) {
+            window.location.href = '/deals';
+          } else {
+            setStage('register-passkey');
+          }
+        })
+        .catch(() => router.push('/deals'));
+    }
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -39,12 +62,44 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        router.push('/deals');
+        const statusRes = await fetch('/api/auth/webauthn/status');
+        const statusData = await statusRes.json();
+        if (statusData.registered) {
+          window.location.href = '/deals';
+        } else {
+          setStage('register-passkey');
+        }
       } else {
         setError(data.error || 'Incorrect email or password.');
       }
     } catch {
       setError('Network error — please try again.');
+    }
+    setLoading(false);
+  };
+
+  const handleRegisterPasskey = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const optRes = await fetch('/api/auth/webauthn/register-options', { method: 'POST' });
+      const options = await optRes.json();
+      if (!optRes.ok) { setError(options.error || 'Could not start setup.'); setLoading(false); return; }
+      const attestation = await startRegistration({ optionsJSON: options });
+      const verRes = await fetch('/api/auth/webauthn/register-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(attestation),
+      });
+      const verData = await verRes.json();
+      if (verRes.ok) {
+        window.location.href = '/deals';
+      } else {
+        setError(verData.error || 'Setup failed.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
     }
     setLoading(false);
   };
@@ -68,7 +123,7 @@ export default function LoginPage() {
       });
       const result = await verRes.json();
       if (verRes.ok) {
-        router.push('/deals');
+        window.location.href = '/deals';
       } else {
         setBiometricError(result.error || 'Biometric sign-in failed.');
       }
@@ -83,6 +138,48 @@ export default function LoginPage() {
     setBiometricLoading(false);
   };
 
+  if (stage === 'register-passkey') {
+    return (
+      <div
+        className="min-h-screen flex flex-col items-center justify-center px-5"
+        style={{ background: 'linear-gradient(160deg, #050814 0%, #0B1120 60%, #0f172a 100%)' }}
+      >
+        <div className="glass-card w-full max-w-sm p-8 text-center">
+          <div
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5"
+            style={{ background: 'linear-gradient(135deg, #3B82F6, #6366F1)', boxShadow: '0 4px 20px rgba(99,102,241,0.45)' }}
+          >
+            <Fingerprint className="w-8 h-8 text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Enable Face ID?</h2>
+          <p className="text-sm text-gray-400 mb-7 leading-relaxed">
+            Skip the password next time. Sign in instantly with Face ID or Touch ID — stored only on this device.
+          </p>
+          {error && (
+            <div className="bg-red-500/15 border border-red-500/30 rounded-xl p-3 mb-5 text-left">
+              <p className="text-xs text-red-300 font-mono break-all">{error}</p>
+            </div>
+          )}
+          <button
+            onClick={handleRegisterPasskey}
+            disabled={loading}
+            className="w-full py-3.5 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 mb-3 transition-all disabled:opacity-40"
+            style={{ background: 'linear-gradient(135deg, #3B82F6, #6366F1)', boxShadow: '0 4px 16px rgba(99,102,241,0.35)' }}
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
+            Set Up Face ID / Touch ID
+          </button>
+          <button
+            onClick={() => router.push('/deals')}
+            className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            Skip for now
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }}>
       <div className="w-full max-w-sm">
@@ -94,18 +191,26 @@ export default function LoginPage() {
           <p className="text-sm mt-1" style={{ color: '#6B7280' }}>Find the best eBay deals</p>
         </div>
 
-        {/* Biometric button */}
+        {/* Biometric button — prominent in standalone/PWA, subtle in browser */}
         {supportsWebAuthn && (
           <div className="mb-5">
             <button
               onClick={handleBiometricLogin}
               disabled={biometricLoading}
               className="w-full py-3.5 font-semibold text-sm flex items-center justify-center gap-2.5 rounded-2xl transition-all disabled:opacity-50"
-              style={{ background: 'rgba(255,255,255,0.09)', border: '1px solid rgba(255,255,255,0.13)', color: 'white' }}
+              style={isStandalone ? {
+                background: 'linear-gradient(135deg, #3B82F6, #6366F1)',
+                boxShadow: '0 4px 16px rgba(99,102,241,0.45)',
+                color: 'white',
+              } : {
+                background: 'rgba(255,255,255,0.09)',
+                border: '1px solid rgba(255,255,255,0.13)',
+                color: 'white',
+              }}
             >
               {biometricLoading
                 ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Fingerprint className="w-4 h-4 text-blue-400" />}
+                : <Fingerprint className={`w-4 h-4 ${isStandalone ? 'text-white' : 'text-blue-400'}`} />}
               {biometricLoading ? 'Verifying…' : biometricLabel}
             </button>
             {biometricError && (
@@ -114,12 +219,22 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Google button */}
+        {/* Google button — prominent in browser, subtle in standalone/PWA */}
         <div className="mb-5">
           <a
             href="/api/auth/google"
             className="w-full py-3.5 font-semibold text-sm flex items-center justify-center gap-2.5 rounded-2xl transition-all"
-            style={{ background: 'rgba(255,255,255,0.09)', border: '1px solid rgba(255,255,255,0.13)', color: 'white', textDecoration: 'none' }}
+            style={isStandalone ? {
+              background: 'rgba(255,255,255,0.09)',
+              border: '1px solid rgba(255,255,255,0.13)',
+              color: 'white',
+              textDecoration: 'none',
+            } : {
+              background: 'white',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+              color: '#1f1f1f',
+              textDecoration: 'none',
+            }}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -148,8 +263,7 @@ export default function LoginPage() {
                 required
                 autoComplete="email"
                 placeholder="you@example.com"
-                className="w-full px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                className="w-full px-3.5 py-2.5 rounded-xl text-sm text-gray-900 bg-white/95 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 border-0"
               />
             </div>
             <div>
@@ -162,8 +276,7 @@ export default function LoginPage() {
                   required
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl text-sm text-gray-900 bg-white/95 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 border-0"
                 />
                 <button
                   type="button"
@@ -203,5 +316,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPageWrapper() {
+  return (
+    <Suspense>
+      <LoginPage />
+    </Suspense>
   );
 }

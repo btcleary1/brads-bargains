@@ -7,6 +7,8 @@ export interface FlipData {
   avgSoldPrice: number;
   soldCount: number;
   marginPct: number;
+  estDaysToSell?: number | null;
+  sourcesCount?: number | null;
 }
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
@@ -66,16 +68,22 @@ function listingAgeBadge(listingDate: string | null): string {
   return `<span style="font-size:10px;color:#94A3B8;background:#F8FAFC;border:1px solid #E2E8F0;padding:2px 7px;border-radius:4px;">Listed ${days}d ago</span>`;
 }
 
-function flipRow(flip: FlipData): string {
+function flipRow(flip: FlipData, annROI?: number | null): string {
   const verdictColor = flip.verdict === 'buy' ? '#16A34A' : flip.verdict === 'maybe' ? '#D97706' : '#DC2626';
   const verdictBg    = flip.verdict === 'buy' ? '#F0FDF4' : flip.verdict === 'maybe' ? '#FFFBEB' : '#FEF2F2';
   const verdictBorder= flip.verdict === 'buy' ? '#BBF7D0' : flip.verdict === 'maybe' ? '#FDE68A' : '#FECACA';
   const label        = flip.verdict === 'buy' ? '✓ BUY' : flip.verdict === 'maybe' ? '~ MAYBE' : '✗ SKIP';
-  return `<div style="margin-top:8px;padding:8px 10px;background:${verdictBg};border:1px solid ${verdictBorder};border-radius:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-    <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:${verdictColor};">${label}</span>
-    <span style="font-size:11px;color:#475569;">Avg sold <strong>$${flip.avgSoldPrice.toFixed(0)}</strong> (${flip.soldCount} comps)</span>
-    ${flip.netProfit > 0 ? `<span style="font-size:11px;font-weight:700;color:#16A34A;">~$${flip.netProfit} net profit</span>` : `<span style="font-size:11px;color:#DC2626;">Low margin</span>`}
-    <span style="font-size:11px;color:#94A3B8;">${flip.marginPct}% margin</span>
+  const roiColor = annROI != null ? (annROI >= 200 ? '#16A34A' : annROI >= 100 ? '#D97706' : '#94A3B8') : '';
+  return `<div style="margin-top:8px;padding:10px 12px;background:${verdictBg};border:1px solid ${verdictBorder};border-radius:6px;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:5px;">
+      <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:${verdictColor};">${label}</span>
+      <span style="font-size:11px;color:#475569;">Avg sold <strong>$${flip.avgSoldPrice.toFixed(0)}</strong> &middot; ${flip.soldCount} comps${flip.sourcesCount != null ? ` &middot; ${flip.sourcesCount} ${flip.sourcesCount === 1 ? 'site' : 'sites'}` : ''}</span>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      ${flip.netProfit > 0 ? `<span style="font-size:12px;font-weight:700;color:#16A34A;">+$${flip.netProfit} Net Profit</span>` : `<span style="font-size:11px;color:#DC2626;">Low margin</span>`}
+      ${flip.estDaysToSell != null ? `<span style="font-size:11px;color:#64748B;">Est. ${flip.estDaysToSell}d to sell</span>` : ''}
+      ${annROI != null && annROI > 0 && annROI <= 2000 ? `<span style="font-size:11px;color:${roiColor};">${annROI}% ann. ROI</span>` : ''}
+    </div>
   </div>`;
 }
 
@@ -84,7 +92,13 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
   const location = safe(deal.location);
   const condition = safe(deal.condition);
   const savings = deal.marketPrice ? deal.marketPrice - deal.price : 0;
-  const netProfit = deal.marketPrice ? Math.round(deal.marketPrice * 0.85 - deal.price - (deal.shippingCost ?? 0)) : null;
+  // Use sold-comps net profit first (more accurate), fall back to marketPrice estimate
+  const netProfit = flip?.netProfit != null
+    ? flip.netProfit
+    : deal.marketPrice ? Math.round(deal.marketPrice * 0.85 - deal.price - (deal.shippingCost ?? 0)) : null;
+  const annROI = flip && flip.netProfit > 0 && flip.estDaysToSell != null && flip.estDaysToSell >= 1
+    ? Math.round((flip.netProfit / deal.price / flip.estDaysToSell) * 365 * 100)
+    : null;
   const tier = tierLabel(deal.discountPct ?? 0);
   const cat = categoryLabel(deal.category);
   const sellScore = sellabilityScore(deal, allDeals);
@@ -128,21 +142,25 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
                   &middot; ${deal.sellerFeedbackPercent}% (${deal.sellerFeedbackScore?.toLocaleString()} ratings)
                  </div>`
               : ''}
-            ${flip ? flipRow(flip) : ''}
+            ${flip ? flipRow(flip, annROI) : ''}
           </td>
 
           <!-- Price -->
           <td width="110" style="padding:14px 14px;text-align:right;vertical-align:top;white-space:nowrap;">
-            ${netProfit !== null && netProfit > 0
-              ? `<div style="font-size:18px;font-weight:900;color:#16A34A;line-height:1;">+$${netProfit} profit</div>`
+            ${netProfit !== null
+              ? netProfit > 0
+                ? `<div style="font-size:18px;font-weight:900;color:#16A34A;line-height:1;">+$${netProfit} net profit</div>`
+                : `<div style="font-size:13px;font-weight:700;color:#DC2626;line-height:1;">-$${Math.abs(netProfit)} loss</div>`
               : ''}
-            <div style="font-size:${netProfit !== null && netProfit > 0 ? '14px' : '22px'};font-weight:800;color:#0F172A;margin-top:${netProfit !== null && netProfit > 0 ? '4px' : '0'};">$${deal.price.toFixed(0)}</div>
+            <div style="font-size:${netProfit !== null ? '14px' : '22px'};font-weight:800;color:#0F172A;margin-top:${netProfit !== null ? '4px' : '0'};">$${deal.price.toFixed(0)}</div>
             ${deal.marketPrice
               ? `<div style="font-size:11px;color:#94A3B8;text-decoration:line-through;margin-top:1px;">$${deal.marketPrice.toFixed(0)}</div>`
               : ''}
             ${deal.discountPct ? `<div style="font-size:11px;color:#94A3B8;margin-top:1px;">${deal.discountPct}% off</div>` : ''}
             <a href="${deal.itemUrl}"
-              style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View</a>
+              style="display:inline-block;margin-top:8px;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View on eBay</a>
+            <a href="${APP_URL}/deals?view=digest#item-${deal.itemId}"
+              style="display:inline-block;margin-top:4px;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">View on Brad's Bargains</a>
             <a href="${buildTrackUrl(deal)}"
               style="display:inline-block;margin-top:4px;background:#1D4ED8;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:5px 12px;border-radius:6px;">Track Deal</a>
           </td>
@@ -198,9 +216,9 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
 
   <!-- Header -->
   <tr><td style="padding-bottom:22px;text-align:center;">
-    <div style="display:inline-block;background:linear-gradient(135deg,#3B82F6,#6366F1);border-radius:12px;padding:10px 20px;margin-bottom:14px;">
+    <a href="${APP_URL}/deals?view=digest" style="display:inline-block;background:linear-gradient(135deg,#3B82F6,#6366F1);border-radius:12px;padding:10px 20px;margin-bottom:14px;text-decoration:none;">
       <span style="font-size:18px;font-weight:800;color:#FFFFFF;letter-spacing:-0.3px;">Brad's Bargains</span>
-    </div>
+    </a>
     <h1 style="margin:0 0 5px;font-size:24px;font-weight:800;color:#0F172A;letter-spacing:-0.5px;">Today's Top 5 Deals</h1>
     <p style="margin:0;font-size:13px;color:#64748B;">${today} &middot; Electronics &amp; Collectibles &middot; Best deals today</p>
   </td></tr>

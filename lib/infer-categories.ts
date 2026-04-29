@@ -2,26 +2,31 @@ import type { TrackerDeal } from './tracker-data';
 import { DIGEST_CATEGORIES } from './digest-categories';
 
 const TITLE_PATTERNS: { pattern: RegExp; key: string }[] = [
-  { pattern: /\biphone\b/i, key: 'iphone' },
-  { pattern: /\bmacbook\b/i, key: 'macbook' },
-  { pattern: /\bipad\b/i, key: 'ipad' },
-  { pattern: /\bapple\s+watch\b/i, key: 'watch' },
-  { pattern: /\bairpod/i, key: 'airpods' },
-  { pattern: /\bnintendo\b|\bswitch\s+oled\b/i, key: 'nintendo' },
-  { pattern: /\bair\s+jordan\b|\baj\d/i, key: 'sneakers' },
-  { pattern: /\bnike\s+dunk\b|\bdeadstock\b/i, key: 'deadstock' },
-  { pattern: /\bpokemon\b/i, key: 'pokemon' },
-  { pattern: /\bpsa\b|\bsports?\s+card\b|\bbaseball\s+card\b/i, key: 'sportcard' },
-  { pattern: /\blego\b/i, key: 'lego' },
-  { pattern: /\bcomic\b|\bcgc\b/i, key: 'comic' },
-  { pattern: /\bdji\b|\bdrone\b/i, key: 'drone' },
-  { pattern: /\bcamera\s+lens\b|\bsony\s+lens\b|\bcanon\s+lens\b/i, key: 'camera' },
-  { pattern: /\bgold\s+coin\b|\bgold\s+bullion\b/i, key: 'gold' },
-  { pattern: /\bsilver\s+coin\b|\bsilver\s+bullion\b/i, key: 'silver' },
-  { pattern: /\bps5\b|\bxbox\s+series\b|\bvideo\s+game\b/i, key: 'games' },
-  { pattern: /\bmechanical\s+keyboard\b/i, key: 'keyboard' },
-  { pattern: /\bsunglasses\b/i, key: 'sunglasses' },
-  { pattern: /\brolex\b|\bomega\s+watch\b/i, key: 'luxwatch' },
+  { pattern: /\biphone\b|\bgalaxy\s+s\d|\bpixel\s+\d|\bsmartphone\b/i,         key: 'cell_phones' },
+  { pattern: /\bmacbook\b|\blaptop\b|\bthinkpad\b|\bdell\s+xps\b/i,            key: 'computers' },
+  { pattern: /\bipad\b|\btablet\b/i,                                             key: 'computers' },
+  { pattern: /\bairpod\b|\bheadphone\b|\bspeaker\b|\bsonos\b/i,                 key: 'consumer_elec' },
+  { pattern: /\bapple\s+watch\b|\bsmartwatch\b|\bgarmin\b|\bfitbit\b/i,         key: 'consumer_elec' },
+  { pattern: /\bdji\b|\bdrone\b/i,                                               key: 'cameras' },
+  { pattern: /\bcamera\b|\blens\b|\bsony\s+a\d|\bcanon\s+r\b/i,                 key: 'cameras' },
+  { pattern: /\bps5\b|\bplaystation\b|\bxbox\b|\bnintendo\b|\bswitch\b|\bvideo\s+game\b/i, key: 'video_games' },
+  { pattern: /\bair\s+jordan\b|\bnike\s+dunk\b|\bdeadstock\b|\bsneaker\b|\bshoe\b/i, key: 'clothing' },
+  { pattern: /\bdesigner\b|\bgucci\b|\blouis\s+vuitton\b|\bprada\b|\bcoach\b/i, key: 'clothing' },
+  { pattern: /\brolex\b|\bomega\b|\bap\s+watch\b|\baudemars\b|\bpatek\b/i,       key: 'jewelry_watches' },
+  { pattern: /\bjewelry\b|\bdiamond\b|\bgold\s+necklace\b|\bsapphire\b/i,        key: 'jewelry_watches' },
+  { pattern: /\blego\b/i,                                                         key: 'toys_hobbies' },
+  { pattern: /\bboard\s+game\b|\bfunko\b|\baction\s+figure\b/i,                  key: 'toys_hobbies' },
+  { pattern: /\bcollectible\b|\bvintage\b|\brare\b|\bantique\b/i,                 key: 'collectibles' },
+  { pattern: /\bpsa\b|\bsports?\s+card\b|\bbaseball\s+card\b|\bgraded\s+card\b/i, key: 'sports_cards' },
+  { pattern: /\bpokemon\b|\bmagic\s+the\s+gathering\b|\bmtg\b/i,                 key: 'sports_cards' },
+  { pattern: /\bgold\s+coin\b|\bsilver\s+coin\b|\bbullion\b|\bnumismatic\b/i,    key: 'coins' },
+  { pattern: /\bgolf\b|\bbike\b|\bsurfboard\b|\bskis\b|\bfishing\b/i,            key: 'sporting_goods' },
+  { pattern: /\bguitar\b|\bsynth\b|\bpiano\b|\bkeyboard\s+midi\b|\bdrum\b/i,     key: 'musical_inst' },
+  { pattern: /\bdewalt\b|\bmilwaukee\b|\bpower\s+tool\b|\bdrills?\b/i,           key: 'tools_industrial' },
+  { pattern: /\bappliance\b|\brobot\s+vacuum\b|\bdyson\b|\binstant\s+pot\b/i,    key: 'home_garden' },
+  { pattern: /\bcomic\b|\bcgc\b|\bfirst\s+edition\b|\bhard\s+cover\b/i,          key: 'books_comics' },
+  { pattern: /\bvinyl\b|\brecord\b|\balbum\s+sealed\b/i,                          key: 'music' },
+  { pattern: /\bblu.?ray\b|\b4k\s+uhd\b/i,                                        key: 'dvds_movies' },
 ];
 
 const VALID_KEYS = new Set(DIGEST_CATEGORIES.map(c => c.key));
@@ -49,8 +54,8 @@ export function inferCategoriesFromDeals(deals: TrackerDeal[]): string[] {
 
 export function inferCategoryScores(
   explicitCategories: string[],
-  ebayWatchedTitles: string[],   // watch list items — strong buying intent
-  ebayWonTitles: string[],       // won/purchased items — strongest signal
+  ebayWatchedTitles: string[],
+  ebayWonTitles: string[],
   trackerDeals: TrackerDeal[],
 ): Map<string, number> {
   const scores = new Map<string, number>();
@@ -59,22 +64,18 @@ export function inferCategoryScores(
     scores.set(key, Math.min(1, (scores.get(key) ?? 0) + weight));
   };
 
-  // Explicit Settings selections: 1.0
   for (const key of explicitCategories) add(key, 1.0);
 
-  // Won/purchased items: 0.7 (strongest revealed preference)
   for (const title of ebayWonTitles) {
     const key = categoryKeyForTitle(title);
     if (key) add(key, 0.7);
   }
 
-  // Watched items: 0.5 (buying intent)
   for (const title of ebayWatchedTitles) {
     const key = categoryKeyForTitle(title);
     if (key) add(key, 0.5);
   }
 
-  // Tracker inference: 0.3
   for (const deal of trackerDeals) {
     const key = (deal.category && VALID_KEYS.has(deal.category))
       ? deal.category

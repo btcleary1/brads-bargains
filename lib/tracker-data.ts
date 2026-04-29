@@ -1,4 +1,5 @@
-import { r2Get, r2Put } from './r2';
+import { r2Get, r2Put, r2Del } from './r2';
+import type { FilterPrefs } from './deal-score';
 
 const PREFIX = 'deal-wiz';
 
@@ -71,6 +72,8 @@ export async function saveSavedSearches(userId: string, searches: SavedSearch[])
 
 // ── User preferences ─────────────────────────────────────────────────────────
 
+export type { FilterPrefs };
+
 export interface UserPrefs {
   notificationEmail?: string;     // where deal alerts are sent
   watchlistQueries?: string[];    // personalized search terms for daily digest
@@ -84,8 +87,10 @@ export interface UserPrefs {
   defaultMinProfit?: number;
   defaultMinDiscount?: number;
   defaultSingleQtyOnly?: boolean;
+  maxDaysToSell?: number;          // hide items estimated to take longer than this to sell (null = no limit)
   notificationPhone?: string;
   pushSubscriptions?: object[];
+  filterPrefs?: FilterPrefs;      // user-configured item filter criteria
 }
 
 export async function getUserPrefs(userId: string): Promise<UserPrefs> {
@@ -94,4 +99,25 @@ export async function getUserPrefs(userId: string): Promise<UserPrefs> {
 
 export async function saveUserPrefs(userId: string, prefs: UserPrefs): Promise<void> {
   await writeBlob(`${PREFIX}/${userId}/prefs.json`, prefs);
+}
+
+// ── eBay user OAuth tokens ────────────────────────────────────────────────────
+
+export interface EbayUserTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;         // Unix ms
+  refreshExpiresAt: number;  // Unix ms
+}
+
+export async function getEbayUserTokens(userId: string): Promise<EbayUserTokens | null> {
+  return readBlob<EbayUserTokens>(`${PREFIX}/${userId}/ebay-tokens.json`);
+}
+
+export async function saveEbayUserTokens(userId: string, tokens: EbayUserTokens): Promise<void> {
+  await writeBlob(`${PREFIX}/${userId}/ebay-tokens.json`, tokens);
+}
+
+export async function deleteEbayUserTokens(userId: string): Promise<void> {
+  await r2Del(`${PREFIX}/${userId}/ebay-tokens.json`);
 }

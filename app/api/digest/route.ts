@@ -11,16 +11,20 @@ import { getAllUsers } from '@/lib/users';
 import { getUserPrefs, getDeals } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals } from '@/lib/infer-categories';
 import { searchSoldComps } from '@/lib/ebay-comps';
+import { getMultiSourceComps } from '@/lib/multi-source-comps';
+import { analyzeFlip } from '@/lib/flip-agent';
+import { sendPushToSubscriptions } from '@/lib/push-notify';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 const DIGEST_STATE_PATH = 'deal-wiz/digest-state.json';
 const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
 
 // Categories to search when live eBay API is available
-const SEARCH_QUERIES = DIGEST_CATEGORIES.map(c => c.query);
+const SEARCH_QUERIES = DIGEST_CATEGORIES.map(c => ({ query: c.query, categoryId: c.categoryId }));
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -32,6 +36,12 @@ export async function GET(req: NextRequest) {
 
   if (secret !== DIGEST_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // ?reset-state=1 clears the sent-today guard without sending (for testing)
+  if (req.nextUrl.searchParams.get('reset-state') === '1') {
+    await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: '2000-01-01' }));
+    return NextResponse.json({ reset: true, message: 'Digest state cleared — next cron run will send.' });
   }
 
   // ?sms= sends a one-off test text without running the full digest
@@ -69,8 +79,8 @@ export async function GET(req: NextRequest) {
       const allResults: EbayItem[] = [];
       const batchSize = 5;
       for (let i = 0; i < SEARCH_QUERIES.length; i += batchSize) {
-        const batch = SEARCH_QUERIES.slice(i, i + batchSize);
-        const batchResults = await Promise.allSettled(batch.map(q => searchDeals(q, 30)));
+        const batch = SEARCH_QUERIES.slice(i, i + batchSize) as { query: string; categoryId: string }[];
+        const batchResults = await Promise.allSettled(batch.map(({ query, categoryId }) => searchDeals(query, 30, categoryId)));
         batchResults.forEach(r => { if (r.status === 'fulfilled') allResults.push(...r.value); });
         if (i + batchSize < SEARCH_QUERIES.length) await new Promise(r => setTimeout(r, 500));
       }
@@ -88,67 +98,111 @@ export async function GET(req: NextRequest) {
     const itemPool = nonRefurb.length >= 10 ? nonRefurb : allItems;
     console.log(`[digest] non-refurb items: ${nonRefurb.length} of ${allItems.length}`);
 
-    // Pull a larger candidate pool so Skip filtering still leaves 5 good deals
-    let candidates = topDeals(itemPool, 15, 60);
-    if (candidates.length < 5) {
-      for (let pct = 59; pct >= 50 && candidates.length < 5; pct--) {
-        candidates = topDeals(itemPool, 15, pct);
+    // Pull a large candidate pool — need enough that after comps filtering we still have 5 good deals
+    let candidates = topDeals(itemPool, 40, 55);
+    if (candidates.length < 10) {
+      for (let pct = 54; pct >= 40 && candidates.length < 10; pct -= 2) {
+        candidates = topDeals(itemPool, 40, pct);
       }
     }
 
+    // If eBay returned nothing (API down/rate-limited), fall back to mock so email always fires
     if (candidates.length === 0) {
-      return NextResponse.json({ sent: false, reason: 'No qualifying deals found' });
+      console.warn('[digest] No qualifying deals from eBay — falling back to MOCK_DEALS');
+      candidates = topDeals(MOCK_DEALS, 40, 40);
     }
 
-    // Remove sold/expired listings before sending — verify each item is still live
+    // Remove sold/expired listings — non-blocking: if verification throws, keep unfiltered candidates
     if (!forceMock && process.env.EBAY_CLIENT_ID) {
-      candidates = await filterLiveItems(candidates);
+      try {
+        const live = await filterLiveItems(candidates);
+        if (live.length > 0) candidates = live;
+      } catch (e) {
+        console.warn('[digest] filterLiveItems failed, using unfiltered candidates:', e);
+      }
     }
 
-    if (candidates.length === 0) {
-      return NextResponse.json({ sent: false, reason: 'No live deals found after verification' });
-    }
+    // Sort by sellabilityScore, take top 30 for comp checking
+    candidates = [...candidates]
+      .sort((a, b) => sellabilityScore(b, candidates) - sellabilityScore(a, candidates))
+      .slice(0, 30);
 
-    // Sort by sellabilityScore
-    candidates = [...candidates].sort((a, b) => sellabilityScore(b, candidates) - sellabilityScore(a, candidates));
-
-    // Run sold comps on all candidates in parallel — filter out Skips, keep top 5
+    // Run multi-source comps on all 30 candidates in parallel
     const flipResults = await Promise.allSettled(
-      candidates.map(item => searchSoldComps(item.title.split(' ').slice(0, 6).join(' '), 12))
+      candidates.map(item => getMultiSourceComps(item.title, 12))
     );
     const flipMap = new Map<string, FlipData>();
     candidates.forEach((item, i) => {
       const r = flipResults[i];
-      if (r.status !== 'fulfilled' || r.value.count < 3) return;
-      const netProfit = Math.round(r.value.avgSoldPrice * 0.85 - item.price - (item.shippingCost ?? 0));
+      if (r.status !== 'fulfilled' || !r.value) return;
+      const { weightedAvgSoldPrice, ebayCount } = r.value;
+      const refPrice = ebayCount >= 1 ? weightedAvgSoldPrice : (item.marketPrice ?? 0);
+      if (refPrice <= 0) return;
+      const netProfit = Math.round(refPrice * 0.85 - item.price - (item.shippingCost ?? 0));
       const marginPct = Math.round((netProfit / item.price) * 100);
       let verdict: 'buy' | 'maybe' | 'skip';
       if (netProfit > 50 || (netProfit > 30 && marginPct > 20)) verdict = 'buy';
       else if (netProfit < 10 || (netProfit < 20 && marginPct < 10)) verdict = 'skip';
       else verdict = 'maybe';
       if (netProfit >= 40 && verdict === 'skip') verdict = 'maybe';
-      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: r.value.avgSoldPrice, soldCount: r.value.count, marginPct });
+      const days = r.value.estDaysToSell;
+      if (days != null && days > 60) verdict = 'skip';
+      else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
+      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length });
     });
-    // Sort: BUY first, then MAYBE, then SKIP — within each tier, highest net profit first
-    candidates.sort((a, b) => {
-      const order = { buy: 0, maybe: 1, skip: 2 };
-      const aFlip = flipMap.get(a.itemId);
-      const bFlip = flipMap.get(b.itemId);
-      const aV = aFlip?.verdict ?? 'maybe';
-      const bV = bFlip?.verdict ?? 'maybe';
-      if (aV !== bV) return (order[aV] ?? 1) - (order[bV] ?? 1);
-      const aProfit = aFlip?.netProfit ?? (a.marketPrice ? Math.round(a.marketPrice * 0.85 - a.price - (a.shippingCost ?? 0)) : 0);
-      const bProfit = bFlip?.netProfit ?? (b.marketPrice ? Math.round(b.marketPrice * 0.85 - b.price - (b.shippingCost ?? 0)) : 0);
-      return bProfit - aProfit;
+
+    // Speed-adjusted score: profit × (14 / daysToSell)^0.4
+    // 14 days = neutral baseline; faster items get a boost, slower get a penalty
+    const dealScore = (flip: FlipData): number => {
+      const days = flip.estDaysToSell ?? 14;
+      return flip.netProfit * Math.pow(14 / Math.max(1, days), 0.4);
+    };
+
+    // Pick best N items — BUY/MAYBE with positive profit only, sorted by speed-adjusted score
+    const pickBest = (pool: typeof candidates, n: number): typeof candidates => {
+      const scored = pool.map(item => ({ item, flip: flipMap.get(item.itemId) }));
+      const buys = scored.filter(x => x.flip?.verdict === 'buy' && (x.flip?.netProfit ?? 0) > 0)
+        .sort((a, b) => dealScore(b.flip!) - dealScore(a.flip!));
+      const maybes = scored.filter(x => x.flip?.verdict === 'maybe' && (x.flip?.netProfit ?? 0) > 0)
+        .sort((a, b) => dealScore(b.flip!) - dealScore(a.flip!));
+      const unknowns = scored.filter(x => !x.flip && (x.item.marketPrice ?? 0) > 0 && Math.round((x.item.marketPrice ?? 0) * 0.85 - x.item.price) > 0);
+      return [...buys, ...maybes, ...unknowns].map(x => x.item).slice(0, n);
+    };
+
+    let best5 = pickBest(candidates, 5);
+    // If not enough positive-profit deals, log and use best available (still exclude hard skips)
+    if (best5.length < 5) {
+      console.log(`[digest] Only ${best5.length} positive-profit deals — filling with best available`);
+      const nonSkip = candidates.filter(i => flipMap.get(i.itemId)?.verdict !== 'skip')
+        .sort((a, b) => (flipMap.get(b.itemId)?.netProfit ?? 0) - (flipMap.get(a.itemId)?.netProfit ?? 0));
+      best5 = nonSkip.slice(0, 5);
+    }
+    // Re-analyze top 5 with AI agent for accurate, consistent stats
+    const aiResults = await Promise.allSettled(
+      best5.map(item => analyzeFlip(item.title, item.price, item.shippingCost ?? 0, null, null, item.condition))
+    );
+    best5.forEach((item, i) => {
+      const r = aiResults[i];
+      if (r.status !== 'fulfilled' || !r.value) return;
+      const v = r.value;
+      flipMap.set(item.itemId, {
+        verdict: v.verdict,
+        netProfit: v.netProfit,
+        avgSoldPrice: v.avgSoldPrice,
+        soldCount: v.soldCount,
+        marginPct: v.marginPct,
+        estDaysToSell: v.daysToSell ?? null,
+        sourcesCount: v.sourcesCount ?? null,
+      });
     });
-    let best5 = candidates.slice(0, 5);
+    console.log(`[digest] best5 AI profits: ${best5.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
 
     // Build recipient list with personalized deals per user
-    type UserDigest = { email: string; deals: typeof best5 };
+    type UserDigest = { userId: string; email: string; deals: typeof best5; aiPick?: string; maxDaysToSell: number };
     let userDigests: UserDigest[] = [];
 
     if (toOverride) {
-      userDigests = [{ email: toOverride, deals: best5 }];
+      userDigests = [{ userId: '', email: toOverride, deals: best5, maxDaysToSell: 60 }];
     } else {
       const users = await getAllUsers();
       const [prefsResults, dealsResults] = await Promise.all([
@@ -158,8 +212,10 @@ export async function GET(req: NextRequest) {
 
       for (let i = 0; i < users.length; i++) {
         const r = prefsResults[i];
-        if (r.status !== 'fulfilled' || !r.value.notificationEmail) continue;
+        if (r.status !== 'fulfilled') continue;
         const prefs = r.value;
+        const recipientEmail = prefs.notificationEmail || users[i].email;
+        if (!recipientEmail) continue;
 
         const count = prefs.digestCount ?? 5;
 
@@ -183,13 +239,9 @@ export async function GET(req: NextRequest) {
           if (pool.length === 0) pool = allItems; // fallback to all if filter yields nothing
         }
 
-        // If user has a personal watchlist, search those terms for their digest
-        let userDeals: typeof best5 = [];
-        let baseDeals = topDeals(pool, count, 60);
-        for (let pct = 59; pct >= 50 && baseDeals.length < count; pct--) {
-          baseDeals = topDeals(pool, count, pct);
-        }
-        userDeals = baseDeals;
+        // Build a large candidate pool for this user, run comps, pick best profitable deals
+        let userPool = topDeals(pool, 40, 50);
+        if (userPool.length < 10) userPool = topDeals(pool, 40, 40);
 
         if (prefs.watchlistQueries && prefs.watchlistQueries.length > 0) {
           const personalResults = await Promise.allSettled(prefs.watchlistQueries.map(q => searchDeals(q, 20)));
@@ -197,21 +249,19 @@ export async function GET(req: NextRequest) {
           const personalItems = personalResults
             .flatMap(res => res.status === 'fulfilled' ? res.value : [])
             .filter(item => { if (seen.has(item.itemId)) return false; seen.add(item.itemId); return true; });
-          if (personalItems.length > 0) {
-            let personalDeals = topDeals(personalItems, count, 60);
-            for (let pct = 59; pct >= 50 && personalDeals.length < count; pct--) {
-              personalDeals = topDeals(personalItems, count, pct);
-            }
-            userDeals = personalDeals.length > 0 ? personalDeals : userDeals;
-          }
+          if (personalItems.length > 0) userPool = [...personalItems, ...userPool];
         }
 
-        const sortedDeals = [...userDeals].sort((a, b) => sellabilityScore(b, userDeals) - sellabilityScore(a, userDeals));
-        userDigests.push({ email: prefs.notificationEmail as string, deals: sortedDeals });
+        // Dedupe and sort by sellability, cap at 30 for comp checking
+        const seenIds = new Set<string>();
+        userPool = userPool.filter(i => { if (seenIds.has(i.itemId)) return false; seenIds.add(i.itemId); return true; });
+        userPool = userPool.sort((a, b) => sellabilityScore(b, userPool) - sellabilityScore(a, userPool)).slice(0, 30);
+
+        userDigests.push({ userId: users[i].userId, email: recipientEmail, deals: userPool, maxDaysToSell: prefs.maxDaysToSell ?? 60 });
       }
 
       if (userDigests.length === 0 && process.env.NOTIFICATION_EMAIL) {
-        userDigests = [{ email: process.env.NOTIFICATION_EMAIL, deals: best5 }];
+        userDigests = [{ userId: '', email: process.env.NOTIFICATION_EMAIL, deals: best5, maxDaysToSell: 60 }];
       }
     }
 
@@ -219,48 +269,174 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'No recipients configured' });
     }
 
-    // Generate AI Pick of the Day — only from BUY/MAYBE items (never Skip)
-    let aiPick: string | undefined;
-    const buyMaybeItems = best5.filter(i => {
-      const flip = flipMap.get(i.itemId);
-      return !flip || flip.verdict !== 'skip';
-    });
-    const top = buyMaybeItems.slice(0, 5).map((i, idx) => {
-      const flip = flipMap.get(i.itemId);
-      const netProfit = flip ? flip.netProfit : (i.marketPrice ? Math.round(i.marketPrice * 0.85 - i.price - (i.shippingCost ?? 0)) : null);
-      const verdictNote = flip ? ` [${flip.verdict.toUpperCase()} — ${flip.soldCount} comps @ avg $${flip.avgSoldPrice}]` : '';
-      return `#${idx + 1} ${i.title} — buy $${i.price}, net profit ~$${netProfit ?? '?'}${verdictNote}. Condition: ${i.condition}.`;
-    }).join('\n');
-    const aiPickPrompt = `You are a sharp eBay flip advisor. Net profit figures already account for eBay fees. All items below are pre-verified as BUY or MAYBE flips. Recommend the single best one. Reference the net profit and sold comps data. Be direct, specific, and under 50 words. No disclaimers. No markdown formatting.\n\n${top}`;
-    for (let attempt = 0; attempt < 2 && !aiPick; attempt++) {
-      try {
-        const msg = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 200,
-          messages: [{ role: 'user', content: aiPickPrompt }],
-        });
-        const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
-        if (text) aiPick = text;
-        else console.warn(`[digest] AI pick attempt ${attempt + 1}: empty response`);
-      } catch (e) { console.error(`[digest] AI pick attempt ${attempt + 1} failed:`, e); }
-    }
-    if (!aiPick) console.warn('[digest] AI pick unavailable after 2 attempts — sending without it');
-
-    // Ensure flip data covers all user-personalized deals too
-    const allDigestItems = userDigests.flatMap(d => d.deals).filter(i => !flipMap.has(i.itemId));
-    const extraFlips = await Promise.allSettled(allDigestItems.map(item => searchSoldComps(item.title.split(' ').slice(0, 6).join(' '), 12)));
-    allDigestItems.forEach((item, i) => {
+    // Run multi-source comps on all user-pool items not already in flipMap
+    const allUserItems = userDigests.flatMap(d => d.deals).filter(i => !flipMap.has(i.itemId));
+    const extraFlips = await Promise.allSettled(
+      allUserItems.map(item => getMultiSourceComps(item.title, 12))
+    );
+    allUserItems.forEach((item, i) => {
       const r = extraFlips[i];
-      if (r.status !== 'fulfilled' || r.value.count < 3) return;
-      const netProfit = Math.round(r.value.avgSoldPrice * 0.85 - item.price - (item.shippingCost ?? 0));
+      if (r.status !== 'fulfilled' || !r.value) return;
+      const { weightedAvgSoldPrice, ebayCount } = r.value;
+      const refPrice = ebayCount >= 1 ? weightedAvgSoldPrice : (item.marketPrice ?? 0);
+      if (refPrice <= 0) return;
+      const netProfit = Math.round(refPrice * 0.85 - item.price - (item.shippingCost ?? 0));
       const marginPct = Math.round((netProfit / item.price) * 100);
       let verdict: 'buy' | 'maybe' | 'skip' = netProfit > 50 || (netProfit > 30 && marginPct > 20) ? 'buy' : netProfit < 10 || (netProfit < 20 && marginPct < 10) ? 'skip' : 'maybe';
       if (netProfit >= 40 && verdict === 'skip') verdict = 'maybe';
-      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: r.value.avgSoldPrice, soldCount: r.value.count, marginPct });
+      const daysU = r.value.estDaysToSell;
+      if (daysU != null && daysU > 60) verdict = 'skip';
+      else if (daysU != null && daysU > 30 && verdict === 'buy') verdict = 'maybe';
+      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length });
     });
 
-    // Send emails
-    const sendResults = await Promise.allSettled(userDigests.map(({ email, deals }) => sendDailyDigest(deals, email, aiPick, flipMap)));
+    // Apply strict positive-profit filter to each user's pool, then take top 5
+    userDigests = userDigests.map(d => {
+      const profitable = d.deals
+        // Apply user's maxDaysToSell — null estDaysToSell always passes through
+        .filter(item => { const flip = flipMap.get(item.itemId); return !flip || flip.estDaysToSell == null || flip.estDaysToSell <= d.maxDaysToSell; })
+        .filter(i => (flipMap.get(i.itemId)?.netProfit ?? -1) > 0)
+        .sort((a, b) => {
+          const order = { buy: 0, maybe: 1, skip: 2 };
+          const af = flipMap.get(a.itemId), bf = flipMap.get(b.itemId);
+          const av = af?.verdict ?? 'maybe', bv = bf?.verdict ?? 'maybe';
+          if (av !== bv) return (order[av] ?? 1) - (order[bv] ?? 1);
+          // Within same verdict tier, rank by speed-adjusted profit score
+          return dealScore(bf ?? { verdict: bv as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 })
+               - dealScore(af ?? { verdict: av as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 });
+        });
+      // Fall back to non-skip if not enough profitable items
+      const finalDeals = profitable.length >= 5
+        ? profitable.slice(0, 5)
+        : d.deals
+            .filter(i => flipMap.get(i.itemId)?.verdict !== 'skip')
+            .sort((a, b) => dealScore(flipMap.get(b.itemId) ?? { verdict: 'maybe', netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 })
+                          - dealScore(flipMap.get(a.itemId) ?? { verdict: 'maybe', netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 }))
+            .slice(0, 5);
+      console.log(`[digest] user ${d.userId} final deals profits: ${finalDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
+      return { ...d, deals: finalDeals };
+    });
+
+    // Generate per-user AI pick from their actual deal list
+    const generateAiPick = async (deals: typeof best5): Promise<string> => {
+      const eligible = deals.filter(i => { const f = flipMap.get(i.itemId); return !f || f.verdict !== 'skip'; });
+      const pool = eligible.length > 0 ? eligible : deals; // fall back to all deals if everything is skip
+      console.log(`[digest] generateAiPick: ${deals.length} deals, ${eligible.length} eligible, hasApiKey=${!!process.env.ANTHROPIC_API_KEY}`);
+
+      // Deterministic fallback — highest net profit among buy verdicts first, then all
+      const deterministicPick = (): string => {
+        const buyItems = pool.filter(i => flipMap.get(i.itemId)?.verdict === 'buy');
+        const ranked = [...(buyItems.length > 0 ? buyItems : pool)].sort((a, b) => {
+          const af = flipMap.get(a.itemId); const bf = flipMap.get(b.itemId);
+          const ap = af?.netProfit ?? (a.marketPrice ? Math.round(a.marketPrice * 0.85 - a.price - (a.shippingCost ?? 0)) : 0);
+          const bp = bf?.netProfit ?? (b.marketPrice ? Math.round(b.marketPrice * 0.85 - b.price - (b.shippingCost ?? 0)) : 0);
+          return bp - ap;
+        });
+        const top = ranked[0];
+        if (!top) return "Check today's deals for great flip opportunities.";
+        const flip = flipMap.get(top.itemId);
+        const net = flip?.netProfit ?? (top.marketPrice ? Math.round(top.marketPrice * 0.85 - top.price - (top.shippingCost ?? 0)) : null);
+        const comps = flip ? ` ${flip.soldCount} recent sold comps at avg $${flip.avgSoldPrice}.` : '';
+        return `Go with the ${top.title} — buy at $${top.price}${net != null ? `, ~$${net} net profit` : ''}.${comps}`;
+      };
+
+      const topLines = pool.slice(0, 5).map(i => {
+        const flip = flipMap.get(i.itemId);
+        const netProfit = flip ? flip.netProfit : (i.marketPrice ? Math.round(i.marketPrice * 0.85 - i.price - (i.shippingCost ?? 0)) : null);
+        const verdictNote = flip ? ` [${flip.verdict.toUpperCase()} — ${flip.soldCount} comps @ avg $${flip.avgSoldPrice}]` : '';
+        return `${i.title} — buy $${i.price}, net profit ~$${netProfit ?? '?'}${verdictNote}. Condition: ${i.condition}.`;
+      }).join('\n');
+      const prompt = `You are a sharp eBay flip advisor. Net profit figures already account for eBay fees. Pick the single best flip opportunity from the list below and recommend it by its full item name (never use position numbers). You MUST recommend exactly one item — do not say "skip all" or refuse to pick. Reference the net profit and sold comps data. Be direct, specific, and under 50 words. No disclaimers. No markdown formatting.\n\n${topLines}`;
+
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: prompt }] });
+          const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
+          console.log(`[digest] AI pick attempt ${attempt} result: "${text.slice(0, 80)}"`);
+          if (text) return text;
+        } catch (e) { console.error('[digest] AI pick attempt failed:', e); }
+      }
+
+      const fallback = deterministicPick();
+      console.log(`[digest] AI pick using deterministic fallback: "${fallback.slice(0, 80)}"`);
+      return fallback;
+    };
+
+    // Generate AI picks for all users in parallel
+    const aiPickResults = await Promise.allSettled(userDigests.map(d => generateAiPick(d.deals)));
+    aiPickResults.forEach((r, i) => {
+      if (r.status === 'rejected') console.error(`[digest] AI pick ${i} rejected:`, r.reason);
+      else console.log(`[digest] AI pick ${i}: "${r.value?.slice(0, 80)}"`);
+    });
+    userDigests = userDigests.map((d, i) => ({
+      ...d,
+      aiPick: aiPickResults[i].status === 'fulfilled' ? (aiPickResults[i] as PromiseFulfilledResult<string>).value : undefined,
+    }));
+
+    // Send emails with per-user AI pick — retry once on transient failure
+    const sendWithRetry = async (email: string, deals: typeof best5, aiPick?: string): Promise<void> => {
+      try {
+        await sendDailyDigest(deals, email, aiPick, flipMap);
+      } catch (e) {
+        console.warn(`[digest] email send failed for ${email}, retrying in 3s:`, e);
+        await new Promise(r => setTimeout(r, 3000));
+        await sendDailyDigest(deals, email, aiPick, flipMap);
+      }
+    };
+    const sendResults = await Promise.allSettled(userDigests.map(({ email, deals, aiPick }) => sendWithRetry(email, deals, aiPick)));
+
+    // Save per-user digest cache so the app shows the same items as the email
+    const toDigestItems = (deals: typeof best5) => deals.map(item => {
+      const flip = flipMap.get(item.itemId);
+      return {
+        itemId: item.itemId,
+        title: item.title,
+        price: item.price,
+        marketPrice: item.marketPrice ?? null,
+        discountPct: item.discountPct ?? null,
+        condition: item.condition,
+        imageUrl: item.imageUrl,
+        itemUrl: item.itemUrl,
+        category: item.category,
+        shippingCost: item.shippingCost ?? null,
+        flipVerdict: flip?.verdict ?? 'maybe',
+        avgSoldPrice: flip?.avgSoldPrice ?? 0,
+        soldCount: flip?.soldCount ?? 0,
+        flipNetProfit: flip?.netProfit ?? 0,
+        flipMarginPct: flip?.marginPct ?? 0,
+        estDaysToSell: flip?.estDaysToSell ?? null,
+        sourcesCount: flip?.sourcesCount ?? null,
+      };
+    });
+    // Save per-user cache and send push — both use the same personalized deals
+    const userMap = new Map(userDigests.map(d => [d.userId, d]));
+    await Promise.allSettled(userDigests.map(async ({ userId, deals, aiPick: userAiPick }) => {
+      if (!userId) return;
+      const cache = { generatedAt: new Date().toISOString(), aiPick: userAiPick ?? null, items: toDigestItems(deals) };
+      await r2Put(`deal-wiz/digest-user-${userId}.json`, JSON.stringify(cache));
+    }));
+
+    // Send push notifications — body shows user's actual #1 deal
+    const allUsersForPush = toOverride ? [] : await getAllUsers();
+    await Promise.allSettled(allUsersForPush.map(async u => {
+      try {
+        const prefs = await getUserPrefs(u.userId);
+        const subs = (prefs.pushSubscriptions as object[] | undefined) ?? [];
+        if (!subs.length) return;
+        const userDigest = userMap.get(u.userId);
+        const topDeal = userDigest?.deals[0] ?? best5[0];
+        const body = topDeal
+          ? `${topDeal.title.slice(0, 60)} — $${topDeal.price} (${topDeal.discountPct ?? 0}% off)`
+          : "Today's top flip deals are ready.";
+        try {
+          await sendPushToSubscriptions(subs, "Brad's Bargains — Daily Deals", body, '/deals?view=digest');
+        } catch (e1) {
+          // Retry push once after 2s
+          await new Promise(r => setTimeout(r, 2000));
+          await sendPushToSubscriptions(subs, "Brad's Bargains — Daily Deals", body, '/deals?view=digest');
+        }
+      } catch { /* push failure never blocks email */ }
+    }));
 
     // Send SMS to all users with a phone number configured
     const smsUsers = toOverride ? [] : await getAllUsers();
@@ -286,9 +462,10 @@ export async function GET(req: NextRequest) {
       sent: true,
       date: todayKey(),
       recipients: successCount,
+
       rawItemCount: allItems.length,
       nonRefurbCount: nonRefurb.length,
-      aiPick: aiPick ?? null,
+      aiPick: userDigests[0]?.aiPick ?? null,
       errors: errors.length > 0 ? errors : undefined,
       deals: best5.map(d => ({
         title: d.title,

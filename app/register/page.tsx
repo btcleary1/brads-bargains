@@ -12,11 +12,16 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const allChecksPassed = PASSWORD_REQUIREMENTS.every(r => r.test(password));
+  const canSubmit = agreed && allChecksPassed && !loading;
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!agreed) { setError('You must agree to the Terms and Privacy Policy.'); return; }
     setLoading(true);
     setError('');
     const res = await fetch('/api/auth/register', {
@@ -26,7 +31,7 @@ export default function RegisterPage() {
     });
     const data = await res.json();
     if (res.ok) {
-      router.push('/deals');
+      window.location.href = '/deals';
     } else {
       setError(data.error || 'Registration failed.');
     }
@@ -71,7 +76,7 @@ export default function RegisterPage() {
         <div className="glass-card p-7">
           <form onSubmit={handleRegister} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#9CA3AF' }}>Your name</label>
+              <label className="block text-xs font-semibold text-gray-300 mb-1.5">Your name</label>
               <input
                 type="text"
                 value={name}
@@ -79,12 +84,11 @@ export default function RegisterPage() {
                 required
                 autoComplete="name"
                 placeholder="First name"
-                className="w-full px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                className="w-full px-3.5 py-2.5 rounded-xl text-sm text-gray-900 bg-white/95 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 border-0"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#9CA3AF' }}>Email</label>
+              <label className="block text-xs font-semibold text-gray-300 mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
@@ -92,12 +96,11 @@ export default function RegisterPage() {
                 required
                 autoComplete="email"
                 placeholder="you@example.com"
-                className="w-full px-3.5 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                className="w-full px-3.5 py-2.5 rounded-xl text-sm text-gray-900 bg-white/95 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 border-0"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#9CA3AF' }}>Password</label>
+              <label className="block text-xs font-semibold text-gray-300 mb-1.5">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -105,20 +108,18 @@ export default function RegisterPage() {
                   onChange={e => setPassword(e.target.value)}
                   required
                   autoComplete="new-password"
-                  placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  placeholder="Create a strong password"
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl text-sm text-gray-900 bg-white/95 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 border-0"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
-                  style={{ color: '#6B7280', minHeight: 'unset' }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                  style={{ minHeight: 'unset' }}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              {/* Requirements */}
               {password.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {PASSWORD_REQUIREMENTS.map((req, i) => {
@@ -136,13 +137,30 @@ export default function RegisterPage() {
               )}
             </div>
 
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={e => setAgreed(e.target.checked)}
+                className="mt-0.5 shrink-0 rounded"
+                style={{ minHeight: 'unset', accentColor: '#3B82F6' }}
+              />
+              <span className="text-[11px] text-gray-400 leading-relaxed">
+                I will use Brad&apos;s Bargains for personal, lawful purposes only. I understand it uses eBay listing data for price comparison and is{' '}
+                <strong className="text-gray-300">not affiliated with eBay</strong>. I agree to the{' '}
+                <a href="/terms" target="_blank" className="text-blue-400 hover:underline">Terms</a>
+                {' '}and{' '}
+                <a href="/privacy" target="_blank" className="text-blue-400 hover:underline">Privacy Policy</a>.
+              </span>
+            </label>
+
             {error && <p className="text-xs text-center py-2 px-3 rounded-xl" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#F87171' }}>{error}</p>}
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: loading ? 'none' : '0 4px 16px rgba(99,102,241,0.35)' }}
+              disabled={!canSubmit}
+              className="w-full py-3 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: canSubmit ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(59,130,246,0.5)', boxShadow: canSubmit ? '0 4px 16px rgba(99,102,241,0.35)' : 'none' }}
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Create Account

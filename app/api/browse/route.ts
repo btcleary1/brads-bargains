@@ -10,6 +10,7 @@ import { fetchEbayOrderTitles } from '@/lib/ebay-orders';
 import { fetchEbayBuyingActivity } from '@/lib/ebay-watchlist';
 import { recordWatcherSnapshots, getWatcherVelocities, WatcherVelocity } from '@/lib/watcher-trends';
 import { assessDiscountQuality } from '@/lib/fake-discount';
+import { getMultiSourceComps } from '@/lib/multi-source-comps';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -23,6 +24,8 @@ export interface BrowseDeal extends EbayItem {
   soldCount: number;
   flipNetProfit: number;
   flipMarginPct: number;
+  estDaysToSell?: number | null;
+  sourcesCount?: number | null;
   watcherVelocity?: WatcherVelocity | null;
   discountQuality?: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   discountQualityReason?: string | null;
@@ -58,13 +61,14 @@ async function quickFlipVerdict(item: EbayItem): Promise<{
   avgSoldPrice: number;
   soldCount: number;
   marginPct: number;
+  estDaysToSell: number | null;
+  sourcesCount: number;
 } | null> {
   try {
-    const query = item.title.split(' ').slice(0, 6).join(' ');
-    const comps = await searchSoldComps(query, 12);
-    if (comps.count < 3) return null;
+    const comps = await getMultiSourceComps(item.title, 12);
+    if (!comps || comps.ebayCount < 3) return null;
 
-    const netProfit = Math.round(comps.avgSoldPrice * 0.85 - item.price - (item.shippingCost ?? 0));
+    const netProfit = Math.round(comps.weightedAvgSoldPrice * 0.85 - item.price - (item.shippingCost ?? 0));
     const marginPct = Math.round((netProfit / item.price) * 100);
 
     let verdict: 'buy' | 'maybe' | 'skip';
@@ -75,7 +79,12 @@ async function quickFlipVerdict(item: EbayItem): Promise<{
     // Never skip strong absolute profit
     if (netProfit >= 40 && verdict === 'skip') verdict = 'maybe';
 
-    return { verdict, netProfit, avgSoldPrice: comps.avgSoldPrice, soldCount: comps.count, marginPct };
+    // Days-to-sell overrides: >60d = skip (capital tied up too long), >30d = downgrade buy→maybe
+    const days = comps.estDaysToSell;
+    if (days != null && days > 60) verdict = 'skip';
+    else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
+
+    return { verdict, netProfit, avgSoldPrice: comps.weightedAvgSoldPrice, soldCount: comps.ebayCount, marginPct, estDaysToSell: comps.estDaysToSell, sourcesCount: comps.sourcesUsed.length };
   } catch {
     return null;
   }
@@ -157,13 +166,17 @@ export async function GET(req: NextRequest) {
     ? inferCategoriesFromDeals(allEbayTitles.map(t => ({ title: t, category: '' } as any)))
     : inferCategoriesFromDeals(deals);
 
+  const maxDays = prefs && (prefs as any).maxDaysToSell != null ? (prefs as any).maxDaysToSell as number : 60;
+
   // Serve from cache if fresh — personalize order before returning
   if (!forceRefresh) {
     const cached = await r2Get<BrowseCache>(BROWSE_CACHE_KEY);
     if (cached && cached.generatedAt) {
       const age = Date.now() - new Date(cached.generatedAt).getTime();
       if (age < CACHE_TTL_MS) {
-        const items = personalizeResults(cached.items, categoryScores, explicitCategories, allWonTitles, buying.watchedTitles);
+        let items = personalizeResults(cached.items, categoryScores, explicitCategories, allWonTitles, buying.watchedTitles);
+        // Apply maxDaysToSell filter — N/A (null) always passes through
+        items = items.filter(i => i.estDaysToSell == null || i.estDaysToSell <= maxDays);
         const matchedFromEbay = items.filter(i => {
           const key = categoryKeyForTitle(i.title);
           return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;
@@ -213,6 +226,8 @@ export async function GET(req: NextRequest) {
         soldCount: r.value.soldCount,
         flipNetProfit: r.value.netProfit,
         flipMarginPct: r.value.marginPct,
+        estDaysToSell: r.value.estDaysToSell,
+        sourcesCount: r.value.sourcesCount ?? null,
       });
     });
 
@@ -230,8 +245,11 @@ export async function GET(req: NextRequest) {
       deal.discountQualityReason = dq.reason;
     });
 
+    // Apply user's maxDaysToSell preference — N/A (null) always passes through
+    const filteredBrowsed = browsed.filter(i => i.estDaysToSell == null || i.estDaysToSell <= maxDays);
+
     // BUY first, then MAYBE; within each group: hot watcher velocity first, then net profit
-    browsed.sort((a, b) => {
+    filteredBrowsed.sort((a, b) => {
       if (a.flipVerdict !== b.flipVerdict) return a.flipVerdict === 'buy' ? -1 : 1;
       const aHot = a.watcherVelocity?.velocityLabel === 'hot' ? 1 : 0;
       const bHot = b.watcherVelocity?.velocityLabel === 'hot' ? 1 : 0;
@@ -240,7 +258,7 @@ export async function GET(req: NextRequest) {
     });
 
     const result: BrowseCache = {
-      items: browsed.slice(0, 15),
+      items: filteredBrowsed.slice(0, 15),
       generatedAt: new Date().toISOString(),
     };
 
