@@ -79,7 +79,7 @@ function SettingsContent() {
     const params = new URLSearchParams(window.location.search);
     const ebayParam = params.get('ebay');
     if (ebayParam === 'connected') setEbayMessage({ type: 'success', text: 'eBay account connected successfully.' });
-    else if (ebayParam === 'denied') setEbayMessage({ type: 'error', text: 'eBay authorization was cancelled.' });
+    else if (ebayParam === 'denied') { const reason = params.get('reason'); setEbayMessage({ type: 'error', text: reason ? `eBay error: ${reason}` : 'eBay authorization was cancelled.' }); }
     else if (ebayParam === 'error' || ebayParam === 'invalid') setEbayMessage({ type: 'error', text: 'Something went wrong connecting your eBay account.' });
     if (ebayParam) window.history.replaceState({}, '', '/settings');
 

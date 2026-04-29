@@ -15,5 +15,8 @@ export async function GET(req: NextRequest) {
   const state = buildOAuthState(session.userId);
   const authUrl = getEbayUserAuthUrl(redirectUri, state);
 
+  console.log('[ebay-connect] redirectUri:', redirectUri);
+  console.log('[ebay-connect] authUrl:', authUrl.slice(0, 200));
+
   return NextResponse.redirect(authUrl);
 }

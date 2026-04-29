@@ -13,7 +13,10 @@ export async function GET(req: NextRequest) {
   const settingsUrl = new URL('/settings', req.nextUrl.origin);
 
   if (error || !code || !state) {
+    const desc = searchParams.get('error_description') ?? error ?? 'no_code';
+    console.error('[ebay-callback] denied:', { error, desc, hasCode: !!code, hasState: !!state });
     settingsUrl.searchParams.set('ebay', 'denied');
+    settingsUrl.searchParams.set('reason', desc.slice(0, 120));
     return NextResponse.redirect(settingsUrl);
   }
 
