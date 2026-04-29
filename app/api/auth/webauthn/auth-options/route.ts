@@ -5,10 +5,12 @@ import { getCredentialsForUser } from '@/lib/webauthn-store';
 
 export const runtime = 'nodejs';
 
-const RP_ID = process.env.WEBAUTHN_RP_ID ||
-  (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : 'localhost');
+function getRpId(req: NextRequest): string {
+  return req.nextUrl.hostname || process.env.WEBAUTHN_RP_ID || 'localhost';
+}
 
 export async function POST(req: NextRequest) {
+  const RP_ID = getRpId(req);
   let allowCredentials: { id: string; transports?: string[] }[] | undefined;
   try {
     const body = await req.json().catch(() => ({}));

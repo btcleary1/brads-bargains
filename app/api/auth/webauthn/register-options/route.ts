@@ -4,8 +4,9 @@ import { getSessionFromRequest } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
-const RP_ID = process.env.WEBAUTHN_RP_ID ||
-  (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : 'localhost');
+function getRpId(req: NextRequest): string {
+  return req.nextUrl.hostname || process.env.WEBAUTHN_RP_ID || 'localhost';
+}
 
 function toLatin1(s: string): string {
   return s.replace(/[^\u0000-\u00FF]/g, '').trim();
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
   const safeName = toLatin1(session.name) || session.email;
   const safeEmail = toLatin1(session.email) || session.userId;
 
+  const RP_ID = getRpId(req);
   const options = await generateRegistrationOptions({
     rpName: "Brad's Bargains",
     rpID: RP_ID,

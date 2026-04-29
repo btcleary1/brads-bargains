@@ -6,11 +6,15 @@ import { setSessionCookie } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
-const RP_ID = process.env.WEBAUTHN_RP_ID ||
-  (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : 'localhost');
-const ORIGIN = process.env.WEBAUTHN_ORIGIN || process.env.NEXT_PUBLIC_APP_URL || `https://${RP_ID}`;
+function getRpId(req: NextRequest): string {
+  const origin = req.headers.get('origin');
+  if (origin) { try { return new URL(origin).hostname; } catch {} }
+  return req.nextUrl.hostname || process.env.WEBAUTHN_RP_ID || 'localhost';
+}
 
 export async function POST(req: NextRequest) {
+  const RP_ID = getRpId(req);
+  const ORIGIN = req.headers.get('origin') || `https://${RP_ID}`;
   const challenge = req.cookies.get('webauthn_challenge')?.value;
   if (!challenge) {
     return NextResponse.json({ error: 'Challenge expired. Please try again.' }, { status: 400 });
