@@ -17,7 +17,6 @@ function isSandbox() {
 // Scopes required for buyer purchase history
 const USER_SCOPES = [
   'https://api.ebay.com/oauth/api_scope',
-  'https://api.ebay.com/oauth/api_scope/buy.order.readonly',
 ].join(' ');
 
 // ── State helpers ─────────────────────────────────────────────────────────────
