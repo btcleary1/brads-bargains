@@ -471,7 +471,7 @@ export default function DealsPage() {
                       </div>
                       {pickedItemId && !recLoading && (
                         <button
-                          onClick={() => document.getElementById(pickedItemId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                          onClick={() => document.getElementById(pickedItemId!)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                           className="text-xs px-2 py-1 rounded-lg shrink-0"
                           style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818CF8' }}
                         >
