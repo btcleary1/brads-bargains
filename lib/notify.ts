@@ -42,6 +42,28 @@ function tierLabel(pct: number): { label: string; color: string; bg: string; bor
   return             { label: 'GREAT DEAL',   color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' };
 }
 
+function buildSpotlightUrl(deal: EbayItem, flip?: FlipData): string {
+  const payload = Buffer.from(JSON.stringify({
+    itemId: deal.itemId,
+    title: deal.title,
+    price: deal.price,
+    marketPrice: deal.marketPrice,
+    discountPct: deal.discountPct,
+    condition: deal.condition,
+    imageUrl: deal.imageUrl,
+    itemUrl: deal.itemUrl,
+    category: deal.category,
+    shippingCost: deal.shippingCost,
+    flipVerdict: flip?.verdict ?? null,
+    avgSoldPrice: flip?.avgSoldPrice ?? null,
+    soldCount: flip?.soldCount ?? null,
+    flipNetProfit: flip?.netProfit ?? null,
+    estDaysToSell: flip?.estDaysToSell ?? null,
+    sourcesCount: flip?.sourcesCount ?? null,
+  })).toString('base64url');
+  return `${APP_URL}/deals?spotlight=${payload}`;
+}
+
 function buildTrackUrl(deal: EbayItem): string {
   const payload = Buffer.from(JSON.stringify({
     ebayItemId: deal.itemId,
@@ -171,7 +193,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
                     style="display:block;text-align:center;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">View on eBay</a>
                 </td>
                 <td width="34%" style="padding:0 2px;">
-                  <a href="${APP_URL}/deals?view=digest&item=${deal.itemId}"
+                  <a href="${buildSpotlightUrl(deal, flip)}"
                     style="display:block;text-align:center;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">Brad's Bargains</a>
                 </td>
                 <td width="33%" style="padding-left:3px;">

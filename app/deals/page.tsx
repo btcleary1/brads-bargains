@@ -127,6 +127,12 @@ function estDaysFromTitle(title: string, category = ''): number {
   return 18;
 }
 
+function decodeBase64url(s: string): string {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64 + '=='.slice(0, (4 - b64.length % 4) % 4);
+  return atob(padded);
+}
+
 function SellBadge({ score }: { score: number }) {
   const label = score >= 70 ? 'High Confidence' : score >= 45 ? 'Med Confidence' : 'Lower Confidence';
   const color = score >= 70 ? '#4ADE80' : score >= 45 ? '#FCD34D' : '#F87171';
@@ -739,6 +745,35 @@ function DealsPageContent() {
   const digestRef = useRef<HTMLDivElement>(null);
   const viewDigest = searchParams.get('view') === 'digest';
   const digestItemId = searchParams.get('item');
+  const spotlightParam = searchParams.get('spotlight');
+  const spotlightItem: BrowseDeal | null = (() => {
+    if (!spotlightParam) return null;
+    try {
+      const data = JSON.parse(decodeBase64url(spotlightParam));
+      return {
+        itemId: data.itemId ?? '',
+        title: data.title ?? '',
+        price: data.price ?? 0,
+        marketPrice: data.marketPrice ?? null,
+        discountPct: data.discountPct ?? null,
+        condition: data.condition ?? '',
+        imageUrl: data.imageUrl ?? '',
+        itemUrl: data.itemUrl ?? '',
+        category: data.category ?? '',
+        shippingCost: data.shippingCost ?? null,
+        listingDate: null,
+        seller: '',
+        sellerFeedbackPercent: null,
+        flipVerdict: data.flipVerdict === 'buy' ? 'buy' : 'maybe',
+        avgSoldPrice: data.avgSoldPrice ?? 0,
+        soldCount: data.soldCount ?? 0,
+        flipNetProfit: data.flipNetProfit ?? 0,
+        flipMarginPct: 0,
+        estDaysToSell: data.estDaysToSell ?? null,
+        sourcesCount: data.sourcesCount ?? null,
+      } as BrowseDeal;
+    } catch { return null; }
+  })();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -868,25 +903,30 @@ function DealsPageContent() {
         setDigestAiPick(d.aiPick ?? null);
         setDigestAiPickItemId(d.aiPickItemId ?? null);
         setDigestGeneratedAt(d.generatedAt ?? null);
-        const targetId = digestItemId ? `item-${digestItemId}` : null;
-        const tryScroll = (attemptsLeft: number) => {
-          const target = targetId ? document.getElementById(targetId) : digestRef.current;
-          if (target) {
-            target.scrollIntoView({ behavior: 'smooth', block: targetId ? 'center' : 'start' });
-            if (targetId) {
-              target.style.outline = '2px solid #818CF8';
-              target.style.borderRadius = '16px';
-              setTimeout(() => { target.style.outline = ''; target.style.borderRadius = ''; }, 2500);
-            }
-          } else if (attemptsLeft > 0) {
-            setTimeout(() => tryScroll(attemptsLeft - 1), 120);
-          }
-        };
-        setTimeout(() => tryScroll(8), 100);
       })
       .catch(() => {})
       .finally(() => setDigestLoading(false));
-  }, [viewDigest, digestItemId]);
+  }, [viewDigest]);
+
+  // Scroll to specific item AFTER React commits digestItems to DOM
+  useEffect(() => {
+    if (!digestItemId || digestItems.length === 0) return;
+    const targetId = `item-${digestItemId}`;
+    let attempts = 0;
+    const tryScroll = () => {
+      const el = document.getElementById(targetId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.outline = '2px solid #818CF8';
+        el.style.borderRadius = '16px';
+        setTimeout(() => { el.style.outline = ''; el.style.borderRadius = ''; }, 2500);
+      } else if (attempts < 15) {
+        attempts++;
+        setTimeout(tryScroll, 100);
+      }
+    };
+    tryScroll();
+  }, [digestItems, digestItemId]);
 
   const search = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -1139,6 +1179,17 @@ function DealsPageContent() {
     <div className="min-h-screen" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }}>
       <Header />
       <div className="max-w-3xl mx-auto px-4 py-6 pb-24 sm:pb-10">
+
+        {/* Spotlight — item linked from email */}
+        {spotlightItem && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Mail className="w-4 h-4" style={{ color: '#818CF8' }} />
+              <span className="text-sm font-semibold" style={{ color: '#818CF8' }}>From today's email</span>
+            </div>
+            <DigestDealCard deal={spotlightItem} />
+          </div>
+        )}
 
         {/* Hero search */}
         <div className="mb-6">
