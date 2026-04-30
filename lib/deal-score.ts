@@ -358,8 +358,9 @@ export function topDeals(items: EbayItem[], n = 5, minDiscount = 60, prefs?: Fil
     return true;
   });
 
-  // Fall back to clean items with decent seller ratings when discount data is sparse
+  // Fall back to items meeting the discount threshold but lacking marketPrice data
   const pool = strictPass.length >= n ? strictPass : clean.filter(i => {
+    if ((i.discountPct ?? 0) < minDiscount) return false;
     const pct   = i.sellerFeedbackPercent ?? 100;
     const count = i.sellerFeedbackScore   ?? 0;
     if (pct < MIN_FEEDBACK_PERCENT) return false;
@@ -367,7 +368,7 @@ export function topDeals(items: EbayItem[], n = 5, minDiscount = 60, prefs?: Fil
     return true;
   });
 
-  const finalPool = pool.length > 0 ? pool : clean;
+  const finalPool = pool;
 
   // Score and sort
   const scored = finalPool
