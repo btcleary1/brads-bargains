@@ -363,7 +363,8 @@ export async function GET(req: NextRequest) {
           const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: prompt }] });
           const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
           console.log(`[digest] AI pick attempt ${attempt} result: "${text.slice(0, 80)}"`);
-          if (text) return { text, itemId: matchItemId(text) };
+          const isRefusal = /nothing.*recommend|cannot.*recommend|no.*recommend|skip all|no item|not recommend|unable to recommend/i.test(text);
+          if (text && !isRefusal) return { text, itemId: matchItemId(text) };
         } catch (e) { console.error('[digest] AI pick attempt failed:', e); }
       }
 

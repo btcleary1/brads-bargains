@@ -111,11 +111,15 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
     ? '+$' + deal.shippingCost.toFixed(2) + ' ship'
     : '';
 
+  const appSearchUrl = `${APP_URL}/deals?q=${encodeURIComponent(title.split(' ').slice(0, 6).join(' '))}`;
+
   return `
   <tr>
     <td style="padding:0 0 14px 0;">
       <table width="100%" cellpadding="0" cellspacing="0"
         style="background:#FFFFFF;border-radius:10px;border:1px solid #E2E8F0;overflow:hidden;">
+
+        <!-- Main content row -->
         <tr>
 
           <!-- Rank + category -->
@@ -179,6 +183,29 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
 
           </td>
         </tr>
+
+        <!-- Action buttons row -->
+        <tr>
+          <td colspan="3" style="padding:0 12px 12px;border-top:1px solid #F1F5F9;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding-top:10px;padding-right:4px;">
+                  <a href="${deal.itemUrl}"
+                    style="display:block;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:6px;text-align:center;">View on eBay</a>
+                </td>
+                <td style="padding-top:10px;padding-right:4px;padding-left:4px;">
+                  <a href="${appSearchUrl}"
+                    style="display:block;background:#7C3AED;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:6px;text-align:center;">View on Brad's</a>
+                </td>
+                <td style="padding-top:10px;padding-left:4px;">
+                  <a href="${buildTrackUrl(deal)}"
+                    style="display:block;background:#1D4ED8;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:6px;text-align:center;">Track Deal</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
       </table>
     </td>
   </tr>`;
