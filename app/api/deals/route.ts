@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { searchDeals, EbayItem } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
-import { isJunk } from '@/lib/deal-score';
+import { isJunk, sellabilityScore } from '@/lib/deal-score';
 import { sendDailyDigest } from '@/lib/notify';
 import { getUserPrefs } from '@/lib/tracker-data';
 import { checkRequestLimit } from '@/lib/rate-limit';
@@ -91,10 +91,15 @@ export async function GET(req: NextRequest) {
       total: items.length,
       hotDeals: hotDeals.length,
       minDiscount,
-      items: items.map(item => ({
-        ...item,
-        isHotDeal: item.discountPct !== null && item.discountPct >= minDiscount,
-      })),
+      items: items.map(item => {
+        const sellScore = sellabilityScore(item, items);
+        return {
+          ...item,
+          isHotDeal: item.discountPct !== null && item.discountPct >= minDiscount,
+          sellScore,
+          grade: sellScore >= 45 ? 'BUY' : 'SKIP',
+        };
+      }),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

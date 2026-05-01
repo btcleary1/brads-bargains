@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   } catch { /* use tracker data as fallback */ }
 
   const item = ebayDetail ?? deal;
-  const sellPrice = deal.sellTargetPrice ?? (deal.marketPrice ? Math.round(deal.marketPrice * 0.6) : deal.ebayPrice * 2);
+  const sellPrice = deal.sellTargetPrice ?? (deal.marketPrice ? Math.round(deal.marketPrice * 0.85) : Math.round(deal.ebayPrice * 1.3));
   const condition = deal.condition || 'Good';
 
   // Build the listing draft
@@ -42,7 +42,7 @@ ${deal.title} in ${condition.toLowerCase()} condition. ${deal.notes ? deal.notes
 
   // Save draft back to the deal
   const updatedDeals = deals.map(d =>
-    d.id === dealId ? { ...d, listingDraft: draft, status: d.status === 'watching' ? 'purchased' : d.status } : d
+    d.id === dealId ? { ...d, listingDraft: draft } : d
   );
   await saveDeals(session.userId, updatedDeals as any);
 

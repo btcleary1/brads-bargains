@@ -3,6 +3,7 @@ import { getItemDetail } from '@/lib/ebay';
 import { getAllUsers } from '@/lib/users';
 import { getDeals, saveDeals } from '@/lib/tracker-data';
 import { getUserPrefs } from '@/lib/tracker-data';
+import { sendSMSPriceDrop } from '@/lib/sms';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -112,9 +113,8 @@ export async function GET(req: NextRequest) {
     if (drops.length > 0) {
       const prefs = await getUserPrefs(user.userId);
       const email = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
-      if (email) {
-        await sendPriceDropEmail(email, drops).catch(() => {});
-      }
+      if (email) await sendPriceDropEmail(email, drops).catch(() => {});
+      if (prefs.notificationPhone) await sendSMSPriceDrop(drops, prefs.notificationPhone).catch(() => {});
       summary.push({ userId: user.userId, drops: drops.length });
     }
   }
