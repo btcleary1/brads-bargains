@@ -1644,7 +1644,7 @@ function DealsPageContent() {
                 <Search className="w-8 h-8" style={{ color: '#374151' }} />
               </div>
               <div className="font-medium" style={{ color: '#6B7280' }}>Search eBay for deals</div>
-              <div className="text-sm mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings at {minDiscount}%+ off market price</div>
+              <div className="text-sm mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings with varying discounts off market price</div>
             </div>
           </div>
         )}

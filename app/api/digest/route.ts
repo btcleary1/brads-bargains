@@ -7,7 +7,7 @@ import { topDeals, sellabilityScore } from '@/lib/deal-score';
 import { sendDailyDigest, FlipData } from '@/lib/notify';
 import { sendSMSDigest } from '@/lib/sms';
 import { r2Get, r2Put } from '@/lib/r2';
-import { getAllUsers } from '@/lib/users';
+import { getAllUsers, getUserByEmail } from '@/lib/users';
 import { getUserPrefs, getDeals } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals } from '@/lib/infer-categories';
 import { searchSoldComps } from '@/lib/ebay-comps';
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
       const days = r.value.estDaysToSell;
       if (days != null && days > 60) verdict = 'skip';
       else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
-      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length });
+      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null });
     });
 
     // Speed-adjusted score: profit × (14 / daysToSell)^0.4
@@ -170,12 +170,32 @@ export async function GET(req: NextRequest) {
     };
 
     let best5 = pickBest(candidates, 5);
-    // If not enough positive-profit deals, log and use best available (still exclude hard skips)
+    // If not enough positive-profit deals, fill with best-available non-skip items (including no-flip-data)
     if (best5.length < 5) {
       console.log(`[digest] Only ${best5.length} positive-profit deals — filling with best available`);
-      const nonSkip = candidates.filter(i => flipMap.get(i.itemId)?.verdict !== 'skip')
-        .sort((a, b) => (flipMap.get(b.itemId)?.netProfit ?? 0) - (flipMap.get(a.itemId)?.netProfit ?? 0));
-      best5 = nonSkip.slice(0, 5);
+      const picked = new Set(best5.map(i => i.itemId));
+      const remaining = candidates
+        .filter(i => !picked.has(i.itemId) && flipMap.get(i.itemId)?.verdict !== 'skip')
+        .sort((a, b) => {
+          const an = flipMap.get(a.itemId)?.netProfit ?? -999;
+          const bn = flipMap.get(b.itemId)?.netProfit ?? -999;
+          if (bn !== an) return bn - an;
+          return (b.discountPct ?? 0) - (a.discountPct ?? 0);
+        });
+      best5 = [...best5, ...remaining].slice(0, 5);
+    }
+    // If still < 5, fill from the full item pool sorted by discount (no comps required)
+    if (best5.length < 5) {
+      const picked = new Set(best5.map(i => i.itemId));
+      const byDiscount = itemPool
+        .filter(i => !picked.has(i.itemId) && (i.discountPct ?? 0) >= 30)
+        .sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0));
+      best5 = [...best5, ...byDiscount].slice(0, 5);
+    }
+    // Last resort — if still empty, take any item sorted by price descending
+    if (best5.length === 0) {
+      console.warn('[digest] All filters yielded 0 items — using raw itemPool last resort');
+      best5 = [...itemPool].sort((a, b) => b.price - a.price).slice(0, 5);
     }
     // Re-analyze top 5 with AI agent for accurate, consistent stats
     const aiResults = await Promise.allSettled(
@@ -193,6 +213,9 @@ export async function GET(req: NextRequest) {
         marginPct: v.marginPct,
         estDaysToSell: v.daysToSell ?? null,
         sourcesCount: v.sourcesCount ?? null,
+        stockxLastSale: v.stockxLastSale ?? null,
+        mercariAvgSold: v.mercariAvgSold ?? null,
+        amazonPrice: v.amazonPrice ?? null,
       });
     });
     console.log(`[digest] best5 AI profits: ${best5.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
@@ -202,7 +225,8 @@ export async function GET(req: NextRequest) {
     let userDigests: UserDigest[] = [];
 
     if (toOverride) {
-      userDigests = [{ userId: '', email: toOverride, deals: best5, maxDaysToSell: 60 }];
+      const overrideUser = await getUserByEmail(toOverride);
+      userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 60 }];
     } else {
       const users = await getAllUsers();
       const [prefsResults, dealsResults] = await Promise.all([
@@ -287,7 +311,7 @@ export async function GET(req: NextRequest) {
       const daysU = r.value.estDaysToSell;
       if (daysU != null && daysU > 60) verdict = 'skip';
       else if (daysU != null && daysU > 30 && verdict === 'buy') verdict = 'maybe';
-      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length });
+      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null });
     });
 
     // Apply strict positive-profit filter to each user's pool, then take top 5
@@ -305,14 +329,12 @@ export async function GET(req: NextRequest) {
           return dealScore(bf ?? { verdict: bv as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 })
                - dealScore(af ?? { verdict: av as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 });
         });
-      // Fall back to non-skip if not enough profitable items
-      const finalDeals = profitable.length >= 5
-        ? profitable.slice(0, 5)
-        : d.deals
-            .filter(i => flipMap.get(i.itemId)?.verdict !== 'skip')
-            .sort((a, b) => dealScore(flipMap.get(b.itemId) ?? { verdict: 'maybe', netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 })
-                          - dealScore(flipMap.get(a.itemId) ?? { verdict: 'maybe', netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 }))
-            .slice(0, 5);
+      // Fill to 5 — profitable first, then fill with remaining by discount
+      const profitableIds = new Set(profitable.map(i => i.itemId));
+      const fillers = d.deals
+        .filter(i => !profitableIds.has(i.itemId))
+        .sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0));
+      const finalDeals = [...profitable, ...fillers].slice(0, 5);
       console.log(`[digest] user ${d.userId} final deals profits: ${finalDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
       return { ...d, deals: finalDeals };
     });
@@ -418,6 +440,9 @@ export async function GET(req: NextRequest) {
         flipMarginPct: flip?.marginPct ?? 0,
         estDaysToSell: flip?.estDaysToSell ?? null,
         sourcesCount: flip?.sourcesCount ?? null,
+        stockxLastSale: flip?.stockxLastSale ?? null,
+        mercariAvgSold: flip?.mercariAvgSold ?? null,
+        amazonPrice: flip?.amazonPrice ?? null,
       };
     });
     // Save per-user cache and send push — both use the same personalized deals
@@ -462,9 +487,10 @@ export async function GET(req: NextRequest) {
       .map((r, i) => r.status === 'rejected' ? `${userDigests[i].email}: ${r.reason}` : null)
       .filter(Boolean);
     const successCount = sendResults.filter(r => r.status === 'fulfilled').length;
+    const actualSendCount = userDigests.filter((d, i) => sendResults[i].status === 'fulfilled' && d.deals.length > 0).length;
 
-    if (successCount === 0) {
-      return NextResponse.json({ sent: false, reason: 'All emails failed', errors }, { status: 500 });
+    if (successCount === 0 || actualSendCount === 0) {
+      return NextResponse.json({ sent: false, reason: actualSendCount === 0 ? 'No deals to send' : 'All emails failed', errors }, { status: 500 });
     }
 
     // Record send date to prevent duplicates
