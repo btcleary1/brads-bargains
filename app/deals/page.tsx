@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
-import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, TrendingUp, Package, AlertCircle, Mail, CheckCircle, Clock, FlaskConical, ThumbsUp, ThumbsDown, Minus, Flame, Sparkles, ShoppingBag, Smartphone, X } from 'lucide-react';
+import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, TrendingUp, Package, AlertCircle, Mail, CheckCircle, Clock, FlaskConical, ThumbsUp, ThumbsDown, Minus, Flame, Sparkles, ShoppingBag, Smartphone, X, MessageSquarePlus } from 'lucide-react';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 
 interface EbayItem {
@@ -87,6 +87,9 @@ interface BrowseDeal {
   flipMarginPct: number;
   estDaysToSell?: number | null;
   sourcesCount?: number | null;
+  stockxLastSale?: number | null;
+  mercariAvgSold?: number | null;
+  amazonPrice?: number | null;
   watcherVelocity?: WatcherVelocity | null;
   discountQuality?: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   discountQualityReason?: string | null;
@@ -666,21 +669,33 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
             )}
           </div>
           {/* Pre-computed flip data */}
-          {!comps && (
+          {!comps && deal.avgSoldPrice <= 0 && deal.soldCount <= 0 && (
+            <div className="rounded-xl px-3 py-2 mb-2 text-xs" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#6B7280' }}>
+              No comps available
+            </div>
+          )}
+          {!comps && deal.avgSoldPrice > 0 && (
             <div className="rounded-xl px-3 py-2 mb-2" style={{ background: deal.flipVerdict === 'buy' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(251,191,36,0.2)' }}>
               <span className="text-xs font-bold block mb-1" style={{ color: deal.flipVerdict === 'buy' ? '#4ADE80' : '#FCD34D' }}>{deal.flipVerdict === 'buy' ? '✓ BUY' : '~ MAYBE'}</span>
-              <StatsCluster
-                avgSoldPrice={deal.avgSoldPrice > 0 ? deal.avgSoldPrice : null}
-                soldCount={deal.soldCount}
-                sourcesCount={deal.sourcesCount}
-                netProfit={deal.flipNetProfit}
-                estDaysToSell={deal.estDaysToSell}
-                annROI={deal.estDaysToSell != null && deal.estDaysToSell >= 1 && deal.flipNetProfit > 0 ? Math.round((deal.flipNetProfit / deal.price / deal.estDaysToSell) * 365 * 100) : null}
-              />
+              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={null} netProfit={deal.flipNetProfit > 0 ? deal.flipNetProfit : null} estDaysToSell={deal.estDaysToSell} annROI={deal.estDaysToSell != null && deal.estDaysToSell >= 1 && deal.flipNetProfit > 0 ? Math.round((deal.flipNetProfit / deal.price / deal.estDaysToSell) * 365 * 100) : null} />
+              {(deal.stockxLastSale || deal.mercariAvgSold || deal.amazonPrice) && (
+                <div className="flex flex-wrap gap-2 mt-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  {deal.avgSoldPrice > 0 && <span className="text-xs" style={{ color: '#6B7280' }}>eBay <span className="font-semibold" style={{ color: '#D1D5DB' }}>${deal.avgSoldPrice.toFixed(0)}</span> ({deal.soldCount})</span>}
+                  {deal.stockxLastSale && <span className="text-xs" style={{ color: '#6B7280' }}>StockX <span className="font-semibold" style={{ color: '#D1D5DB' }}>${deal.stockxLastSale.toFixed(0)}</span></span>}
+                  {deal.mercariAvgSold && <span className="text-xs" style={{ color: '#6B7280' }}>Mercari <span className="font-semibold" style={{ color: '#D1D5DB' }}>${deal.mercariAvgSold.toFixed(0)}</span></span>}
+                  {deal.amazonPrice && <span className="text-xs" style={{ color: '#6B7280' }}>Amazon <span className="font-semibold" style={{ color: '#D1D5DB' }}>${deal.amazonPrice.toFixed(0)}</span></span>}
+                </div>
+              )}
             </div>
           )}
           {/* Live Check Flip result */}
-          {comps && comps.noData && (
+          {comps && comps.noData && deal.avgSoldPrice > 0 && (
+            <div className="rounded-xl px-3 py-2 mb-2" style={{ background: deal.flipVerdict === 'buy' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(251,191,36,0.2)' }}>
+              <span className="text-xs font-bold block mb-1" style={{ color: deal.flipVerdict === 'buy' ? '#4ADE80' : '#FCD34D' }}>{deal.flipVerdict === 'buy' ? '✓ BUY' : '~ MAYBE'} <span className="font-normal opacity-60">(email data)</span></span>
+              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={null} netProfit={deal.flipNetProfit} estDaysToSell={deal.estDaysToSell} annROI={null} />
+            </div>
+          )}
+          {comps && comps.noData && deal.avgSoldPrice <= 0 && (
             <div className="mt-2 rounded-xl px-3 py-2 mb-2 text-xs" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#6B7280' }}>
               No sold comps available — N/A
             </div>
@@ -691,15 +706,17 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
                 <VerdictBadge verdict={comps.verdict} />
               </div>
               <div className="mb-2">
-                <StatsCluster
-                  avgSoldPrice={comps.avgSoldPrice}
-                  soldCount={comps.soldCount}
-                  sourcesCount={comps.sourcesCount}
-                  netProfit={comps.netProfit}
-                  estDaysToSell={comps.daysToSell}
-                  annROI={comps.capitalEfficiency}
-                />
+                <StatsCluster avgSoldPrice={comps.avgSoldPrice} soldCount={comps.soldCount} sourcesCount={null} netProfit={comps.netProfit} estDaysToSell={comps.daysToSell} annROI={comps.capitalEfficiency} />
               </div>
+              {/* Per-source breakdown */}
+              {(comps.stockxLastSale || comps.mercariAvgSold || comps.amazonPrice) && (
+                <div className="flex flex-wrap gap-2 mb-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span className="text-xs" style={{ color: '#6B7280' }}>eBay avg <span className="font-semibold text-white">${comps.avgSoldPrice.toFixed(0)}</span> ({comps.soldCount})</span>
+                  {comps.stockxLastSale && <span className="text-xs" style={{ color: '#6B7280' }}>StockX <span className="font-semibold text-white">${comps.stockxLastSale.toFixed(0)}</span></span>}
+                  {comps.mercariAvgSold && <span className="text-xs" style={{ color: '#6B7280' }}>Mercari <span className="font-semibold text-white">${comps.mercariAvgSold.toFixed(0)}</span></span>}
+                  {comps.amazonPrice && <span className="text-xs" style={{ color: '#6B7280' }}>Amazon <span className="font-semibold text-white">${comps.amazonPrice.toFixed(0)}</span></span>}
+                </div>
+              )}
               {comps.reasoning && <p className="text-xs leading-relaxed" style={{ color: '#9CA3AF' }}>{comps.reasoning}</p>}
             </div>
           )}
@@ -764,13 +781,16 @@ function DealsPageContent() {
         listingDate: null,
         seller: '',
         sellerFeedbackPercent: null,
-        flipVerdict: data.flipVerdict === 'buy' ? 'buy' : 'maybe',
+        flipVerdict: data.flipVerdict === 'buy' ? 'buy' : data.flipVerdict === 'skip' ? 'maybe' : 'maybe',
         avgSoldPrice: data.avgSoldPrice ?? 0,
         soldCount: data.soldCount ?? 0,
         flipNetProfit: data.flipNetProfit ?? 0,
         flipMarginPct: 0,
         estDaysToSell: data.estDaysToSell ?? null,
         sourcesCount: data.sourcesCount ?? null,
+        stockxLastSale: data.stockxLastSale ?? null,
+        mercariAvgSold: data.mercariAvgSold ?? null,
+        amazonPrice: data.amazonPrice ?? null,
       } as BrowseDeal;
     } catch { return null; }
   })();
@@ -811,6 +831,26 @@ function DealsPageContent() {
   const [recsKeywords, setRecsKeywords] = useState<string[]>([]);
   const [ebayConnected, setEbayConnected] = useState(false);
   const [showPwaBanner, setShowPwaBanner] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [fbType, setFbType] = useState<'enhancement' | 'bug'>('enhancement');
+  const [fbTitle, setFbTitle] = useState('');
+  const [fbDesc, setFbDesc] = useState('');
+  const [fbLoading, setFbLoading] = useState(false);
+  const [fbMessage, setFbMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const submitFeedback = async () => {
+    if (!fbTitle.trim() || !fbDesc.trim()) return;
+    setFbLoading(true); setFbMessage(null);
+    try {
+      const res = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: fbType, title: fbTitle, description: fbDesc }) });
+      if (!res.ok) throw new Error();
+      setFbMessage({ type: 'success', text: 'Feedback submitted — thank you!' });
+      setFbTitle(''); setFbDesc('');
+      setTimeout(() => { setShowFeedback(false); setFbMessage(null); }, 2000);
+    } catch {
+      setFbMessage({ type: 'error', text: 'Failed to submit. Please try again.' });
+    } finally { setFbLoading(false); }
+  };
 
   useEffect(() => {
     const dismissed = typeof window !== 'undefined' && localStorage.getItem('pwa-banner-dismissed');
@@ -1828,6 +1868,46 @@ function DealsPageContent() {
             <div className="text-sm py-3" style={{ color: '#4B5563' }}>No trending signals found right now — check back later.</div>
           )}
         </div>
+
+        {/* Floating Feedback Button */}
+        <button
+          onClick={() => { setShowFeedback(true); setFbMessage(null); }}
+          className="fixed bottom-6 right-6 flex items-center gap-2 px-4 py-3 rounded-full text-sm font-semibold text-white shadow-lg z-40 transition-all"
+          style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}
+        >
+          <MessageSquarePlus className="w-4 h-4" />
+          Feedback
+        </button>
+
+        {/* Feedback Modal */}
+        {showFeedback && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={e => { if (e.target === e.currentTarget) setShowFeedback(false); }}>
+            <div className="w-full max-w-md rounded-2xl p-6" style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquarePlus className="w-5 h-5" style={{ color: '#60A5FA' }} />
+                  <h2 className="font-semibold text-white text-[15px]">Submit Feedback</h2>
+                </div>
+                <button onClick={() => setShowFeedback(false)} style={{ color: '#6B7280' }}><X className="w-5 h-5" /></button>
+              </div>
+              <div className="flex gap-2 mb-3">
+                {(['enhancement', 'bug'] as const).map(t => (
+                  <button key={t} onClick={() => setFbType(t)} className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all" style={{ background: fbType === t ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)', border: fbType === t ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)', color: fbType === t ? '#60A5FA' : '#6B7280' }}>
+                    {t === 'enhancement' ? '✨ Enhancement' : '🐛 Bug Fix'}
+                  </button>
+                ))}
+              </div>
+              <input type="text" value={fbTitle} onChange={e => setFbTitle(e.target.value)} placeholder="Short title..." className="w-full px-3 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 mb-3" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+              <textarea value={fbDesc} onChange={e => setFbDesc(e.target.value)} placeholder="Describe the enhancement or bug in detail..." rows={4} className="w-full px-3 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 mb-3 resize-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
+              {fbMessage && (
+                <div className="text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: fbMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', color: fbMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>{fbMessage.text}</div>
+              )}
+              <button onClick={submitFeedback} disabled={fbLoading || !fbTitle.trim() || !fbDesc.trim()} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50" style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}>
+                {fbLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Submit Feedback'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="mt-12 pt-6 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>

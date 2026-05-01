@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus, SlidersHorizontal, Filter, ShoppingBag, Link2Off } from 'lucide-react';
+import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus, SlidersHorizontal, Filter, ShoppingBag, Link2Off, MessageSquarePlus } from 'lucide-react';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import Header from '@/components/Header';
@@ -73,6 +73,29 @@ function SettingsContent() {
   const [filterMessage, setFilterMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [ebayLoading, setEbayLoading] = useState(false);
+
+  const [fbType, setFbType] = useState<'enhancement' | 'bug'>('enhancement');
+  const [fbTitle, setFbTitle] = useState('');
+  const [fbDesc, setFbDesc] = useState('');
+  const [fbLoading, setFbLoading] = useState(false);
+  const [fbMessage, setFbMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const submitFeedback = async () => {
+    if (!fbTitle.trim() || !fbDesc.trim()) return;
+    setFbLoading(true);
+    setFbMessage(null);
+    try {
+      const res = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: fbType, title: fbTitle, description: fbDesc }) });
+      if (!res.ok) throw new Error('Failed to submit');
+      setFbMessage({ type: 'success', text: 'Feedback submitted — thank you!' });
+      setFbTitle('');
+      setFbDesc('');
+    } catch {
+      setFbMessage({ type: 'error', text: 'Failed to submit feedback. Please try again.' });
+    } finally {
+      setFbLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Handle eBay OAuth callback result in URL params
@@ -1077,6 +1100,45 @@ function SettingsContent() {
               Connect eBay Account
             </a>
           )}
+        </div>
+
+        {/* Feedback */}
+        <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <MessageSquarePlus className="w-5 h-5" style={{ color: '#60A5FA' }} />
+            <h2 className="font-semibold text-white text-[15px]">Submit Feedback</h2>
+          </div>
+          <div className="flex gap-2 mb-3">
+            {(['enhancement', 'bug'] as const).map(t => (
+              <button key={t} onClick={() => setFbType(t)} className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all capitalize" style={{ background: fbType === t ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)', border: fbType === t ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)', color: fbType === t ? '#60A5FA' : '#6B7280' }}>
+                {t === 'enhancement' ? '✨ Enhancement' : '🐛 Bug Fix'}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={fbTitle}
+            onChange={e => setFbTitle(e.target.value)}
+            placeholder="Short title..."
+            className="w-full px-3 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 mb-3"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+          />
+          <textarea
+            value={fbDesc}
+            onChange={e => setFbDesc(e.target.value)}
+            placeholder="Describe the enhancement or bug in detail..."
+            rows={4}
+            className="w-full px-3 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-blue-500/50 mb-3 resize-none"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+          />
+          {fbMessage && (
+            <div className="text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: fbMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', color: fbMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>
+              {fbMessage.text}
+            </div>
+          )}
+          <button onClick={submitFeedback} disabled={fbLoading || !fbTitle.trim() || !fbDesc.trim()} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50" style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}>
+            {fbLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Submit Feedback'}
+          </button>
         </div>
 
         {/* Danger zone */}
