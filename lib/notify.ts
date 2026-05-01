@@ -9,6 +9,9 @@ export interface FlipData {
   marginPct: number;
   estDaysToSell?: number | null;
   sourcesCount?: number | null;
+  stockxLastSale?: number | null;
+  mercariAvgSold?: number | null;
+  amazonPrice?: number | null;
 }
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
@@ -42,7 +45,7 @@ function tierLabel(pct: number): { label: string; color: string; bg: string; bor
   return             { label: 'GREAT DEAL',   color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' };
 }
 
-function buildSpotlightUrl(deal: EbayItem, flip?: FlipData): string {
+function buildSpotlightUrl(deal: EbayItem, flip?: FlipData, displayNetProfit?: number | null): string {
   const payload = Buffer.from(JSON.stringify({
     itemId: deal.itemId,
     title: deal.title,
@@ -57,9 +60,12 @@ function buildSpotlightUrl(deal: EbayItem, flip?: FlipData): string {
     flipVerdict: flip?.verdict ?? null,
     avgSoldPrice: flip?.avgSoldPrice ?? null,
     soldCount: flip?.soldCount ?? null,
-    flipNetProfit: flip?.netProfit ?? null,
+    flipNetProfit: displayNetProfit ?? flip?.netProfit ?? null,
     estDaysToSell: flip?.estDaysToSell ?? null,
     sourcesCount: flip?.sourcesCount ?? null,
+    stockxLastSale: flip?.stockxLastSale ?? null,
+    mercariAvgSold: flip?.mercariAvgSold ?? null,
+    amazonPrice: flip?.amazonPrice ?? null,
   })).toString('base64url');
   return `${APP_URL}/deals?spotlight=${payload}`;
 }
@@ -96,16 +102,20 @@ function flipRow(flip: FlipData, annROI?: number | null): string {
   const verdictBorder= flip.verdict === 'buy' ? '#BBF7D0' : flip.verdict === 'maybe' ? '#FDE68A' : '#FECACA';
   const label        = flip.verdict === 'buy' ? '✓ BUY' : flip.verdict === 'maybe' ? '~ MAYBE' : '✗ SKIP';
   const roiColor = annROI != null ? (annROI >= 200 ? '#16A34A' : annROI >= 100 ? '#D97706' : '#94A3B8') : '';
+  const sourceParts: string[] = [];
+  if (flip.avgSoldPrice > 0) sourceParts.push(`<span style="font-size:10px;color:#475569;">eBay&nbsp;<strong>$${flip.avgSoldPrice.toFixed(0)}</strong>&nbsp;(${flip.soldCount})</span>`);
+  if (flip.stockxLastSale) sourceParts.push(`<span style="font-size:10px;color:#475569;">StockX&nbsp;<strong>$${flip.stockxLastSale.toFixed(0)}</strong></span>`);
+  if (flip.mercariAvgSold) sourceParts.push(`<span style="font-size:10px;color:#475569;">Mercari&nbsp;<strong>$${flip.mercariAvgSold.toFixed(0)}</strong></span>`);
+  if (flip.amazonPrice) sourceParts.push(`<span style="font-size:10px;color:#475569;">Amazon&nbsp;<strong>$${flip.amazonPrice.toFixed(0)}</strong></span>`);
   return `<div style="margin-top:8px;padding:10px 12px;background:${verdictBg};border:1px solid ${verdictBorder};border-radius:6px;">
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:5px;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
       <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:${verdictColor};">${label}</span>
-      <span style="font-size:11px;color:#475569;">Avg sold <strong>$${flip.avgSoldPrice.toFixed(0)}</strong> &middot; ${flip.soldCount} comps${flip.sourcesCount != null ? ` &middot; ${flip.sourcesCount} ${flip.sourcesCount === 1 ? 'site' : 'sites'}` : ''}</span>
-    </div>
-    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
       ${flip.netProfit > 0 ? `<span style="font-size:12px;font-weight:700;color:#16A34A;">+$${flip.netProfit} Net Profit</span>` : `<span style="font-size:11px;color:#DC2626;">Low margin</span>`}
-      ${flip.estDaysToSell != null ? `<span style="font-size:11px;color:#64748B;">Est. ${flip.estDaysToSell}d to sell</span>` : ''}
+      ${flip.estDaysToSell != null ? `<span style="font-size:11px;color:#64748B;">~${flip.estDaysToSell}d to sell</span>` : ''}
       ${annROI != null && annROI > 0 && annROI <= 2000 ? `<span style="font-size:11px;color:${roiColor};">${annROI}% ann. ROI</span>` : ''}
     </div>
+    ${flip.avgSoldPrice > 0 ? `<div style="font-size:11px;color:#475569;margin-bottom:${sourceParts.length > 1 ? '4' : '0'}px;">Avg sold <strong>$${flip.avgSoldPrice.toFixed(0)}</strong> &middot; ${flip.soldCount} comps</div>` : ''}
+    ${sourceParts.length > 1 ? `<div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;border-top:1px solid ${verdictBorder};">${sourceParts.join('<span style="color:#CBD5E1;">&nbsp;·&nbsp;</span>')}</div>` : ''}
   </div>`;
 }
 
@@ -132,8 +142,6 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
     : deal.shippingCost
     ? '+$' + deal.shippingCost.toFixed(2) + ' ship'
     : '';
-
-  const appSearchUrl = `${APP_URL}/deals?q=${encodeURIComponent(title.split(' ').slice(0, 6).join(' '))}`;
 
   return `
   <tr>
@@ -183,7 +191,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
             </div>
 
             <!-- Flip data -->
-            ${flip ? flipRow(flip, annROI) : ''}
+            ${flip ? flipRow(flip, annROI) : '<div style="margin-top:8px;padding:8px 10px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;font-size:11px;color:#94A3B8;">No comps available</div>'}
 
             <!-- CTA buttons — 3-up row, each block fills equal width -->
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">
@@ -193,7 +201,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
                     style="display:block;text-align:center;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">View on eBay</a>
                 </td>
                 <td width="34%" style="padding:0 2px;">
-                  <a href="${buildSpotlightUrl(deal, flip)}"
+                  <a href="${APP_URL}/deals?view=digest&item=${deal.itemId}"
                     style="display:block;text-align:center;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">Brad's Bargains</a>
                 </td>
                 <td width="33%" style="padding-left:3px;">
@@ -206,27 +214,6 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
           </td>
         </tr>
 
-        <!-- Action buttons row -->
-        <tr>
-          <td colspan="3" style="padding:0 12px 12px;border-top:1px solid #F1F5F9;">
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="padding-top:10px;padding-right:4px;">
-                  <a href="${deal.itemUrl}"
-                    style="display:block;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:6px;text-align:center;">View on eBay</a>
-                </td>
-                <td style="padding-top:10px;padding-right:4px;padding-left:4px;">
-                  <a href="${appSearchUrl}"
-                    style="display:block;background:#7C3AED;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:6px;text-align:center;">View on Brad's</a>
-                </td>
-                <td style="padding-top:10px;padding-left:4px;">
-                  <a href="${buildTrackUrl(deal)}"
-                    style="display:block;background:#1D4ED8;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 10px;border-radius:6px;text-align:center;">Track Deal</a>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
 
       </table>
     </td>
