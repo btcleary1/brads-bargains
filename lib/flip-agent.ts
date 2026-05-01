@@ -56,7 +56,7 @@ export async function analyzeFlip(
     }
   } catch { /* cache miss */ }
 
-  const isSneakerOrCollectible = /jordan|nike|adidas|yeezy|dunk|sneaker|pokemon|card|lego|comic|figure|funko/i.test(title);
+  const isSneakerOrCollectible = /jordan|nike|adidas|yeezy|dunk|sneaker|pokemon|card|lego|comic|figure|funko|iphone|airpods|apple watch|playstation|ps5|xbox|nintendo switch|gpu|rtx|geforce|supreme|bape|off-white/i.test(title);
   const shortQuery = extractModelQuery(title);
   const [stockxResult, mercariResult, amazonResult] = await Promise.allSettled([
     isSneakerOrCollectible ? searchStockX(shortQuery) : Promise.resolve(null),
