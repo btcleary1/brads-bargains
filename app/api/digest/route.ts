@@ -69,6 +69,12 @@ export async function GET(req: NextRequest) {
   // ?to= overrides for manual testing; otherwise sends to all registered users
   const toOverride = req.nextUrl.searchParams.get('to') || null;
 
+  // Claim today's slot immediately — prevents duplicate sends if the function
+  // times out mid-run and Vercel retries the cron invocation.
+  if (!force && !toOverride) {
+    await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey() }));
+  }
+
   try {
     let allItems;
 
