@@ -894,6 +894,12 @@ function DealsPageContent() {
       if (!dismissed) setShowOnboarding(true);
     });
 
+    // Check eBay connection status independently (fast, not rate-limited)
+    fetch('/api/auth/ebay/status')
+      .then(r => r.ok ? r.json() : { connected: false })
+      .then((d: any) => { if (d?.connected) setEbayConnected(true); })
+      .catch(() => {});
+
     // Fetch personalized recommendations on page load
     setRecsLoading(true);
     fetch('/api/recommendations')
