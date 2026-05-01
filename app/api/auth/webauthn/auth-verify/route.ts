@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { findCredentialById, updateCredentialCounter, getCredentialsForUser, saveCredentialsForUser } from '@/lib/webauthn-store';
-import { getUserById, getUserByEmail } from '@/lib/users';
+import { getUserById, getUserByEmail, incrementLoginCount } from '@/lib/users';
 import { setSessionCookie } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
       user = canonicalUser;
     }
 
+    await incrementLoginCount(user.userId);
     const res = NextResponse.json({ success: true });
     setSessionCookie(res, {
       userId: user.userId,

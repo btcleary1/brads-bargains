@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByEmail, hashPassword } from '@/lib/users';
+import { getUserByEmail, hashPassword, incrementLoginCount } from '@/lib/users';
 import { setSessionCookie } from '@/lib/session';
 import { checkRateLimit, recordFailure, clearFailures } from '@/lib/rate-limit';
 import { logAudit, getClientIp } from '@/lib/audit';
@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
 
     await clearFailures(ip);
     logAudit({ timestamp: new Date().toISOString(), userId: user.userId, email: user.email, action: 'login_success', ip });
+    await incrementLoginCount(user.userId);
 
     const safeName = user.name.replace(/[^\u0000-\u00FF]/g, '').trim() || user.email;
     const res = NextResponse.json({ success: true, name: safeName });
