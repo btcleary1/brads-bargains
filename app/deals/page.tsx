@@ -288,6 +288,7 @@ function DiscountQualityBadge({ quality, reason }: { quality?: string; reason?: 
 
 function StatsCluster({
   avgSoldPrice, soldCount, sourcesCount, netProfit, estDaysToSell, annROI,
+  stockxLastSale, mercariAvgSold, amazonPrice,
 }: {
   avgSoldPrice?: number | null;
   soldCount?: number | null;
@@ -295,19 +296,47 @@ function StatsCluster({
   netProfit?: number | null;
   estDaysToSell?: number | null;
   annROI?: number | null;
+  stockxLastSale?: number | null;
+  mercariAvgSold?: number | null;
+  amazonPrice?: number | null;
 }) {
+  const [sourcesExpanded, setSourcesExpanded] = useState(false);
   const hasLine1 = avgSoldPrice != null;
   const line2: { text: string; color: string; bold?: boolean }[] = [];
   if (netProfit != null) line2.push({ text: `${netProfit >= 0 ? '+' : ''}$${Math.abs(netProfit).toFixed(0)} Net Profit`, color: netProfit > 0 ? '#4ADE80' : '#F87171', bold: true });
   if (estDaysToSell != null && estDaysToSell >= 1) line2.push({ text: `Est. ${estDaysToSell}d to sell`, color: '#6B7280' });
   if (annROI != null && annROI > 0 && annROI <= 2000) line2.push({ text: `${Math.round(annROI)}% ann. ROI`, color: annROI >= 200 ? '#4ADE80' : annROI >= 100 ? '#FCD34D' : '#9CA3AF' });
   if (!hasLine1 && line2.length === 0) return null;
+
+  const sources: { name: string; price: number; count?: number }[] = [];
+  if (avgSoldPrice != null && avgSoldPrice > 0) sources.push({ name: 'eBay', price: avgSoldPrice, count: soldCount ?? undefined });
+  if (stockxLastSale) sources.push({ name: 'StockX', price: stockxLastSale });
+  if (mercariAvgSold) sources.push({ name: 'Mercari', price: mercariAvgSold });
+  if (amazonPrice) sources.push({ name: 'Amazon', price: amazonPrice });
+  const siteCount = sourcesCount ?? (sources.length > 0 ? sources.length : null);
+
   return (
     <div className="space-y-0.5">
       {hasLine1 && (
         <div className="text-xs" style={{ color: '#9CA3AF' }}>
           Avg sold <strong style={{ color: '#E5E7EB' }}>${avgSoldPrice!.toFixed(0)}</strong>
-          {soldCount != null && <> &middot; {soldCount} comps{sourcesCount != null ? ` · ${sourcesCount} ${sourcesCount === 1 ? 'site' : 'sites'}` : ''}</>}
+          {soldCount != null && (
+            <> &middot; {soldCount} comps{siteCount != null ? (
+              <> &middot; <button
+                onClick={(e) => { e.stopPropagation(); setSourcesExpanded(v => !v); }}
+                style={{ color: '#60A5FA', background: 'none', border: 'none', padding: 0, fontSize: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+              >{siteCount} {siteCount === 1 ? 'site' : 'sites'}</button></>
+            ) : ''}</>
+          )}
+        </div>
+      )}
+      {sourcesExpanded && sources.length > 0 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs mt-0.5">
+          {sources.map(s => (
+            <span key={s.name} style={{ color: '#6B7280' }}>
+              {s.name} <strong style={{ color: '#D1D5DB' }}>${s.price.toFixed(0)}</strong>{s.count != null ? ` (${s.count})` : ''}
+            </span>
+          ))}
         </div>
       )}
       {line2.length > 0 && (
@@ -602,6 +631,9 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
                   netProfit={activeComps.netProfit}
                   estDaysToSell={activeComps.daysToSell}
                   annROI={activeComps.capitalEfficiency}
+                  stockxLastSale={activeComps.stockxLastSale}
+                  mercariAvgSold={activeComps.mercariAvgSold}
+                  amazonPrice={activeComps.amazonPrice}
                 />
               </div>
               {activeComps.platformRecommendation && (
@@ -677,22 +709,14 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
           {!comps && deal.avgSoldPrice > 0 && (
             <div className="rounded-xl px-3 py-2 mb-2" style={{ background: deal.flipVerdict === 'buy' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(251,191,36,0.2)' }}>
               <span className="text-xs font-bold block mb-1" style={{ color: deal.flipVerdict === 'buy' ? '#4ADE80' : '#FCD34D' }}>{deal.flipVerdict === 'buy' ? '✓ BUY' : '~ MAYBE'}</span>
-              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={null} netProfit={deal.flipNetProfit > 0 ? deal.flipNetProfit : null} estDaysToSell={deal.estDaysToSell} annROI={deal.estDaysToSell != null && deal.estDaysToSell >= 1 && deal.flipNetProfit > 0 ? Math.round((deal.flipNetProfit / deal.price / deal.estDaysToSell) * 365 * 100) : null} />
-              {(deal.stockxLastSale || deal.mercariAvgSold || deal.amazonPrice) && (
-                <div className="flex flex-wrap gap-2 mt-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  {deal.avgSoldPrice > 0 && <span className="text-xs" style={{ color: '#6B7280' }}>eBay <span className="font-semibold" style={{ color: '#D1D5DB' }}>${deal.avgSoldPrice.toFixed(0)}</span> ({deal.soldCount})</span>}
-                  {deal.stockxLastSale && <span className="text-xs" style={{ color: '#6B7280' }}>StockX <span className="font-semibold" style={{ color: '#D1D5DB' }}>${deal.stockxLastSale.toFixed(0)}</span></span>}
-                  {deal.mercariAvgSold && <span className="text-xs" style={{ color: '#6B7280' }}>Mercari <span className="font-semibold" style={{ color: '#D1D5DB' }}>${deal.mercariAvgSold.toFixed(0)}</span></span>}
-                  {deal.amazonPrice && <span className="text-xs" style={{ color: '#6B7280' }}>Amazon <span className="font-semibold" style={{ color: '#D1D5DB' }}>${deal.amazonPrice.toFixed(0)}</span></span>}
-                </div>
-              )}
+              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={deal.sourcesCount} netProfit={deal.flipNetProfit > 0 ? deal.flipNetProfit : null} estDaysToSell={deal.estDaysToSell} annROI={deal.estDaysToSell != null && deal.estDaysToSell >= 1 && deal.flipNetProfit > 0 ? Math.round((deal.flipNetProfit / deal.price / deal.estDaysToSell) * 365 * 100) : null} stockxLastSale={deal.stockxLastSale} mercariAvgSold={deal.mercariAvgSold} amazonPrice={deal.amazonPrice} />
             </div>
           )}
           {/* Live Check Flip result */}
           {comps && comps.noData && deal.avgSoldPrice > 0 && (
             <div className="rounded-xl px-3 py-2 mb-2" style={{ background: deal.flipVerdict === 'buy' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(251,191,36,0.2)' }}>
               <span className="text-xs font-bold block mb-1" style={{ color: deal.flipVerdict === 'buy' ? '#4ADE80' : '#FCD34D' }}>{deal.flipVerdict === 'buy' ? '✓ BUY' : '~ MAYBE'} <span className="font-normal opacity-60">(email data)</span></span>
-              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={null} netProfit={deal.flipNetProfit} estDaysToSell={deal.estDaysToSell} annROI={null} />
+              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={deal.sourcesCount} netProfit={deal.flipNetProfit} estDaysToSell={deal.estDaysToSell} annROI={null} stockxLastSale={deal.stockxLastSale} mercariAvgSold={deal.mercariAvgSold} amazonPrice={deal.amazonPrice} />
             </div>
           )}
           {comps && comps.noData && deal.avgSoldPrice <= 0 && (
@@ -706,17 +730,8 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
                 <VerdictBadge verdict={comps.verdict} />
               </div>
               <div className="mb-2">
-                <StatsCluster avgSoldPrice={comps.avgSoldPrice} soldCount={comps.soldCount} sourcesCount={null} netProfit={comps.netProfit} estDaysToSell={comps.daysToSell} annROI={comps.capitalEfficiency} />
+                <StatsCluster avgSoldPrice={comps.avgSoldPrice} soldCount={comps.soldCount} sourcesCount={comps.sourcesCount} netProfit={comps.netProfit} estDaysToSell={comps.daysToSell} annROI={comps.capitalEfficiency} stockxLastSale={comps.stockxLastSale} mercariAvgSold={comps.mercariAvgSold} amazonPrice={comps.amazonPrice} />
               </div>
-              {/* Per-source breakdown */}
-              {(comps.stockxLastSale || comps.mercariAvgSold || comps.amazonPrice) && (
-                <div className="flex flex-wrap gap-2 mb-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span className="text-xs" style={{ color: '#6B7280' }}>eBay avg <span className="font-semibold text-white">${comps.avgSoldPrice.toFixed(0)}</span> ({comps.soldCount})</span>
-                  {comps.stockxLastSale && <span className="text-xs" style={{ color: '#6B7280' }}>StockX <span className="font-semibold text-white">${comps.stockxLastSale.toFixed(0)}</span></span>}
-                  {comps.mercariAvgSold && <span className="text-xs" style={{ color: '#6B7280' }}>Mercari <span className="font-semibold text-white">${comps.mercariAvgSold.toFixed(0)}</span></span>}
-                  {comps.amazonPrice && <span className="text-xs" style={{ color: '#6B7280' }}>Amazon <span className="font-semibold text-white">${comps.amazonPrice.toFixed(0)}</span></span>}
-                </div>
-              )}
               {comps.reasoning && <p className="text-xs leading-relaxed" style={{ color: '#9CA3AF' }}>{comps.reasoning}</p>}
             </div>
           )}
@@ -1448,6 +1463,9 @@ function DealsPageContent() {
                         netProfit={pickedFlip.netProfit}
                         estDaysToSell={pickedFlip.daysToSell}
                         annROI={pickedFlip.capitalEfficiency}
+                        stockxLastSale={pickedFlip.stockxLastSale}
+                        mercariAvgSold={pickedFlip.mercariAvgSold}
+                        amazonPrice={pickedFlip.amazonPrice}
                       />
                     </div>
                   )}
@@ -1723,6 +1741,9 @@ function DealsPageContent() {
                             netProfit={deal.flipNetProfit}
                             estDaysToSell={deal.estDaysToSell}
                             annROI={deal.estDaysToSell != null && deal.estDaysToSell >= 1 && deal.flipNetProfit > 0 ? Math.round((deal.flipNetProfit / deal.price / deal.estDaysToSell) * 365 * 100) : null}
+                            stockxLastSale={deal.stockxLastSale}
+                            mercariAvgSold={deal.mercariAvgSold}
+                            amazonPrice={deal.amazonPrice}
                           />
                         </div>
                         <div className="text-xs mb-2" style={{ color: '#6B7280' }}>{deal.condition}</div>
@@ -1830,6 +1851,9 @@ function DealsPageContent() {
                               netProfit={trendingFlips[item.itemId].netProfit}
                               estDaysToSell={trendingFlips[item.itemId].daysToSell}
                               annROI={trendingFlips[item.itemId].capitalEfficiency}
+                              stockxLastSale={trendingFlips[item.itemId].stockxLastSale}
+                              mercariAvgSold={trendingFlips[item.itemId].mercariAvgSold}
+                              amazonPrice={trendingFlips[item.itemId].amazonPrice}
                             />
                           </div>
                         ) : (

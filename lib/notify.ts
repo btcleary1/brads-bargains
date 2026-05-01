@@ -114,8 +114,8 @@ function flipRow(flip: FlipData, annROI?: number | null): string {
       ${flip.estDaysToSell != null ? `<span style="font-size:11px;color:#64748B;">~${flip.estDaysToSell}d to sell</span>` : ''}
       ${annROI != null && annROI > 0 && annROI <= 2000 ? `<span style="font-size:11px;color:${roiColor};">${annROI}% ann. ROI</span>` : ''}
     </div>
-    ${flip.avgSoldPrice > 0 ? `<div style="font-size:11px;color:#475569;margin-bottom:${sourceParts.length > 1 ? '4' : '0'}px;">Avg sold <strong>$${flip.avgSoldPrice.toFixed(0)}</strong> &middot; ${flip.soldCount} comps</div>` : ''}
-    ${sourceParts.length > 1 ? `<div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;border-top:1px solid ${verdictBorder};">${sourceParts.join('<span style="color:#CBD5E1;">&nbsp;·&nbsp;</span>')}</div>` : ''}
+    ${flip.avgSoldPrice > 0 ? `<div style="font-size:11px;color:#475569;margin-bottom:${sourceParts.length >= 1 ? '4' : '0'}px;">Avg sold <strong>$${flip.avgSoldPrice.toFixed(0)}</strong> &middot; ${flip.soldCount} comps</div>` : ''}
+    ${sourceParts.length >= 1 ? `<div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;border-top:1px solid ${verdictBorder};">${sourceParts.join('<span style="color:#CBD5E1;">&nbsp;·&nbsp;</span>')}</div>` : ''}
   </div>`;
 }
 
