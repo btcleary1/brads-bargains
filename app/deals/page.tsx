@@ -315,22 +315,31 @@ function StatsCluster({
   if (amazonPrice) sources.push({ name: 'Amazon', price: amazonPrice });
   const siteCount = sourcesCount ?? (sources.length > 0 ? sources.length : null);
 
+  const multiSource = sources.length > 1;
+
   return (
     <div className="space-y-0.5">
       {hasLine1 && (
         <div className="text-xs" style={{ color: '#9CA3AF' }}>
           Avg sold <strong style={{ color: '#E5E7EB' }}>${avgSoldPrice!.toFixed(0)}</strong>
           {soldCount != null && (
-            <> &middot; {soldCount} comps{siteCount != null ? (
-              <> &middot; <button
-                onClick={(e) => { e.stopPropagation(); setSourcesExpanded(v => !v); }}
-                style={{ color: '#60A5FA', background: 'none', border: 'none', padding: 0, fontSize: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
-              >{siteCount} {siteCount === 1 ? 'site' : 'sites'}</button></>
-            ) : ''}</>
+            <> &middot; {soldCount} comps
+              {sources.length === 1 && (
+                <> &middot; <span style={{ color: '#6B7280' }}>
+                  {sources[0].name}{sources[0].count != null ? ` (${sources[0].count})` : ''}
+                </span></>
+              )}
+              {multiSource && (
+                <> &middot; <button
+                  onClick={(e) => { e.stopPropagation(); setSourcesExpanded(v => !v); }}
+                  style={{ color: '#60A5FA', background: 'none', border: 'none', padding: 0, fontSize: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+                >{sources.length} sites {sourcesExpanded ? '▲' : '▼'}</button></>
+              )}
+            </>
           )}
         </div>
       )}
-      {sourcesExpanded && sources.length > 0 && (
+      {sourcesExpanded && multiSource && (
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs mt-0.5">
           {sources.map(s => (
             <span key={s.name} style={{ color: '#6B7280' }}>
