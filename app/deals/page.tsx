@@ -875,7 +875,12 @@ function DealsPageContent() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => { if (r.status === 401) router.replace('/login'); }).catch(() => { /* network error — don't log out */ });
+    fetch('/api/auth/me').then(r => {
+      if (r.status === 401) {
+        const dest = window.location.pathname + window.location.search;
+        router.replace(`/login?redirect=${encodeURIComponent(dest)}`);
+      }
+    }).catch(() => { /* network error — don't log out */ });
 
     // Check if user has set category preferences; also load default price range
     fetch('/api/prefs').then(r => r.ok ? r.json() : {}).then((p: any) => {

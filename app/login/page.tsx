@@ -11,6 +11,10 @@ type Stage = 'login' | 'register-passkey';
 function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const redirectTo = (() => {
+    const r = searchParams.get('redirect') ?? '';
+    return r.startsWith('/') && !r.startsWith('//') ? r : '/deals';
+  })();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -41,12 +45,12 @@ function LoginPage() {
         .then(r => r.json())
         .then(d => {
           if (d.registered) {
-            window.location.href = '/deals';
+            window.location.href = redirectTo;
           } else {
             setStage('register-passkey');
           }
         })
-        .catch(() => router.push('/deals'));
+        .catch(() => router.push(redirectTo));
     }
   }, []);
 
@@ -65,7 +69,7 @@ function LoginPage() {
         const statusRes = await fetch('/api/auth/webauthn/status');
         const statusData = await statusRes.json();
         if (statusData.registered) {
-          window.location.href = '/deals';
+          window.location.href = redirectTo;
         } else {
           setStage('register-passkey');
         }
@@ -93,7 +97,7 @@ function LoginPage() {
       });
       const verData = await verRes.json();
       if (verRes.ok) {
-        window.location.href = '/deals';
+        window.location.href = redirectTo;
       } else {
         setError(verData.error || 'Setup failed.');
       }
@@ -123,7 +127,7 @@ function LoginPage() {
       });
       const result = await verRes.json();
       if (verRes.ok) {
-        window.location.href = '/deals';
+        window.location.href = redirectTo;
       } else {
         setBiometricError(result.error || 'Biometric sign-in failed.');
       }
@@ -170,7 +174,7 @@ function LoginPage() {
             Set Up Face ID / Touch ID
           </button>
           <button
-            onClick={() => router.push('/deals')}
+            onClick={() => router.push(redirectTo)}
             className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-300 transition-colors"
           >
             Skip for now
@@ -222,7 +226,7 @@ function LoginPage() {
         {/* Google button — prominent in browser, subtle in standalone/PWA */}
         <div className="mb-5">
           <a
-            href="/api/auth/google"
+            href={redirectTo !== '/deals' ? `/api/auth/google?redirect=${encodeURIComponent(redirectTo)}` : '/api/auth/google'}
             className="w-full py-3.5 font-semibold text-sm flex items-center justify-center gap-2.5 rounded-2xl transition-all"
             style={isStandalone ? {
               background: 'rgba(255,255,255,0.09)',

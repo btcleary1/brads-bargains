@@ -37,6 +37,8 @@ async function getGoogleUserInfo(accessToken: string): Promise<{ email: string; 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
   const error = req.nextUrl.searchParams.get('error');
+  const state = req.nextUrl.searchParams.get('state') ?? '';
+  const safeRedirect = state.startsWith('/') && !state.startsWith('//') ? state : '';
 
   if (error || !code) {
     return NextResponse.redirect(`${APP_URL}/login?error=google_cancelled`);
@@ -67,7 +69,10 @@ export async function GET(req: NextRequest) {
     await markGoogleAuth(user.userId);
 
     const safeName = user.name.replace(/[^\u0000-\u00FF]/g, '').trim() || user.email;
-    const res = NextResponse.redirect(`${APP_URL}/login?setup-passkey=1`);
+    const loginDest = safeRedirect
+      ? `${APP_URL}/login?setup-passkey=1&redirect=${encodeURIComponent(safeRedirect)}`
+      : `${APP_URL}/login?setup-passkey=1`;
+    const res = NextResponse.redirect(loginDest);
     setSessionCookie(res, {
       userId: user.userId,
       email: user.email,
