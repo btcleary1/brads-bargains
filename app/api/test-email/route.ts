@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendDailyDigest, FlipData } from '@/lib/notify';
+import { getUserByEmail } from '@/lib/users';
+import { r2Put } from '@/lib/r2';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +51,40 @@ export async function GET(req: NextRequest) {
 
   try {
     await sendDailyDigest([sampleItem], to, aiPick, flipMap);
+
+    // Write digest cache so the app shows the item when navigating from the email
+    const user = await getUserByEmail(to).catch(() => null);
+    if (user) {
+      const cache = {
+        generatedAt: new Date().toISOString(),
+        aiPick,
+        aiPickItemId: 'test-001',
+        items: [{
+          itemId: 'test-001',
+          title: sampleItem.title,
+          price: sampleItem.price,
+          marketPrice: sampleItem.marketPrice,
+          discountPct: sampleItem.discountPct,
+          condition: sampleItem.condition,
+          imageUrl: sampleItem.imageUrl,
+          itemUrl: sampleItem.itemUrl,
+          category: sampleItem.category,
+          shippingCost: sampleItem.shippingCost,
+          flipVerdict: flipData.verdict,
+          avgSoldPrice: flipData.avgSoldPrice,
+          soldCount: flipData.soldCount,
+          flipNetProfit: flipData.netProfit,
+          flipMarginPct: flipData.marginPct,
+          estDaysToSell: flipData.estDaysToSell ?? null,
+          sourcesCount: flipData.sourcesCount ?? null,
+          stockxLastSale: flipData.stockxLastSale ?? null,
+          mercariAvgSold: flipData.mercariAvgSold ?? null,
+          amazonPrice: flipData.amazonPrice ?? null,
+        }],
+      };
+      await r2Put(`deal-wiz/digest-user-${user.userId}.json`, JSON.stringify(cache));
+    }
+
     return NextResponse.json({ sent: true, to });
   } catch (err) {
     return NextResponse.json({ sent: false, error: String(err) });
