@@ -1,3 +1,6 @@
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {};
   const title = data.title || "Brad's Bargains";
@@ -13,15 +16,20 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const rawUrl = event.notification.data?.url || '/deals';
-  // iOS requires an absolute URL for clients.openWindow
   const targetUrl = rawUrl.startsWith('http') ? rawUrl : `${self.location.origin}${rawUrl}`;
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      for (const client of windowClients) {
-        if ('navigate' in client) {
-          return client.navigate(targetUrl).then(c => c?.focus());
+      // Find an existing window on this origin
+      const existing = windowClients.find(c => c.url.startsWith(self.location.origin));
+      if (existing) {
+        // navigate() is Chrome-only — iOS only supports focus()
+        if ('navigate' in existing) {
+          return existing.navigate(targetUrl).then(c => c && c.focus());
         }
+        return existing.focus();
       }
+      // No existing window — open a new one
       return clients.openWindow(targetUrl);
     })
   );
