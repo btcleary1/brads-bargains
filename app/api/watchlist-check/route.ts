@@ -16,7 +16,7 @@ async function sendWatchlistAlert(
   toEmail: string,
   alerts: { query: string; deals: EbayItem[] }[]
 ): Promise<void> {
-  const apiKey = (process.env.SENDGRID_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
+  const apiKey = (process.env.RESEND_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
 
   const rows = alerts.flatMap(({ query, deals }) =>
     deals.map(d => {
@@ -49,14 +49,14 @@ async function sendWatchlistAlert(
 
   const totalDeals = alerts.reduce((n, a) => n + a.deals.length, 0);
 
-  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+  const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      personalizations: [{ to: [{ email: toEmail }] }],
-      from: { name: "Brad's Bargains", email: 'btcleary1@gmail.com' },
+      from: "Brad's Bargains <onboarding@resend.dev>",
+      to: toEmail,
       subject: `Watchlist Alert — ${totalDeals} new deal${totalDeals > 1 ? 's' : ''} found`,
-      content: [{ type: 'text/html', value: `<!DOCTYPE html><html>
+      html: `<!DOCTYPE html><html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:28px 16px;">
@@ -78,13 +78,13 @@ async function sendWatchlistAlert(
     </p>
   </td></tr>
 </table></td></tr></table>
-</body></html>` }],
+</body></html>`,
     }),
   });
 
   if (res.status >= 300) {
     const err = await res.text();
-    throw new Error(`SendGrid error ${res.status}: ${err}`);
+    throw new Error(`Resend error ${res.status}: ${err}`);
   }
 }
 
