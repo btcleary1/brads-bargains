@@ -96,7 +96,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ skipped: true, reason: 'eBay not configured' });
   }
 
-  const users = await getAllUsers();
+  let users: Awaited<ReturnType<typeof getAllUsers>>;
+  try { users = await getAllUsers(); }
+  catch (err) {
+    console.error('[watchlist-check] getAllUsers failed:', err);
+    return NextResponse.json({ skipped: true, error: String(err) }); // 200 — no retry
+  }
   const summary: { userId: string; alerts: number }[] = [];
 
   for (const user of users) {

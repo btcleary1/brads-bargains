@@ -69,10 +69,11 @@ export async function GET(req: NextRequest) {
   // ?to= overrides for manual testing; otherwise sends to all registered users
   const toOverride = req.nextUrl.searchParams.get('to') || null;
 
-  // Claim today's slot immediately — prevents duplicate sends if the function
-  // times out mid-run and Vercel retries the cron invocation.
+  // Claim today's slot immediately — prevents duplicate sends if Vercel retries
+  // a failed/timed-out cron invocation (Vercel retries non-2xx cron responses).
   if (!force && !toOverride) {
-    await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey() }));
+    try { await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey() })); }
+    catch (e) { console.warn('[digest] Could not write sent-today guard:', e); }
   }
 
   try {
@@ -496,7 +497,8 @@ export async function GET(req: NextRequest) {
     const actualSendCount = userDigests.filter((d, i) => sendResults[i].status === 'fulfilled' && d.deals.length > 0).length;
 
     if (successCount === 0 || actualSendCount === 0) {
-      return NextResponse.json({ sent: false, reason: actualSendCount === 0 ? 'No deals to send' : 'All emails failed', errors }, { status: 500 });
+      // Return 200 so Vercel does not retry the cron — a 5xx triggers automatic retries
+      return NextResponse.json({ sent: false, reason: actualSendCount === 0 ? 'No deals to send' : 'All emails failed', errors });
     }
 
     // Record send date to prevent duplicates
@@ -520,6 +522,8 @@ export async function GET(req: NextRequest) {
       })),
     });
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    // Return 200 so Vercel does not retry the cron — retries cause duplicate emails
+    console.error('[digest] Unhandled error:', err);
+    return NextResponse.json({ sent: false, error: String(err) });
   }
 }
