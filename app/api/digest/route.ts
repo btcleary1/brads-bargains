@@ -4,7 +4,7 @@ import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { searchDeals, EbayItem, filterLiveItems } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
 import { topDeals, sellabilityScore } from '@/lib/deal-score';
-import { sendDailyDigest, FlipData } from '@/lib/notify';
+import { sendDailyDigest, FlipData, buildSpotlightUrl } from '@/lib/notify';
 import { sendSMSDigest } from '@/lib/sms';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getAllUsers, getUserByEmail } from '@/lib/users';
@@ -105,15 +105,10 @@ export async function GET(req: NextRequest) {
     const itemPool = nonRefurb.length >= 10 ? nonRefurb : allItems;
     console.log(`[digest] non-refurb items: ${nonRefurb.length} of ${allItems.length}`);
 
-    // Pull a large candidate pool — need enough that after comps filtering we still have 5 good deals
-    let candidates = topDeals(itemPool, 40, 55);
-    if (candidates.length < 10) {
-      for (let pct = 54; pct >= 40 && candidates.length < 10; pct -= 2) {
-        candidates = topDeals(itemPool, 40, pct);
-      }
-    }
-
-    // If eBay returned nothing (API down/rate-limited), fall back to mock so email always fires
+    // Pull a large candidate pool — eBay Browse API rarely includes seller-claimed original prices,
+    // so we can't pre-filter by discountPct. Instead take the top 40 by sellability score and let
+    // multi-source comps determine actual flip value. Fall back to mock only if eBay is fully down.
+    let candidates = topDeals(itemPool, 40, 0);
     if (candidates.length === 0) {
       console.warn('[digest] No qualifying deals from eBay — falling back to MOCK_DEALS');
       candidates = topDeals(MOCK_DEALS, 40, 40);
@@ -129,12 +124,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Sort by sellabilityScore, take top 30 for comp checking
+    // Sort by sellabilityScore, take top 50 for comp checking — larger pool = more qualifying deals after profit filter
     candidates = [...candidates]
       .sort((a, b) => sellabilityScore(b, candidates) - sellabilityScore(a, candidates))
-      .slice(0, 30);
+      .slice(0, 50);
 
-    // Run multi-source comps on all 30 candidates in parallel
+    // Run multi-source comps on all 50 candidates in parallel
     const flipResults = await Promise.allSettled(
       candidates.map(item => getMultiSourceComps(item.title, 12))
     );
@@ -245,7 +240,8 @@ export async function GET(req: NextRequest) {
         const r = prefsResults[i];
         if (r.status !== 'fulfilled') continue;
         const prefs = r.value;
-        const recipientEmail = prefs.notificationEmail || users[i].email;
+        // Only send to users who explicitly opted in via Settings — never use registration email as fallback
+        const recipientEmail = prefs.notificationEmail;
         if (!recipientEmail) continue;
 
         const count = prefs.digestCount ?? 5;
@@ -270,9 +266,14 @@ export async function GET(req: NextRequest) {
           if (pool.length === 0) pool = allItems; // fallback to all if filter yields nothing
         }
 
-        // Build a large candidate pool for this user, run comps, pick best profitable deals
-        let userPool = topDeals(pool, 40, 50);
-        if (userPool.length < 10) userPool = topDeals(pool, 40, 40);
+        // Build a large candidate pool for this user — pass prefs so maxTechAge etc. are respected
+        const userFilterPrefs = {
+          maxTechAgeYears: prefs.filterPrefs?.maxTechAgeYears ?? 2,
+          minPrice: prefs.defaultPriceMin,
+          maxPrice: prefs.defaultPriceMax,
+        };
+        let userPool = topDeals(pool, 40, 0, userFilterPrefs);
+        if (userPool.length === 0) userPool = [...candidates];
 
         if (prefs.watchlistQueries && prefs.watchlistQueries.length > 0) {
           const personalResults = await Promise.allSettled(prefs.watchlistQueries.map(q => searchDeals(q, 20)));
@@ -321,30 +322,36 @@ export async function GET(req: NextRequest) {
       flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null });
     });
 
-    // Apply strict positive-profit filter to each user's pool, then take top 5
+    // Minimum net profit to include a deal in the digest
+    const MIN_NET_PROFIT = 15;
+
+    // Apply strict profit filter — never pad with SKIP or low-margin deals
     userDigests = userDigests.map(d => {
-      const profitable = d.deals
+      const finalDeals = d.deals
         // Apply user's maxDaysToSell — null estDaysToSell always passes through
         .filter(item => { const flip = flipMap.get(item.itemId); return !flip || flip.estDaysToSell == null || flip.estDaysToSell <= d.maxDaysToSell; })
-        .filter(i => (flipMap.get(i.itemId)?.netProfit ?? -1) > 0)
+        // Require meaningful net profit and exclude explicit SKIP verdicts
+        .filter(i => {
+          const flip = flipMap.get(i.itemId);
+          if (!flip) return false; // no comp data = exclude
+          if (flip.verdict === 'skip') return false;
+          return flip.netProfit >= MIN_NET_PROFIT;
+        })
         .sort((a, b) => {
           const order = { buy: 0, maybe: 1, skip: 2 };
           const af = flipMap.get(a.itemId), bf = flipMap.get(b.itemId);
           const av = af?.verdict ?? 'maybe', bv = bf?.verdict ?? 'maybe';
           if (av !== bv) return (order[av] ?? 1) - (order[bv] ?? 1);
-          // Within same verdict tier, rank by speed-adjusted profit score
           return dealScore(bf ?? { verdict: bv as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 })
                - dealScore(af ?? { verdict: av as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 });
-        });
-      // Fill to 5 — profitable first, then fill with remaining by discount
-      const profitableIds = new Set(profitable.map(i => i.itemId));
-      const fillers = d.deals
-        .filter(i => !profitableIds.has(i.itemId))
-        .sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0));
-      const finalDeals = [...profitable, ...fillers].slice(0, 5);
-      console.log(`[digest] user ${d.userId} final deals profits: ${finalDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
+        })
+        .slice(0, 5);
+      console.log(`[digest] user ${d.userId} qualified deals: ${finalDeals.length}, profits: ${finalDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
       return { ...d, deals: finalDeals };
     });
+
+    // Drop users with no qualifying deals — better to send nothing than junk
+    userDigests = userDigests.filter(d => d.deals.length > 0);
 
     // Generate per-user AI pick from their actual deal list
     const generateAiPick = async (deals: typeof best5): Promise<{ text: string; itemId: string | null }> => {
@@ -414,17 +421,25 @@ export async function GET(req: NextRequest) {
       aiPickItemId: aiPickResults[i].status === 'fulfilled' ? (aiPickResults[i] as PromiseFulfilledResult<{ text: string; itemId: string | null }>).value?.itemId ?? null : null,
     }));
 
-    // Send emails with per-user AI pick — retry once on transient failure
-    const sendWithRetry = async (email: string, deals: typeof best5, aiPick?: string): Promise<void> => {
-      try {
-        await sendDailyDigest(deals, email, aiPick, flipMap);
-      } catch (e) {
-        console.warn(`[digest] email send failed for ${email}, retrying in 3s:`, e);
-        await new Promise(r => setTimeout(r, 3000));
-        await sendDailyDigest(deals, email, aiPick, flipMap);
-      }
-    };
-    const sendResults = await Promise.allSettled(userDigests.map(({ email, deals, aiPick }) => sendWithRetry(email, deals, aiPick)));
+    // Deduplicate by email — if 2 user records share the same email, only send once
+    const seenEmails = new Set<string>();
+    userDigests = userDigests.filter(d => {
+      const key = d.email.toLowerCase();
+      if (seenEmails.has(key)) return false;
+      seenEmails.add(key);
+      return true;
+    });
+
+    // Send emails sequentially with a small delay to stay under Resend's 5 req/s rate limit
+    const sendResults: PromiseSettledResult<void>[] = [];
+    for (const { email, deals, aiPick } of userDigests) {
+      const result = await sendDailyDigest(deals, email, aiPick, flipMap).then(
+        () => ({ status: 'fulfilled' as const, value: undefined }),
+        (reason) => ({ status: 'rejected' as const, reason })
+      );
+      sendResults.push(result);
+      await new Promise(r => setTimeout(r, 250)); // 250ms between sends = ~4 req/s
+    }
 
     // Save per-user digest cache so the app shows the same items as the email
     const toDigestItems = (deals: typeof best5) => deals.map(item => {
@@ -460,8 +475,8 @@ export async function GET(req: NextRequest) {
       await r2Put(`deal-wiz/digest-user-${userId}.json`, JSON.stringify(cache));
     }));
 
-    // Send push notifications — body shows user's actual #1 deal
-    const allUsersForPush = toOverride ? [] : await getAllUsers();
+    // Send push notifications — URL is a spotlight link so tapping opens the specific deal
+    const allUsersForPush = await getAllUsers();
     await Promise.allSettled(allUsersForPush.map(async u => {
       try {
         const prefs = await getUserPrefs(u.userId);
@@ -469,21 +484,16 @@ export async function GET(req: NextRequest) {
         if (!subs.length) return;
         const userDigest = userMap.get(u.userId);
         const topDeal = userDigest?.deals[0] ?? best5[0];
-        const body = topDeal
-          ? `${topDeal.title.slice(0, 60)} — $${topDeal.price} (${topDeal.discountPct ?? 0}% off)`
-          : "Today's top flip deals are ready.";
-        try {
-          await sendPushToSubscriptions(subs, "Brad's Bargains — Daily Deals", body, '/deals?view=digest');
-        } catch (e1) {
-          // Retry push once after 2s
-          await new Promise(r => setTimeout(r, 2000));
-          await sendPushToSubscriptions(subs, "Brad's Bargains — Daily Deals", body, '/deals?view=digest');
-        }
+        if (!topDeal) return;
+        const topFlip = flipMap.get(topDeal.itemId);
+        const body = `${topDeal.title.slice(0, 60)} — $${topDeal.price} (${topDeal.discountPct ?? 0}% off)`;
+        const url = buildSpotlightUrl(topDeal, topFlip);
+        await sendPushToSubscriptions(subs, "Brad's Bargains — Daily Deals", body, url).catch(() => {});
       } catch { /* push failure never blocks email */ }
     }));
 
     // Send SMS to all users with a phone number configured
-    const smsUsers = toOverride ? [] : await getAllUsers();
+    const smsUsers = await getAllUsers();
     await Promise.allSettled(smsUsers.map(async u => {
       try {
         const prefs = await getUserPrefs(u.userId);
