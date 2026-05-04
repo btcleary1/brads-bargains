@@ -31,6 +31,9 @@ const JUNK_TITLE_PATTERNS = /for parts|not working|broken|cracked screen|read de
 // Accessories and low-value add-ons not worth flipping
 const ACCESSORY_PATTERNS = /\bstrap\b|watch band|\bcase\b|\bcover\b|screen protector|tempered glass|charger cable|\bcord\b|\badapter\b|car mount|phone mount|stand holder|game holder|card holder|lamp attachment|searchlight|burst light|\blight\b.*drone|drone.*\blight\b|\bskin\b.*phone|phone.*\bskin\b|keycap|wrist rest|\bposter\b/i;
 
+// Clothing and fashion — not a category we cover
+const FASHION_PATTERNS = /\bshoes?\b|\bheels?\b|\bsneakers?\b|\bboots?\b|\bsandals?\b|\bloafers?\b|\bflats?\b|\bpumps?\b|\bdress\b|\bblouse\b|\bjacket\b|\bcoat\b|\bsuit\b|\bjeans?\b|\bpants?\b|\bskirt\b|\bversace\b|\bgucci\b|\bprada\b|\blouisvuitton\b|\bchanel\b|\bhermes\b|\bburberry\b|\bbag\b.*leather|\bhandbag\b|\bpurse\b|\btote\b/i;
+
 // Heavy/bulky items not worth storing or shipping
 const BULKY_PATTERNS = /\bconsole\b|desktop|monitor|printer|treadmill|bicycle|bike\b|guitar|amplifier|furniture|mattress|refrigerator|washer|dryer|dishwasher|television|\bsofa\b|\bcouch\b|elliptical|weight bench|kayak|surfboard|scooter|electric bike|e-bike|hoverboard/i;
 
@@ -257,6 +260,7 @@ export function isJunk(item: EbayItem, prefs?: FilterPrefs): boolean {
   if (!item.imageUrl) return true;
   if (JUNK_TITLE_PATTERNS.test(item.title)) return true;
   if (ACCESSORY_PATTERNS.test(item.title)) return true;
+  if (FASHION_PATTERNS.test(item.title)) return true;
   if (BULKY_PATTERNS.test(item.title)) return true;
   if (/refurbished/i.test(item.title)) return true;
   if (/\bpoor\b/i.test(item.title)) return true;
