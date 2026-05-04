@@ -113,9 +113,11 @@ function toEbayItem(raw: any): EbayItem {
     shippingCost: raw.shippingOptions?.[0]?.shippingCost
       ? parsePrice(raw.shippingOptions[0].shippingCost)
       : null,
-    localPickupOnly: Array.isArray(raw.buyingOptions)
-      ? raw.buyingOptions.includes('LOCAL_PICKUP') && !raw.shippingOptions?.length
-      : false,
+    localPickupOnly: (
+      (Array.isArray(raw.buyingOptions) && raw.buyingOptions.includes('LOCAL_PICKUP')) ||
+      /local\s*pick.?up only/i.test(raw.title ?? '') ||
+      (raw.shippingOptions?.length > 0 && raw.shippingOptions.every((s: any) => s.shippingServiceCode === 'LOCAL_PICKUP' || s.shippingCostType === 'NOT_SPECIFIED'))
+    ),
     listingType: raw.buyingOptions?.[0] ?? 'FIXED_PRICE',
     listingDate: raw.itemCreationDate ?? null,
     quantity: raw.estimatedAvailabilities?.[0]?.estimatedAvailableQuantity ?? null,
