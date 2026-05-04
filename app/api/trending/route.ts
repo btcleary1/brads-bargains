@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { getEbayToken } from '@/lib/ebay';
 import { checkRequestLimit } from '@/lib/rate-limit';
+import { r2Get, r2Put } from '@/lib/r2';
 
 export const runtime = 'nodejs';
 export const maxDuration = 90;
@@ -33,6 +34,8 @@ export interface TrendingResult {
 }
 
 const EBAY_API_BASE = 'https://api.ebay.com';
+const TRENDING_CACHE_KEY = 'deal-wiz/trending-cache.json';
+const TRENDING_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours — all users share one refresh
 
 async function searchTrending(query: string, maxResults = 20): Promise<TrendingItem[]> {
   const token = await getEbayToken();
@@ -119,16 +122,12 @@ async function searchTrending(query: string, maxResults = 20): Promise<TrendingI
 const TRENDING_QUERIES = [
   'iPhone 15 Pro',
   'PlayStation 5',
-  'NVIDIA RTX 4080',
   'MacBook Pro M3',
-  'Stanley tumbler',
   'Air Jordan 1',
   'Pokemon cards',
-  'Apple Watch Series 9',
   'Nintendo Switch OLED',
+  'Apple Watch Series 9',
   'DJI drone',
-  'Lego Star Wars',
-  'Dyson vacuum',
 ];
 
 export async function GET(req: NextRequest) {
@@ -140,6 +139,13 @@ export async function GET(req: NextRequest) {
 
   if (!process.env.EBAY_CLIENT_ID) {
     return NextResponse.json({ error: 'eBay API not configured' }, { status: 503 });
+  }
+
+  // Serve shared cache — all users get the same trending data, refreshed every 12 hours
+  const trendingCached = await r2Get<TrendingResult & { fetchedAt: string }>(TRENDING_CACHE_KEY);
+  if (trendingCached && trendingCached.items?.length > 0) {
+    const age = Date.now() - new Date(trendingCached.fetchedAt).getTime();
+    if (age < TRENDING_CACHE_TTL) return NextResponse.json(trendingCached);
   }
 
   try {
@@ -163,6 +169,8 @@ export async function GET(req: NextRequest) {
     const top = allItems.sort((a, b) => b.demandScore - a.demandScore).slice(0, 12);
 
     if (top.length === 0) {
+      // All searches returned nothing — serve stale cache if available, else empty
+      if (trendingCached?.items?.length) return NextResponse.json({ ...trendingCached, stale: true });
       return NextResponse.json({ items: [], summary: 'No trending items found right now.', fetchedAt: new Date().toISOString() });
     }
 
@@ -182,9 +190,15 @@ export async function GET(req: NextRequest) {
       if (text) summary = text;
     } catch { /* use default summary */ }
 
-    return NextResponse.json({ items: top, summary, fetchedAt: new Date().toISOString() } as TrendingResult);
+    const result: TrendingResult = { items: top, summary, fetchedAt: new Date().toISOString() };
+    await r2Put(TRENDING_CACHE_KEY, JSON.stringify(result)).catch(() => {});
+    return NextResponse.json(result);
 
   } catch (err: any) {
+    // eBay rate limited — serve stale cache if available
+    if (trendingCached?.items?.length && (String(err).includes('Too many requests') || String(err).includes('2001'))) {
+      return NextResponse.json({ ...trendingCached, stale: true });
+    }
     return NextResponse.json({ error: err.message || 'Trending search failed' }, { status: 500 });
   }
 }

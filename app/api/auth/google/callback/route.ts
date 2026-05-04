@@ -62,8 +62,9 @@ export async function GET(req: NextRequest) {
       logAudit({ timestamp: new Date().toISOString(), userId: user.userId, email: user.email, action: 'register', ip, details: 'google_oauth' });
     } else {
       logAudit({ timestamp: new Date().toISOString(), userId: user.userId, email: user.email, action: 'login_success', ip, details: 'google_oauth' });
-      await incrementLoginCount(user.userId);
     }
+    // Track login for both new and returning Google users
+    await incrementLoginCount(user.userId);
 
     // Stamp googleAuth flag so settings page can hide password section
     await markGoogleAuth(user.userId);

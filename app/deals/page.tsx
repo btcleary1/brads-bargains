@@ -818,7 +818,7 @@ function DealsPageContent() {
       } as BrowseDeal;
     } catch { return null; }
   })();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -853,6 +853,7 @@ function DealsPageContent() {
   const [personalizedRecs, setPersonalizedRecs] = useState<EbayItem[] | null>(null);
   const [recsLoading, setRecsLoading] = useState(false);
   const [recsKeywords, setRecsKeywords] = useState<string[]>([]);
+  const [recsIsDefaultFallback, setRecsIsDefaultFallback] = useState(false);
   const [ebayConnected, setEbayConnected] = useState(false);
   const [showPwaBanner, setShowPwaBanner] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -876,12 +877,19 @@ function DealsPageContent() {
     } finally { setFbLoading(false); }
   };
 
+
+  // Sync search state with URL — handles back/forward navigation and direct URL sharing
   useEffect(() => {
-    const dismissed = typeof window !== 'undefined' && localStorage.getItem('pwa-banner-dismissed');
-    const isStandalone = typeof window !== 'undefined' &&
-      (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
-    if (!dismissed && !isStandalone) setShowPwaBanner(true);
-  }, []);
+    const urlQ = searchParams.get('q') ?? '';
+    if (urlQ && urlQ !== query) {
+      setQuery(urlQ);
+      search(undefined, urlQ);
+    } else if (!urlQ && results) {
+      setResults(null);
+      setQuery('');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => {
@@ -899,13 +907,22 @@ function DealsPageContent() {
       if (p.defaultMinDiscount != null) setFilterPct(p.defaultMinDiscount);
       if (p.defaultSingleQtyOnly) setFilterSingleQty(true);
       setMaxDaysToSell(p.maxDaysToSell != null ? p.maxDaysToSell : 60);
-      const dismissed = typeof window !== 'undefined' && localStorage.getItem('onboarding-dismissed');
-      if (!dismissed && (!p.digestCategories || p.digestCategories.length === 0)) {
+      const onboardingDismissed = localStorage.getItem('onboarding-dismissed');
+      if (!onboardingDismissed && (!p.digestCategories || p.digestCategories.length === 0)) {
         setShowOnboarding(true);
       }
+      // PWA banner: only show if not dismissed server-side (account-wide) and not standalone
+      if (!p.pwaBannerDismissed) {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+        const localDismissed = localStorage.getItem('pwa-banner-dismissed');
+        if (!isStandalone && !localDismissed) setShowPwaBanner(true);
+      } else {
+        // Server says dismissed — sync to localStorage so future loads skip the API check
+        localStorage.setItem('pwa-banner-dismissed', '1');
+      }
     }).catch(() => {
-      const dismissed = typeof window !== 'undefined' && localStorage.getItem('onboarding-dismissed');
-      if (!dismissed) setShowOnboarding(true);
+      const onboardingDismissed = localStorage.getItem('onboarding-dismissed');
+      if (!onboardingDismissed) setShowOnboarding(true);
     });
 
     // Check eBay connection status independently (fast, not rate-limited)
@@ -914,19 +931,42 @@ function DealsPageContent() {
       .then((d: any) => { if (d?.connected) setEbayConnected(true); })
       .catch(() => {});
 
-    // Fetch personalized recommendations on page load
-    setRecsLoading(true);
-    fetch('/api/recommendations')
-      .then(r => r.ok ? r.json() : null)
-      .then((d: any) => {
-        if (d?.connected) {
-          setEbayConnected(true);
-          setPersonalizedRecs(d.recommendations ?? []);
-          setRecsKeywords(d.keywords ?? []);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setRecsLoading(false));
+    // Fetch personalized recommendations — use localStorage cache (5 min TTL) to avoid rate limits on refresh
+    const REC_CACHE_KEY = 'recs_cache_v1';
+    const REC_CACHE_TTL = 5 * 60 * 1000;
+    const cached = (() => { try { return JSON.parse(localStorage.getItem(REC_CACHE_KEY) ?? 'null'); } catch { return null; } })();
+    if (cached && Date.now() - cached.ts < REC_CACHE_TTL) {
+      if (!cached.isDefaultFallback) {
+        setEbayConnected(true);
+        setPersonalizedRecs(cached.recommendations ?? []);
+        setRecsKeywords(cached.keywords ?? []);
+        setRecsIsDefaultFallback(false);
+      }
+    } else {
+      setRecsLoading(true);
+      fetch('/api/recommendations')
+        .then(r => r.json().then(d => ({ ok: r.ok, status: r.status, d })))
+        .then(({ ok, d }) => {
+          if (ok && d?.connected && !d?.isDefaultFallback) {
+            setEbayConnected(true);
+            setPersonalizedRecs(d.recommendations ?? []);
+            setRecsKeywords(d.keywords ?? []);
+            setRecsIsDefaultFallback(false);
+            try { localStorage.setItem(REC_CACHE_KEY, JSON.stringify({ ts: Date.now(), recommendations: d.recommendations, keywords: d.keywords, isDefaultFallback: false })); } catch {}
+          } else if (ok && d?.connected && d?.isDefaultFallback) {
+            setRecsIsDefaultFallback(true);
+          } else if (!ok && d?.error) {
+            // Rate limited or error — show cached stale data if available, silently skip otherwise
+            if (cached?.recommendations && !cached?.isDefaultFallback) {
+              setEbayConnected(true);
+              setPersonalizedRecs(cached.recommendations);
+              setRecsKeywords(cached.keywords ?? []);
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => setRecsLoading(false));
+    }
 
     // Load trending and browse feed on mount in parallel
     setTrendingLoading(true);
@@ -966,7 +1006,13 @@ function DealsPageContent() {
       .then(d => { setBrowseItems(d.items ?? []); setBrowseGeneratedAt(d.generatedAt ?? null); })
       .catch(() => {})
       .finally(() => setBrowseLoading(false));
-  }, [router]);
+
+    // Auto-run search if ?q= is in the URL on initial page load (shared link / bookmark)
+    const initialQ = searchParams.get('q');
+    if (initialQ?.trim()) {
+      search(undefined, initialQ.trim());
+    }
+  }, [router]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!viewDigest) return;
@@ -1003,9 +1049,16 @@ function DealsPageContent() {
     tryScroll();
   }, [digestItems, digestItemId]);
 
-  const search = async (e?: React.FormEvent) => {
+  const search = async (e?: React.FormEvent, overrideQuery?: string) => {
     e?.preventDefault();
-    if (!query.trim()) return;
+    const q = overrideQuery ?? query;
+    if (!q.trim()) return;
+    if (!overrideQuery) {
+      // Push query into URL so back/forward cycles through search history
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('q', q.trim());
+      router.push(`/deals?${params.toString()}`);
+    }
     setLoading(true);
     setError('');
     setResults(null);
@@ -1017,9 +1070,21 @@ function DealsPageContent() {
     setBulkFlips({});
     setBulkPending(new Set());
     try {
-      const res = await fetch(`/api/deals?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Search failed.');
+      // Check localStorage cache (10 min TTL) before hitting eBay
+      const SEARCH_CACHE_TTL = 10 * 60 * 1000;
+      const cacheKey = `search_${q.trim().toLowerCase()}`;
+      const cachedSearch = (() => { try { return JSON.parse(localStorage.getItem(cacheKey) ?? 'null'); } catch { return null; } })();
+      let data: any;
+      if (cachedSearch && !cachedSearch.ebayRateLimited && Date.now() - cachedSearch.ts < SEARCH_CACHE_TTL) {
+        data = cachedSearch;
+      } else {
+        const res = await fetch(`/api/deals?q=${encodeURIComponent(q)}`);
+        data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Search failed.');
+        if (!data.ebayRateLimited) {
+          try { localStorage.setItem(cacheKey, JSON.stringify({ ...data, ts: Date.now() })); } catch {}
+        }
+      }
       setResults(data);
       // Fetch AI recommendation in background — sort items the same way the display will
       if (data.items?.length > 0) {
@@ -1253,7 +1318,7 @@ function DealsPageContent() {
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }}>
       <Header />
-      <div className="max-w-3xl mx-auto px-4 py-6 pb-24 sm:pb-10">
+      <div className="max-w-3xl mx-auto px-4 pt-4 pb-24 sm:pb-10">
 
         {/* Spotlight — item linked from email */}
         {spotlightItem && (
@@ -1267,8 +1332,8 @@ function DealsPageContent() {
         )}
 
         {/* Hero search */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="mb-4">
+          <div className="flex items-center gap-3 mb-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-2xl shrink-0" style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 2px 12px rgba(99,102,241,0.4)' }}>
               <Search className="w-5 h-5 text-white" />
             </div>
@@ -1305,6 +1370,7 @@ function DealsPageContent() {
           <PwaBanner onDismiss={() => {
             localStorage.setItem('pwa-banner-dismissed', '1');
             setShowPwaBanner(false);
+            fetch('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pwaBannerDismissed: true }) }).catch(() => {});
           }} />
         )}
 
@@ -1336,7 +1402,12 @@ function DealsPageContent() {
                 <div className="text-xs" style={{ color: '#6B7280' }}>Hot deals</div>
                 <div className="font-bold" style={{ color: hotCount > 0 ? '#F87171' : 'white' }}>{hotCount}</div>
               </div>
-              {hotCount === 0 && (
+              {(results as any)?.ebayRateLimited && (
+                <div className="flex items-center text-xs px-3 py-2 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#FCA5A5' }}>
+                  eBay search temporarily limited — results will restore shortly
+                </div>
+              )}
+              {hotCount === 0 && !(results as any)?.ebayRateLimited && (
                 <div className="flex items-center text-xs px-3 py-2 rounded-xl" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: '#FCD34D' }}>
                   No hot deals found — try a different search or check back later
                 </div>
@@ -1635,8 +1706,8 @@ function DealsPageContent() {
         {/* Empty state / Personalized Recommendations */}
         {!results && !loading && !error && (
           <div>
-            {(recsLoading || (ebayConnected && personalizedRecs !== null)) && (
-              <div className="mb-8">
+            {!recsIsDefaultFallback && (recsLoading || (ebayConnected && personalizedRecs !== null)) && (
+              <div className="mb-4">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="flex items-center justify-center w-7 h-7 rounded-lg shrink-0" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
                     <Sparkles className="w-4 h-4 text-white" />
@@ -1677,12 +1748,9 @@ function DealsPageContent() {
                 </div>
               </div>
             )}
-            <div className="text-center py-10" style={{ color: '#4B5563' }}>
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <Search className="w-8 h-8" style={{ color: '#374151' }} />
-              </div>
-              <div className="font-medium" style={{ color: '#6B7280' }}>Search eBay for deals</div>
-              <div className="text-sm mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings with varying discounts off market price</div>
+            <div className="text-center py-3" style={{ color: '#4B5563' }}>
+              <div className="font-medium text-sm" style={{ color: '#6B7280' }}>Search eBay for deals</div>
+              <div className="text-xs mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings with varying discounts off market price</div>
             </div>
           </div>
         )}
@@ -1913,15 +1981,17 @@ function DealsPageContent() {
           )}
         </div>
 
-        {/* Floating Feedback Button */}
-        <button
-          onClick={() => { setShowFeedback(true); setFbMessage(null); }}
-          className="fixed bottom-6 right-6 flex items-center gap-2 px-4 py-3 rounded-full text-sm font-semibold text-white shadow-lg z-40 transition-all"
-          style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}
-        >
-          <MessageSquarePlus className="w-4 h-4" />
-          Feedback
-        </button>
+        {/* Feedback Button — above footer */}
+        <div className="mt-10 flex justify-center">
+          <button
+            onClick={() => { setShowFeedback(true); setFbMessage(null); }}
+            className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold text-white shadow-lg transition-all"
+            style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}
+          >
+            <MessageSquarePlus className="w-4 h-4" />
+            Submit Feedback
+          </button>
+        </div>
 
         {/* Feedback Modal */}
         {showFeedback && (

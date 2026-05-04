@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 120;
 
 const BROWSE_CACHE_KEY = 'deal-wiz/browse-cache.json';
-const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 export interface BrowseDeal extends EbayItem {
   flipVerdict: 'buy' | 'maybe';
@@ -37,22 +37,16 @@ interface BrowseCache {
   generatedAt: string;
 }
 
-// Categories with highest resale liquidity — ordered by demand
+// Categories with highest resale liquidity — ordered by demand (kept small to stay within eBay rate limits)
 const BROWSE_CATEGORIES = [
   'iPhone unlocked used',
   'MacBook Air used',
-  'iPad unlocked used',
   'Nintendo Switch OLED',
   'AirPods Pro',
-  'Apple Watch unlocked',
   'Air Jordan sneakers new',
-  'Pokemon card PSA 10',
   'PS5 console',
-  'LEGO sealed set',
+  'Pokemon card PSA 10',
   'Samsung Galaxy unlocked used',
-  'DJI drone',
-  'sports card PSA 10 graded',
-  'Nike Dunk deadstock new',
 ];
 
 async function quickFlipVerdict(item: EbayItem): Promise<{
@@ -169,21 +163,22 @@ export async function GET(req: NextRequest) {
   const maxDays = prefs && (prefs as any).maxDaysToSell != null ? (prefs as any).maxDaysToSell as number : 60;
 
   // Serve from cache if fresh — personalize order before returning
-  if (!forceRefresh) {
-    const cached = await r2Get<BrowseCache>(BROWSE_CACHE_KEY);
-    if (cached && cached.generatedAt) {
-      const age = Date.now() - new Date(cached.generatedAt).getTime();
-      if (age < CACHE_TTL_MS) {
-        let items = personalizeResults(cached.items, categoryScores, explicitCategories, allWonTitles, buying.watchedTitles);
-        // Apply maxDaysToSell filter — N/A (null) always passes through
-        items = items.filter(i => i.estDaysToSell == null || i.estDaysToSell <= maxDays);
-        const matchedFromEbay = items.filter(i => {
-          const key = categoryKeyForTitle(i.title);
-          return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;
-        }).length;
-        return NextResponse.json({ ...cached, items, fromCache: true, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay } });
-      }
-    }
+  const cached = await r2Get<BrowseCache>(BROWSE_CACHE_KEY);
+  const cacheHasItems = cached && cached.generatedAt && cached.items.length > 0;
+
+  const serveCache = (stale = false) => {
+    let items = personalizeResults(cached!.items, categoryScores, explicitCategories, allWonTitles, buying.watchedTitles);
+    items = items.filter(i => i.estDaysToSell == null || i.estDaysToSell <= maxDays);
+    const matchedFromEbay = items.filter(i => {
+      const key = categoryKeyForTitle(i.title);
+      return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;
+    }).length;
+    return NextResponse.json({ ...cached, items, fromCache: true, stale, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay } });
+  };
+
+  if (!forceRefresh && cacheHasItems) {
+    const age = Date.now() - new Date(cached!.generatedAt).getTime();
+    if (age < CACHE_TTL_MS) return serveCache();
   }
 
   if (!process.env.EBAY_CLIENT_ID) {
@@ -206,9 +201,11 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // Score and pick top 20 candidates
-    const candidates = topDeals(allItems, 20, 50);
+    // Score and pick top 12 candidates (fewer comps calls = fewer eBay API hits)
+    const candidates = topDeals(allItems, 12, 50);
     if (candidates.length === 0) {
+      // All eBay searches failed or returned nothing — serve stale cache if available
+      if (cacheHasItems) return serveCache(true);
       return NextResponse.json({ items: [], generatedAt: new Date().toISOString(), fromCache: false });
     }
 
@@ -271,6 +268,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ...result, items: personalizedItems, fromCache: false, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay } });
 
   } catch (err: any) {
+    // eBay rate limited — serve stale cache if available rather than returning an error
+    if (cacheHasItems && (String(err).includes('Too many requests') || String(err).includes('2001') || String(err).includes('rate'))) {
+      return serveCache(true);
+    }
     return NextResponse.json({ error: err.message || 'Browse failed' }, { status: 500 });
   }
 }

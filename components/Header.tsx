@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Zap, Search, BarChart2, LogOut, Settings } from 'lucide-react';
@@ -11,6 +12,20 @@ const navItems = [
 
 export default function Header() {
   const pathname = usePathname();
+
+  useEffect(() => {
+    // Inject a /deals sentinel into history so pressing back from an external entry
+    // stays in-app rather than leaving to the previous website.
+    if (!sessionStorage.getItem('_appEntered')) {
+      sessionStorage.setItem('_appEntered', '1');
+      const fromExternal = !document.referrer || !document.referrer.startsWith(window.location.origin);
+      if (fromExternal) {
+        const current = window.location.pathname + window.location.search + window.location.hash;
+        window.history.pushState(null, '', '/deals');
+        window.history.pushState(null, '', current);
+      }
+    }
+  }, []);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -24,6 +39,7 @@ export default function Header() {
         style={{
           background: 'linear-gradient(180deg, #050814 0%, #0B1120 100%)',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
+          paddingTop: 'env(safe-area-inset-top)',
         }}
       >
         <div className="w-full px-4 py-3">
@@ -80,12 +96,12 @@ export default function Header() {
             </div>
 
             {/* Mobile top-right */}
-            <div className="sm:hidden flex items-center gap-0.5">
-              <Link href="/settings" className="flex items-center justify-center w-9 h-9 rounded-xl text-gray-400 hover:text-white">
-                <Settings className="w-4 h-4" />
+            <div className="sm:hidden flex items-center gap-2">
+              <Link href="/settings" className="flex items-center justify-center w-9 h-9 rounded-xl text-white" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                <Settings className="w-5 h-5" />
               </Link>
-              <button onClick={handleLogout} className="flex items-center justify-center w-9 h-9 rounded-xl text-gray-400 hover:text-white" style={{ minHeight: 'unset' }}>
-                <LogOut className="w-4 h-4" />
+              <button onClick={handleLogout} className="flex items-center justify-center w-9 h-9 rounded-xl text-white" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', minHeight: 'unset' }}>
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
           </div>

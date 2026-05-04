@@ -45,7 +45,7 @@ function tierLabel(pct: number): { label: string; color: string; bg: string; bor
   return             { label: 'GREAT DEAL',   color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' };
 }
 
-function buildSpotlightUrl(deal: EbayItem, flip?: FlipData, displayNetProfit?: number | null): string {
+export function buildSpotlightUrl(deal: EbayItem, flip?: FlipData, displayNetProfit?: number | null): string {
   const payload = Buffer.from(JSON.stringify({
     itemId: deal.itemId,
     title: deal.title,
@@ -201,7 +201,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
                     style="display:block;text-align:center;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">View on eBay</a>
                 </td>
                 <td width="34%" style="padding:0 2px;">
-                  <a href="${APP_URL}/deals?view=digest&item=${deal.itemId}"
+                  <a href="${buildSpotlightUrl(deal, flip, netProfit)}"
                     style="display:block;text-align:center;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">Brad's Bargains</a>
                 </td>
                 <td width="33%" style="padding-left:3px;">
@@ -223,7 +223,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
 export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick?: string, flipMap?: Map<string, FlipData>): Promise<void> {
   if (deals.length === 0 || !toEmail) return;
 
-  const apiKey = (process.env.RESEND_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
+  const apiKey = (process.env.SENDGRID_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
   const top5 = deals.slice(0, 5);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const rows = top5.map((d, i) => dealRow(d, i + 1, top5, flipMap?.get(d.itemId))).join('');
@@ -245,17 +245,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
     </table>
   </td></tr>` : '';
 
-  const emailRes = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: "Brad's Bargains <onboarding@resend.dev>",
-      to: toEmail,
-      subject: "Today's Top 5 Deals - " + today,
-      html: `<!DOCTYPE html>
+  const htmlBody = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
@@ -302,12 +292,24 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
 </td></tr>
 </table>
 </body>
-</html>`,
+</html>`;
+
+  const emailRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: toEmail }] }],
+      from: { email: process.env.SENDGRID_FROM_EMAIL ?? 'btcleary1@gmail.com', name: "Brad's Bargains" },
+      subject: "Today's Top 5 Deals - " + today,
+      content: [{ type: 'text/html', value: htmlBody }],
     }),
   });
   if (emailRes.status >= 300) {
     const errText = await emailRes.text();
-    throw new Error('SendGrid API error ' + emailRes.status + ': ' + errText);
+    throw new Error('SendGrid error ' + emailRes.status + ': ' + errText);
   }
 }
 
