@@ -72,6 +72,8 @@ function SettingsContent() {
   const [filterLoading, setFilterLoading] = useState(false);
   const [filterMessage, setFilterMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [showLocalPickup, setShowLocalPickup] = useState(false);
+
   const [ebayLoading, setEbayLoading] = useState(false);
 
   const [fbType, setFbType] = useState<'enhancement' | 'bug'>('enhancement');
@@ -132,6 +134,7 @@ function SettingsContent() {
           if (fp.minDiscountPct != null) setFpMinDiscount(fp.minDiscountPct);
           if (fp.allowedConditions?.length) setFpConditions(fp.allowedConditions);
         }
+        if (p.showLocalPickup != null) setShowLocalPickup(p.showLocalPickup);
       }).catch(() => {});
       fetch('/api/auth/ebay/status').then(r => r.ok ? r.json() : { connected: false }).then((d: any) => {
         setEbayConnected(d.connected);
@@ -1045,6 +1048,26 @@ function SettingsContent() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Local Pickup Toggle */}
+          <div className="flex items-center justify-between py-3 mb-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div>
+              <p className="text-sm font-medium text-white">Include Local Pickup Deals</p>
+              <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>Off by default — local pickup items require in-person collection</p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const next = !showLocalPickup;
+                setShowLocalPickup(next);
+                await fetch('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ showLocalPickup: next }) });
+              }}
+              className="relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none"
+              style={{ background: showLocalPickup ? '#3B82F6' : 'rgba(255,255,255,0.15)', minHeight: 'unset' }}
+            >
+              <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200" style={{ transform: showLocalPickup ? 'translateX(20px)' : 'translateX(0)' }} />
+            </button>
           </div>
 
           <button

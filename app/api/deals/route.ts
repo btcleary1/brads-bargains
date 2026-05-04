@@ -41,17 +41,20 @@ export async function GET(req: NextRequest) {
 
   try {
     const prefs = await getUserPrefs(session.userId);
-    const filterPrefs = prefs.filterPrefs;
+    const filterPrefs = { ...(prefs.filterPrefs ?? {}), showLocalPickup: prefs.showLocalPickup ?? false };
     const startDiscount = filterPrefs?.minDiscountPct ?? START_DISCOUNT;
 
     const isMock = process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID;
     let raw: EbayItem[];
+    let ebayRateLimited = false;
     if (isMock) {
       raw = MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '');
     } else {
       try {
         raw = await searchDeals(query, 200);
-      } catch {
+      } catch (e) {
+        const msg = String(e);
+        if (msg.includes('Too many requests') || msg.includes('2001')) ebayRateLimited = true;
         raw = MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '');
       }
     }
@@ -91,6 +94,7 @@ export async function GET(req: NextRequest) {
       total: items.length,
       hotDeals: hotDeals.length,
       minDiscount,
+      ebayRateLimited: ebayRateLimited || undefined,
       items: items.map(item => {
         const sellScore = sellabilityScore(item, items);
         return {

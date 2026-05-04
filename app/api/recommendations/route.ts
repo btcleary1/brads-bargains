@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   }
 
   const prefs = await getUserPrefs(session.userId);
-  const filterPrefs = prefs.filterPrefs;
+  const filterPrefs = { ...(prefs.filterPrefs ?? {}), showLocalPickup: prefs.showLocalPickup ?? false };
 
   // Fetch purchase history
   let keywords: string[] = [];
@@ -47,11 +47,13 @@ export async function GET(req: NextRequest) {
   }
 
   // Fall back to watchlist or default categories if history is empty
+  let isDefaultFallback = false;
   if (keywords.length === 0) {
     if (prefs.watchlistQueries?.length) {
       keywords = prefs.watchlistQueries.slice(0, 4);
     } else {
       keywords = ['iPhone', 'MacBook', 'PlayStation 5', 'Nintendo Switch'];
+      isDefaultFallback = true;
     }
   }
   const isMock = process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID;
@@ -78,6 +80,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     connected: true,
     keywords,
+    isDefaultFallback,
     recommendations: top.map(item => ({
       ...item,
       isHotDeal: item.discountPct !== null && item.discountPct >= (filterPrefs?.minDiscountPct ?? 50),

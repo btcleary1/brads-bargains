@@ -91,6 +91,7 @@ export interface UserPrefs {
   notificationPhone?: string;
   pushSubscriptions?: object[];
   filterPrefs?: FilterPrefs;      // user-configured item filter criteria
+  showLocalPickup?: boolean;      // include local-pickup-only listings (default false)
 }
 
 export async function getUserPrefs(userId: string): Promise<UserPrefs> {

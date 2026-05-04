@@ -58,6 +58,7 @@ export interface EbayItem {
   location: string;
   category: string;
   shippingCost: number | null;
+  localPickupOnly: boolean;
   listingType: string;
   listingDate: string | null; // ISO date when item was listed
   quantity: number | null;    // how many the seller has available
@@ -112,6 +113,9 @@ function toEbayItem(raw: any): EbayItem {
     shippingCost: raw.shippingOptions?.[0]?.shippingCost
       ? parsePrice(raw.shippingOptions[0].shippingCost)
       : null,
+    localPickupOnly: Array.isArray(raw.buyingOptions)
+      ? raw.buyingOptions.includes('LOCAL_PICKUP') && !raw.shippingOptions?.length
+      : false,
     listingType: raw.buyingOptions?.[0] ?? 'FIXED_PRICE',
     listingDate: raw.itemCreationDate ?? null,
     quantity: raw.estimatedAvailabilities?.[0]?.estimatedAvailableQuantity ?? null,

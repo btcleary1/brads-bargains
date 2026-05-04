@@ -22,6 +22,7 @@ export interface FilterPrefs {
   minSellerFeedbackPct?: number; // default 97
   minDiscountPct?: number;      // starting hot deal threshold, default 60
   allowedConditions?: string[]; // empty = use default (excludes Acceptable/For Parts/etc.)
+  showLocalPickup?: boolean;    // default false — filter out local-pickup-only listings
 }
 
 // Title keywords that indicate junk listings
@@ -58,6 +59,11 @@ const CURRENT_YEAR = 2026;
 
 // Map Apple model numbers to release year (no year in title like "iPhone 13")
 function appleModelYear(title: string): number | null {
+  // iPhone X-series (Roman numerals — must check before numeric match)
+  if (/iPhone\s+XS\s+Max/i.test(title)) return 2018;
+  if (/iPhone\s+X[SR]/i.test(title))    return 2018; // XS, XR
+  if (/iPhone\s+X\b/i.test(title))      return 2017; // iPhone X
+
   const iphone = title.match(/iPhone\s+(\d+)/i);
   if (iphone) {
     const n = parseInt(iphone[1]);
@@ -67,7 +73,7 @@ function appleModelYear(title: string): number | null {
     if (n === 13) return 2021;
     if (n === 12) return 2020;
     if (n === 11) return 2019;
-    return 2017; // iPhone X and older
+    return 2017; // iPhone 10 and older numeric models
   }
 
   // iPhone SE by generation
@@ -245,7 +251,7 @@ export function isJunk(item: EbayItem, prefs?: FilterPrefs): boolean {
   const minPrice    = prefs?.minPrice    ?? MIN_PRICE;
   const maxPrice    = prefs?.maxPrice    ?? MAX_PRICE;
   const maxShipping = prefs?.maxShipping ?? MAX_SHIPPING;
-  const maxTechAge  = prefs?.maxTechAgeYears ?? 2;
+  const maxTechAge  = prefs?.maxTechAgeYears ?? 5;
   const minFeedPct  = prefs?.minSellerFeedbackPct ?? MIN_FEEDBACK_PERCENT;
 
   if (!item.imageUrl) return true;
@@ -274,6 +280,8 @@ export function isJunk(item: EbayItem, prefs?: FilterPrefs): boolean {
   if (feedbackCount >= MIN_FEEDBACK_COUNT && feedbackPct < minFeedPct) return true;
 
   if (techAgePenalty(item.title, maxTechAge) > 0) return true;
+  // Filter local-pickup-only listings unless user has opted in
+  if (item.localPickupOnly && !prefs?.showLocalPickup) return true;
   return false;
 }
 
@@ -351,20 +359,18 @@ export function topDeals(items: EbayItem[], n = 5, minDiscount = 60, prefs?: Fil
   const strictPass = clean.filter(i => {
     if (!i.discountPct || !i.marketPrice) return false;
     if (i.discountPct < minDiscount) return false;
-    const pct   = i.sellerFeedbackPercent ?? 100;
-    const count = i.sellerFeedbackScore   ?? 0;
-    if (pct < MIN_FEEDBACK_PERCENT) return false;
-    if (count < MIN_FEEDBACK_COUNT) return false;
+    // Only reject on feedback when the API actually returned a value — summary
+    // search endpoints don't include seller feedback, so null means unknown not bad
+    if (i.sellerFeedbackPercent !== null && i.sellerFeedbackPercent < MIN_FEEDBACK_PERCENT) return false;
+    if (i.sellerFeedbackScore   !== null && i.sellerFeedbackScore   < MIN_FEEDBACK_COUNT)   return false;
     return true;
   });
 
   // Fall back to items meeting the discount threshold but lacking marketPrice data
   const pool = strictPass.length >= n ? strictPass : clean.filter(i => {
     if ((i.discountPct ?? 0) < minDiscount) return false;
-    const pct   = i.sellerFeedbackPercent ?? 100;
-    const count = i.sellerFeedbackScore   ?? 0;
-    if (pct < MIN_FEEDBACK_PERCENT) return false;
-    if (count < MIN_FEEDBACK_COUNT) return false;
+    if (i.sellerFeedbackPercent !== null && i.sellerFeedbackPercent < MIN_FEEDBACK_PERCENT) return false;
+    if (i.sellerFeedbackScore   !== null && i.sellerFeedbackScore   < MIN_FEEDBACK_COUNT)   return false;
     return true;
   });
 

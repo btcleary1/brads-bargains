@@ -271,6 +271,7 @@ export async function GET(req: NextRequest) {
           maxTechAgeYears: prefs.filterPrefs?.maxTechAgeYears ?? 2,
           minPrice: prefs.defaultPriceMin,
           maxPrice: prefs.defaultPriceMax,
+          showLocalPickup: prefs.showLocalPickup ?? false,
         };
         let userPool = topDeals(pool, 40, 0, userFilterPrefs);
         if (userPool.length === 0) userPool = [...candidates];
