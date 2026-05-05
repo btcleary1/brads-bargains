@@ -41,7 +41,7 @@ const BULKY_PATTERNS = /\bconsole\b|desktop|monitor|printer|treadmill|bicycle|bi
 const BAD_CONDITIONS = /acceptable|for parts|parts only|refurbished|poor/i;
 
 // Tech categories where device age matters
-const TECH_PATTERNS = /iphone|ipad|macbook|laptop|galaxy\s+[szn]|galaxy\s+note|galaxy\s+z|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
+const TECH_PATTERNS = /iphone|ipad|macbook|laptop|galaxy\s+[sznf]|galaxy\s+note|galaxy\s+z|pixel\s+\d|pixel\s+fold|airpods|apple watch|playstation|ps[345]\b|xbox|nintendo switch|\b3ds\b/i;
 
 // Sealed/unopened items command a resale premium — especially collectibles, games, LEGO, cards
 const SEALED_PATTERNS = /\bsealed\b|factory.?sealed|unopened|shrink.?wrap|\bNIB\b|\bMISB\b|\bMIB\b|new.?in.?box|new.?in.?package|deadstock|new.?old.?stock|\bNOS\b/i;
@@ -197,6 +197,67 @@ function samsungModelYear(title: string): number | null {
   return null;
 }
 
+// Map Google Pixel model numbers to release year
+function pixelModelYear(title: string): number | null {
+  if (!/pixel/i.test(title)) return null;
+  if (/Pixel\s+Fold/i.test(title)) return 2023;
+  if (/Pixel\s+Tablet/i.test(title)) return 2023;
+  // Pixel a-series: 3a=2019, 4a=2020, 5a=2021, 6a=2022, 7a=2023, 8a=2024
+  const pa = title.match(/Pixel\s+(\d+)a/i);
+  if (pa) {
+    const n = parseInt(pa[1]);
+    if (n >= 8) return 2024;
+    if (n === 7) return 2023;
+    if (n === 6) return 2022;
+    if (n === 5) return 2021;
+    if (n === 4) return 2020;
+    return 2019;
+  }
+  // Standard Pixel: 6=2021, 7=2022, 8=2023, 9=2024
+  const p = title.match(/Pixel\s+(\d+)/i);
+  if (p) {
+    const n = parseInt(p[1]);
+    if (n >= 9) return 2024;
+    if (n === 8) return 2023;
+    if (n === 7) return 2022;
+    if (n === 6) return 2021;
+    if (n === 5) return 2020;
+    if (n === 4) return 2019;
+    if (n === 3) return 2018;
+    return 2016;
+  }
+  return null;
+}
+
+// Map gaming console model names to release year
+function consoleModelYear(title: string): number | null {
+  // PlayStation
+  if (/playstation|PS\d/i.test(title)) {
+    if (/PS5|PlayStation\s*5/i.test(title)) return 2020;
+    if (/PS4\s*Pro|PlayStation\s*4\s*Pro/i.test(title)) return 2016;
+    if (/PS4|PlayStation\s*4/i.test(title)) return 2013;
+    if (/PS3|PlayStation\s*3/i.test(title)) return 2006;
+  }
+  // Xbox
+  if (/xbox/i.test(title)) {
+    if (/Series\s*[XS]/i.test(title)) return 2020;
+    if (/One\s*X\b/i.test(title)) return 2017;
+    if (/One\s*S\b/i.test(title)) return 2016;
+    if (/One\b/i.test(title)) return 2013;
+    if (/360/i.test(title)) return 2005;
+  }
+  // Nintendo Switch
+  if (/nintendo|switch/i.test(title)) {
+    if (/Switch\s*OLED/i.test(title)) return 2021;
+    if (/Switch\s*Lite/i.test(title)) return 2019;
+    if (/Switch/i.test(title)) return 2017;
+    if (/3DS\s*XL|New\s*3DS/i.test(title)) return 2014;
+    if (/\b3DS\b/i.test(title)) return 2011;
+    if (/Wii\s*U/i.test(title)) return 2012;
+  }
+  return null;
+}
+
 // Sealed/factory-new items sell faster and at a higher premium — especially collectibles and LEGO
 function sealedBonus(item: EbayItem): number {
   const text = `${item.title} ${item.condition}`;
@@ -225,7 +286,7 @@ function techAgePenalty(title: string, maxAgeYears = 2): number {
 
   // Try explicit year in title first (e.g. "2020 MacBook Air")
   const yearMatch = title.match(/\b(20\d{2})\b/);
-  const releaseYear = yearMatch ? parseInt(yearMatch[1]) : (appleModelYear(title) ?? samsungModelYear(title));
+  const releaseYear = yearMatch ? parseInt(yearMatch[1]) : (appleModelYear(title) ?? samsungModelYear(title) ?? pixelModelYear(title) ?? consoleModelYear(title));
   if (!releaseYear) return 0;
 
   const age = CURRENT_YEAR - releaseYear;
