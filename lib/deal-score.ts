@@ -41,7 +41,7 @@ const BULKY_PATTERNS = /\bconsole\b|desktop|monitor|printer|treadmill|bicycle|bi
 const BAD_CONDITIONS = /acceptable|for parts|parts only|refurbished|poor/i;
 
 // Tech categories where device age matters
-const TECH_PATTERNS = /iphone|ipad|macbook|laptop|samsung|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
+const TECH_PATTERNS = /iphone|ipad|macbook|laptop|galaxy\s+[szn]|galaxy\s+note|galaxy\s+z|pixel|airpods|apple watch|playstation|xbox|nintendo/i;
 
 // Sealed/unopened items command a resale premium — especially collectibles, games, LEGO, cards
 const SEALED_PATTERNS = /\bsealed\b|factory.?sealed|unopened|shrink.?wrap|\bNIB\b|\bMISB\b|\bMIB\b|new.?in.?box|new.?in.?package|deadstock|new.?old.?stock|\bNOS\b/i;
@@ -144,6 +144,59 @@ function appleModelYear(title: string): number | null {
   return null;
 }
 
+// Map Samsung Galaxy model numbers to release year
+function samsungModelYear(title: string): number | null {
+  // Galaxy S series: S20=2020, S21=2021, S22=2022, S23=2023, S24=2024
+  const s = title.match(/Galaxy\s+S(\d+)/i);
+  if (s) {
+    const n = parseInt(s[1]);
+    if (n >= 24) return 2024;
+    if (n === 23) return 2023;
+    if (n === 22) return 2022;
+    if (n === 21) return 2021;
+    if (n === 20) return 2020;
+    if (n === 10) return 2019;
+    if (n === 9)  return 2018;
+    return 2017; // S8 and older
+  }
+
+  // Galaxy Note series: Note9=2018, Note10=2019, Note20=2020
+  const note = title.match(/Galaxy\s+Note\s*(\d+)/i);
+  if (note) {
+    const n = parseInt(note[1]);
+    if (n === 20) return 2020;
+    if (n === 10) return 2019;
+    if (n === 9)  return 2018;
+    if (n === 8)  return 2017;
+    return 2016;
+  }
+
+  // Galaxy Z Fold: Fold=2019, Fold2=2020, Fold3=2021, Fold4=2022, Fold5=2023, Fold6=2024
+  const fold = title.match(/Galaxy\s+Z\s+Fold\s*(\d*)/i);
+  if (fold) {
+    const n = fold[1] ? parseInt(fold[1]) : 1;
+    if (n >= 6) return 2024;
+    if (n === 5) return 2023;
+    if (n === 4) return 2022;
+    if (n === 3) return 2021;
+    if (n === 2) return 2020;
+    return 2019;
+  }
+
+  // Galaxy Z Flip: Flip=2020, Flip3=2021, Flip4=2022, Flip5=2023, Flip6=2024
+  const flip = title.match(/Galaxy\s+Z\s+Flip\s*(\d*)/i);
+  if (flip) {
+    const n = flip[1] ? parseInt(flip[1]) : 1;
+    if (n >= 6) return 2024;
+    if (n === 5) return 2023;
+    if (n === 4) return 2022;
+    if (n === 3) return 2021;
+    return 2020;
+  }
+
+  return null;
+}
+
 // Sealed/factory-new items sell faster and at a higher premium — especially collectibles and LEGO
 function sealedBonus(item: EbayItem): number {
   const text = `${item.title} ${item.condition}`;
@@ -172,7 +225,7 @@ function techAgePenalty(title: string, maxAgeYears = 2): number {
 
   // Try explicit year in title first (e.g. "2020 MacBook Air")
   const yearMatch = title.match(/\b(20\d{2})\b/);
-  const releaseYear = yearMatch ? parseInt(yearMatch[1]) : appleModelYear(title);
+  const releaseYear = yearMatch ? parseInt(yearMatch[1]) : (appleModelYear(title) ?? samsungModelYear(title));
   if (!releaseYear) return 0;
 
   const age = CURRENT_YEAR - releaseYear;

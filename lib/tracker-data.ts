@@ -92,6 +92,7 @@ export interface UserPrefs {
   pushSubscriptions?: object[];
   filterPrefs?: FilterPrefs;      // user-configured item filter criteria
   showLocalPickup?: boolean;      // include local-pickup-only listings (default false)
+  onboardingComplete?: boolean;   // true once user has seen and dismissed the first-run setup card
 }
 
 export async function getUserPrefs(userId: string): Promise<UserPrefs> {

@@ -850,6 +850,9 @@ function DealsPageContent() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingCats, setOnboardingCats] = useState<string[]>([]);
   const [onboardingSaving, setOnboardingSaving] = useState(false);
+  const [onboardingEmail, setOnboardingEmail] = useState('');
+  const [onboardingPushDone, setOnboardingPushDone] = useState(false);
+  const [onboardingPushLoading, setOnboardingPushLoading] = useState(false);
   const [personalizedRecs, setPersonalizedRecs] = useState<EbayItem[] | null>(null);
   const [recsLoading, setRecsLoading] = useState(false);
   const [recsKeywords, setRecsKeywords] = useState<string[]>([]);
@@ -896,7 +899,11 @@ function DealsPageContent() {
       if (r.status === 401) {
         const dest = window.location.pathname + window.location.search;
         router.replace(`/login?redirect=${encodeURIComponent(dest)}`);
+        return;
       }
+      return r.json();
+    }).then((me: any) => {
+      if (me?.email) setOnboardingEmail(prev => prev || me.email);
     }).catch(() => { /* network error — don't log out */ });
 
     // Check if user has set category preferences; also load default price range
@@ -907,9 +914,9 @@ function DealsPageContent() {
       if (p.defaultMinDiscount != null) setFilterPct(p.defaultMinDiscount);
       if (p.defaultSingleQtyOnly) setFilterSingleQty(true);
       setMaxDaysToSell(p.maxDaysToSell != null ? p.maxDaysToSell : 60);
-      const onboardingDismissed = localStorage.getItem('onboarding-dismissed');
-      if (!onboardingDismissed && (!p.digestCategories || p.digestCategories.length === 0)) {
+      if (!p.onboardingComplete) {
         setShowOnboarding(true);
+        if (p.notificationEmail) setOnboardingEmail(p.notificationEmail);
       }
       // PWA banner: only show if not dismissed server-side (account-wide) and not standalone
       if (!p.pwaBannerDismissed) {
@@ -921,8 +928,7 @@ function DealsPageContent() {
         localStorage.setItem('pwa-banner-dismissed', '1');
       }
     }).catch(() => {
-      const onboardingDismissed = localStorage.getItem('onboarding-dismissed');
-      if (!onboardingDismissed) setShowOnboarding(true);
+      setShowOnboarding(true);
     });
 
     // Check eBay connection status independently (fast, not rate-limited)
@@ -1209,26 +1215,45 @@ function DealsPageContent() {
   };
 
   const saveOnboarding = async () => {
-    if (onboardingCats.length === 0) return;
     setOnboardingSaving(true);
     try {
-      await fetch('/api/prefs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ digestCategories: onboardingCats }),
-      });
+      const body: Record<string, unknown> = { onboardingComplete: true };
+      if (onboardingCats.length > 0) body.digestCategories = onboardingCats;
+      if (onboardingEmail.trim()) body.notificationEmail = onboardingEmail.trim();
+      await fetch('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch { /* silent */ }
-    localStorage.setItem('onboarding-dismissed', '1');
     setShowOnboarding(false);
     setOnboardingSaving(false);
-    // Refresh browse feed to apply personalization
-    setBrowseLoading(true);
-    fetch('/api/browse').then(r => r.json()).then(d => { setBrowseItems(d.items ?? []); setBrowseGeneratedAt(d.generatedAt ?? null); }).catch(() => {}).finally(() => setBrowseLoading(false));
+    if (onboardingCats.length > 0) {
+      setBrowseLoading(true);
+      fetch('/api/browse').then(r => r.json()).then(d => { setBrowseItems(d.items ?? []); setBrowseGeneratedAt(d.generatedAt ?? null); }).catch(() => {}).finally(() => setBrowseLoading(false));
+    }
   };
 
   const dismissOnboarding = () => {
-    localStorage.setItem('onboarding-dismissed', '1');
     setShowOnboarding(false);
+    fetch('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ onboardingComplete: true }) }).catch(() => {});
+  };
+
+  const enableOnboardingPush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    setOnboardingPushLoading(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') { setOnboardingPushLoading(false); return; }
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      const existingSub = await reg.pushManager.getSubscription();
+      if (existingSub) await existingSub.unsubscribe();
+      const vapidKey = 'BGompd4HHUYAezVDMJRlo43NiVabTA1FXiE5JSUEbFAQfp9Ak_2zaVHCu807IAhqIuCd7I6bFJFOpEopaqu6kYE';
+      const b64 = vapidKey.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
+      const keyBytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes });
+      await fetch('/api/push-subscribe', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON() }) });
+      setOnboardingPushDone(true);
+    } catch { /* silent */ }
+    setOnboardingPushLoading(false);
   };
 
   const activeFilter = filterPct !== '' ? filterPct : null;
@@ -1608,12 +1633,15 @@ function DealsPageContent() {
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5" style={{ color: '#818CF8' }} />
-                <h3 className="font-bold text-white text-[15px]">What do you flip?</h3>
+                <h3 className="font-bold text-white text-[15px]">Welcome to Brad&apos;s Bargains!</h3>
               </div>
               <button onClick={dismissOnboarding} className="text-xs px-2 py-1 rounded-lg transition-colors" style={{ color: '#6B7280' }}>Skip</button>
             </div>
-            <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Pick your categories so Today&apos;s Picks and your daily email stay in your wheelhouse.</p>
-            <div className="flex flex-wrap gap-2 mb-4">
+            <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Take 30 seconds to personalize your deals and set up alerts.</p>
+
+            {/* Step 1: Categories */}
+            <p className="text-xs font-semibold mb-2" style={{ color: '#A5B4FC' }}>What do you flip? (pick all that apply)</p>
+            <div className="flex flex-wrap gap-2 mb-5">
               {DIGEST_CATEGORIES.map(cat => {
                 const active = onboardingCats.includes(cat.key);
                 return (
@@ -1632,14 +1660,45 @@ function DealsPageContent() {
                 );
               })}
             </div>
+
+            {/* Step 2: Alerts */}
+            <div className="pt-4 mb-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+              <p className="text-xs font-semibold mb-3" style={{ color: '#A5B4FC' }}>Get your Top 5 deals every morning at 9 AM</p>
+              <div className="flex flex-col gap-2.5">
+                {/* Email */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    value={onboardingEmail}
+                    onChange={e => setOnboardingEmail(e.target.value)}
+                    placeholder="Email for daily digest"
+                    className="flex-1 px-3 py-2 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  />
+                </div>
+                {/* Push */}
+                {'serviceWorker' in navigator && 'PushManager' in window && (
+                  <button
+                    onClick={enableOnboardingPush}
+                    disabled={onboardingPushDone || onboardingPushLoading}
+                    className="flex items-center justify-center gap-2 w-full py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                    style={{ background: onboardingPushDone ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.06)', border: onboardingPushDone ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(255,255,255,0.1)', color: onboardingPushDone ? '#4ADE80' : '#D1D5DB', minHeight: 'unset' }}
+                  >
+                    {onboardingPushLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : onboardingPushDone ? <CheckCircle className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
+                    {onboardingPushDone ? 'Phone notifications enabled!' : 'Enable phone notifications'}
+                  </button>
+                )}
+              </div>
+            </div>
+
             <button
               onClick={saveOnboarding}
-              disabled={onboardingCats.length === 0 || onboardingSaving}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 flex items-center gap-2"
+              disabled={onboardingSaving}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ background: 'linear-gradient(135deg,#6366F1,#8B5CF6)', boxShadow: '0 2px 10px rgba(99,102,241,0.35)' }}
             >
               {onboardingSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {onboardingCats.length > 0 ? `Save ${onboardingCats.length} categor${onboardingCats.length === 1 ? 'y' : 'ies'}` : 'Select categories above'}
+              Get Started
             </button>
           </div>
         )}
