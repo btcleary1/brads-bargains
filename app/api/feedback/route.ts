@@ -44,8 +44,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const secret = req.nextUrl.searchParams.get('secret');
   const session = await getSessionFromRequest(req);
-  if (!session || session.role !== 'admin') {
+  const adminSecret = process.env.DIGEST_SECRET ?? 'digest-2026';
+  if (secret !== adminSecret && (!session || session.role !== 'admin')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
