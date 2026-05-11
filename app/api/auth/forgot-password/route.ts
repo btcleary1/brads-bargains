@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserByEmail } from '@/lib/users';
 import { createResetCode } from '@/lib/reset-tokens';
+import { checkRequestLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    await checkRequestLimit(ip, 'forgot-password', 3, 15 * 60 * 1000);
+
     const { email } = await req.json();
     if (!email) return NextResponse.json({ error: 'Email is required.' }, { status: 400 });
 
@@ -39,6 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const status = msg.startsWith('Rate limit') ? 429 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }
