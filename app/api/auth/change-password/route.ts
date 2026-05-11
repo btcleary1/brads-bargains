@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
-import { getUserById, hashPassword, updatePassword } from '@/lib/users';
+import { getUserById, verifyPassword, updatePassword } from '@/lib/users';
 import { validatePassword } from '@/lib/password-rules';
 
 export const runtime = 'nodejs';
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const user = await getUserById(session.userId);
     if (!user) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
 
-    if (hashPassword(currentPassword) !== user.passwordHash)
+    if (!verifyPassword(currentPassword, user))
       return NextResponse.json({ error: 'Current password is incorrect.' }, { status: 401 });
 
     const { valid, errors } = validatePassword(newPassword);
