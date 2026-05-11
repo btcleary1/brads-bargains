@@ -20,7 +20,12 @@ export async function POST(req: NextRequest) {
   const deals = await getDeals(session.userId);
 
   if (body.id) {
-    // Update existing
+    // Verify ownership — reject if this deal doesn't belong to this user
+    if (!deals.some(d => d.id === body.id)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    // Cap notes length
+    if (body.notes && typeof body.notes === 'string') body.notes = body.notes.slice(0, 5000);
     const updated = deals.map(d => d.id === body.id ? { ...d, ...body } : d);
     await saveDeals(session.userId, updated);
     return NextResponse.json({ success: true, deals: updated });

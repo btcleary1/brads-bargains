@@ -78,7 +78,7 @@ export function setSessionCookie(res: NextResponse, payload: Omit<SessionPayload
   const token = createSessionToken(payload);
   res.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
     sameSite: 'lax',
     maxAge: SESSION_TTL,
     path: '/',

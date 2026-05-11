@@ -16,9 +16,15 @@ export interface FlipData {
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
 
-// Strip any non-Latin-1 characters from strings that end up in email HTML
+// Strip non-Latin-1 characters and HTML-escape for safe embedding in email templates
 function safe(s: string): string {
-  return s.replace(/[^\x00-\xFF]/g, '');
+  return s
+    .replace(/[^\x00-\xFF]/g, '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function categoryLabel(category: string): string {

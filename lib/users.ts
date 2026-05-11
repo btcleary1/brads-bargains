@@ -1,5 +1,5 @@
 import { r2Get, r2Put, r2Del } from './r2';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 const PREFIX = 'deal-wiz/users/';
 const INDEX_PATH = 'deal-wiz/users-index.json';
@@ -9,6 +9,8 @@ export interface User {
   email: string;
   name: string;
   passwordHash: string;
+  passwordSalt?: string;        // present on scrypt hashes; absent on legacy sha256
+  hashVersion?: 'sha256' | 'scrypt';
   role: 'admin' | 'user';
   createdAt: string;
   googleAuth?: boolean;
@@ -18,9 +20,33 @@ export interface User {
 
 export type PublicUser = Omit<User, 'passwordHash'>;
 
-export function hashPassword(password: string): string {
+// Legacy SHA256 hash — only used for migration verification
+function sha256Hash(password: string): string {
   const salt = process.env.SESSION_SECRET ?? 'deal-wiz-salt';
   return createHash('sha256').update(salt + password).digest('hex');
+}
+
+// Current secure hash — scrypt with per-user random salt
+export function hashPassword(password: string): { hash: string; salt: string } {
+  const salt = randomBytes(32).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return { hash, salt };
+}
+
+// Verify password against a user record, handling both legacy sha256 and current scrypt
+export function verifyPassword(password: string, user: User): boolean {
+  if (user.hashVersion === 'scrypt' && user.passwordSalt) {
+    try {
+      const derived = scryptSync(password, user.passwordSalt, 64);
+      const stored = Buffer.from(user.passwordHash, 'hex');
+      if (derived.length !== stored.length) return false;
+      return timingSafeEqual(derived, stored);
+    } catch {
+      return false;
+    }
+  }
+  // Legacy SHA256 path
+  return user.passwordHash === sha256Hash(password);
 }
 
 async function readIndex(): Promise<{ email: string; userId: string }[]> {
@@ -64,11 +90,14 @@ export async function createUser(
   if (existing) throw new Error('An account with this email already exists.');
 
   const userId = randomBytes(16).toString('hex');
+  const { hash, salt } = hashPassword(password);
   const user: User = {
     userId,
     email: email.toLowerCase().trim(),
     name: name.trim(),
-    passwordHash: hashPassword(password),
+    passwordHash: hash,
+    passwordSalt: salt,
+    hashVersion: 'scrypt',
     role,
     createdAt: new Date().toISOString(),
   };
@@ -101,7 +130,20 @@ export async function updateUserRole(userId: string, role: 'admin' | 'user'): Pr
 export async function updatePassword(userId: string, newPassword: string): Promise<void> {
   const user = await getUserById(userId);
   if (!user) throw new Error('User not found.');
-  await r2Put(`${PREFIX}${userId}.json`, JSON.stringify({ ...user, passwordHash: hashPassword(newPassword) }));
+  const { hash, salt } = hashPassword(newPassword);
+  await r2Put(`${PREFIX}${userId}.json`, JSON.stringify({
+    ...user,
+    passwordHash: hash,
+    passwordSalt: salt,
+    hashVersion: 'scrypt',
+  }));
+}
+
+// Called after a successful legacy SHA256 login — silently upgrades the stored hash
+export async function upgradePasswordHash(userId: string, password: string): Promise<void> {
+  try {
+    await updatePassword(userId, password);
+  } catch { /* non-fatal */ }
 }
 
 export async function incrementLoginCount(userId: string): Promise<void> {

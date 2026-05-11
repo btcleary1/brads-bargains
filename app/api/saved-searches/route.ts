@@ -16,7 +16,9 @@ export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { query, minDiscount = 60 } = await req.json();
+  const body = await req.json();
+  const { query } = body;
+  const minDiscount = Math.max(0, Math.min(100, Number(body.minDiscount ?? 60) || 60));
   if (!query?.trim()) return NextResponse.json({ error: 'query required' }, { status: 400 });
 
   const searches = await getSavedSearches(session.userId);

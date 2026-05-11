@@ -16,6 +16,13 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const body = await req.json();
+    if (body.notificationEmail !== undefined) {
+      const email = String(body.notificationEmail).trim();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return NextResponse.json({ error: 'Invalid notification email format.' }, { status: 400 });
+      }
+      body.notificationEmail = email || undefined;
+    }
     const current = await getUserPrefs(session.userId);
     const updated = { ...current, ...body };
     await saveUserPrefs(session.userId, updated);

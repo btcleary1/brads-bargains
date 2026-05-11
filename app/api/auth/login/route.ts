@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByEmail, hashPassword, incrementLoginCount } from '@/lib/users';
+import { getUserByEmail, verifyPassword, upgradePasswordHash, incrementLoginCount } from '@/lib/users';
 import { setSessionCookie } from '@/lib/session';
 import { checkRateLimit, recordFailure, clearFailures } from '@/lib/rate-limit';
 import { logAudit, getClientIp } from '@/lib/audit';
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await getUserByEmail(email);
-    if (!user || user.passwordHash !== hashPassword(password)) {
+    if (!user || !verifyPassword(password, user)) {
       await recordFailure(ip);
       logAudit({ timestamp: new Date().toISOString(), userId: user?.userId ?? 'unknown', email: email ?? 'unknown', action: 'login_failure', ip });
       return NextResponse.json({ error: 'Incorrect email or password.' }, { status: 401 });
@@ -28,6 +28,10 @@ export async function POST(req: NextRequest) {
     await clearFailures(ip);
     logAudit({ timestamp: new Date().toISOString(), userId: user.userId, email: user.email, action: 'login_success', ip });
     await incrementLoginCount(user.userId);
+    // Auto-upgrade legacy SHA256 hashes to scrypt on next successful login
+    if (!user.hashVersion || user.hashVersion === 'sha256') {
+      upgradePasswordHash(user.userId, password);
+    }
 
     const safeName = user.name.replace(/[^\u0000-\u00FF]/g, '').trim() || user.email;
     const res = NextResponse.json({ success: true, name: safeName });
