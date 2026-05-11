@@ -398,6 +398,13 @@ export function isJunk(item: EbayItem, prefs?: FilterPrefs): boolean {
   if (feedbackCount >= MIN_FEEDBACK_COUNT && feedbackPct < minFeedPct) return true;
 
   if (techAgePenalty(item.title, maxTechAge) > 0) return true;
+
+  // Stale listing filter — items listed > 180 days ago are unlikely to be real bargains
+  if (item.listingDate) {
+    const daysListed = (Date.now() - new Date(item.listingDate).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysListed > 180) return true;
+  }
+
   // Filter local-pickup-only listings unless user has opted in
   if (item.localPickupOnly && !prefs?.showLocalPickup) return true;
   return false;

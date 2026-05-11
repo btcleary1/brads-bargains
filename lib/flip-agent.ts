@@ -193,6 +193,19 @@ Platform: "facebook" if bulky or price < $30; "ebay" if electronics/collectibles
 
     const verdict: CompsVerdict = JSON.parse(finalText.slice(start, end + 1));
 
+    // Sanity check: if avg sold is more than 8x the buy price, comps matched wrong items — reject
+    if (verdict.avgSoldPrice > price * 8) {
+      console.warn(`[flip-agent] Rejected implausible comps: avgSold $${verdict.avgSoldPrice} vs buy $${price} (${Math.round(verdict.avgSoldPrice / price)}x ratio)`);
+      return null;
+    }
+
+    // Require meaningful comp count — 3 comps is not enough confidence
+    if (verdict.soldCount < 5) {
+      verdict.verdict = 'skip';
+      verdict.multiSourceConfidence = 'low';
+      verdict.reasoning = `Only ${verdict.soldCount} sold comps — not enough data to verify. ${verdict.reasoning}`.slice(0, 180);
+    }
+
     // Override if math contradicts verdict
     const computedProfit = Math.round(verdict.avgSoldPrice * 0.85 - price - shipping);
     const computedMargin = Math.round((computedProfit / price) * 100);
@@ -239,7 +252,7 @@ Platform: "facebook" if bulky or price < $30; "ebay" if electronics/collectibles
     console.error('[flip-agent] AI error, falling back to multi-source:', err.status, err.message);
     try {
       const comps = await getMultiSourceComps(title, 12);
-      if (!comps || comps.ebayCount < 2) return null;
+      if (!comps || comps.ebayCount < 5) return null;
 
       const netProfit = Math.round(comps.weightedAvgSoldPrice * 0.85 - price - shipping);
       const marginPct = Math.round((netProfit / price) * 100);
