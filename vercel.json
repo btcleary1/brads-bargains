@@ -1,5 +1,4 @@
 {
-  "nodeVersion": "20.x",
   "crons": [
     {
       "path": "/api/digest?secret=digest-2026",
