@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
 
     // Run multi-source comps on all 50 candidates in parallel
     const flipResults = await Promise.allSettled(
-      candidates.map(item => getMultiSourceComps(item.title, 12))
+      candidates.map(item => getMultiSourceComps(item.title, 12, item.condition))
     );
     const flipMap = new Map<string, FlipData>();
     candidates.forEach((item, i) => {
@@ -150,7 +150,7 @@ export async function GET(req: NextRequest) {
       const days = r.value.estDaysToSell;
       if (days != null && days > 60) verdict = 'skip';
       else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
-      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null });
+      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, fbMarketplaceAvg: null });
     });
 
     // Speed-adjusted score: profit × (14 / daysToSell)^0.4
@@ -218,6 +218,7 @@ export async function GET(req: NextRequest) {
         stockxLastSale: v.stockxLastSale ?? null,
         mercariAvgSold: v.mercariAvgSold ?? null,
         amazonPrice: v.amazonPrice ?? null,
+        fbMarketplaceAvg: v.fbMarketplaceAvg ?? null,
       });
     });
     console.log(`[digest] best5 AI profits: ${best5.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
@@ -273,7 +274,18 @@ export async function GET(req: NextRequest) {
           maxPrice: prefs.defaultPriceMax,
           showLocalPickup: prefs.showLocalPickup ?? false,
         };
-        let userPool = topDeals(pool, 40, 0, userFilterPrefs);
+
+        // Filter out items sent in the last 30 days to prevent digest repetition
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const recentlySentIds = new Set(
+          (prefs.sentItemIds ?? [])
+            .filter(s => new Date(s.sentAt).getTime() > cutoff)
+            .map(s => s.itemId)
+        );
+
+        let userPool = topDeals(pool, 40, 0, userFilterPrefs)
+          .filter(item => !recentlySentIds.has(item.itemId));
+        if (userPool.length === 0) userPool = topDeals(pool, 40, 0, userFilterPrefs); // fallback: ignore dedup if nothing left
         if (userPool.length === 0) userPool = [...candidates];
 
         if (prefs.watchlistQueries && prefs.watchlistQueries.length > 0) {
@@ -346,6 +358,14 @@ export async function GET(req: NextRequest) {
           return dealScore(bf ?? { verdict: bv as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 })
                - dealScore(af ?? { verdict: av as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 });
         })
+        // Cap sports/trading cards at 1 per digest so a single category can't dominate
+        .reduce<typeof best5>((acc, item) => {
+          const isCard = /\b(psa|bgs|sgc|graded|trading card|sports card|pokemon|baseball card|basketball card|football card)\b/i.test(item.title);
+          const cardCount = acc.filter(i => /\b(psa|bgs|sgc|graded|trading card|sports card|pokemon|baseball card|basketball card|football card)\b/i.test(i.title)).length;
+          if (isCard && cardCount >= 1) return acc;
+          acc.push(item);
+          return acc;
+        }, [])
         .slice(0, 5);
       console.log(`[digest] user ${d.userId} qualified deals: ${finalDeals.length}, profits: ${finalDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
       return { ...d, deals: finalDeals };
@@ -474,6 +494,16 @@ export async function GET(req: NextRequest) {
       if (!userId) return;
       const cache = { generatedAt: new Date().toISOString(), aiPick: userAiPick ?? null, aiPickItemId: userPickItemId ?? null, items: toDigestItems(deals) };
       await r2Put(`deal-wiz/digest-user-${userId}.json`, JSON.stringify(cache));
+
+      // Record sent item IDs so they won't repeat in future digests (30-day window)
+      const { getUserPrefs: getPrefs, saveUserPrefs: savePrefs } = await import('@/lib/tracker-data');
+      const prefs = await getPrefs(userId);
+      const cutoffTs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const existing = (prefs.sentItemIds ?? []).filter(s => new Date(s.sentAt).getTime() > cutoffTs);
+      const nowIso = new Date().toISOString();
+      const newEntries = deals.map(d => ({ itemId: d.itemId, sentAt: nowIso }));
+      prefs.sentItemIds = [...existing, ...newEntries];
+      await savePrefs(userId, prefs);
     }));
 
     // Send push notifications — URL is a spotlight link so tapping opens the specific deal

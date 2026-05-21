@@ -93,6 +93,7 @@ export interface UserPrefs {
   filterPrefs?: FilterPrefs;      // user-configured item filter criteria
   showLocalPickup?: boolean;      // include local-pickup-only listings (default false)
   onboardingComplete?: boolean;   // true once user has seen and dismissed the first-run setup card
+  sentItemIds?: { itemId: string; sentAt: string }[]; // items already sent in digest (30-day dedup)
 }
 
 export async function getUserPrefs(userId: string): Promise<UserPrefs> {
