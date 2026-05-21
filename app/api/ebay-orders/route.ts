@@ -16,7 +16,6 @@ export async function GET(req: NextRequest) {
 
   let token = tokens.accessToken;
 
-  // Refresh if expiring within 5 minutes
   if (tokens.expiresAt < Date.now() + 5 * 60 * 1000) {
     try {
       const refreshed = await refreshEbayUserToken(tokens.refreshToken);
@@ -26,7 +25,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const debug: Record<string, any> = {};
+  const debug: Record<string, unknown> = {};
 
   // Try REST Buy Order API first
   try {
@@ -39,15 +38,15 @@ export async function GET(req: NextRequest) {
     });
     const data = await res.json();
     debug.restStatus = res.status;
-    debug.restResponse = JSON.stringify(data).slice(0, 500);
     if (res.ok && (data.purchaseOrders?.length ?? 0) > 0) {
-      const orders = data.purchaseOrders.map((o: any) => {
-        const items = (o.lineItems ?? []).map((li: any) => ({
+      const orders = data.purchaseOrders.map((o: Record<string, unknown>) => {
+        const lineItems = (o.lineItems as Record<string, unknown>[] ?? []);
+        const items = lineItems.map((li: Record<string, unknown>) => ({
           title: li.title,
-          quantity: li.quantity ?? 1,
-          price: li.lineItemCost ? parseFloat(li.lineItemCost.value) : null,
+          quantity: (li.quantity as number) ?? 1,
+          price: li.lineItemCost ? parseFloat((li.lineItemCost as Record<string, string>).value) : null,
         }));
-        const total = items.reduce((s: number, li: any) => s + (li.price ?? 0) * li.quantity, 0);
+        const total = items.reduce((s: number, li) => s + ((li.price ?? 0) as number) * li.quantity, 0);
         return { orderId: o.legacyOrderId, date: o.creationDate, items, total: total || null };
       });
       return NextResponse.json({ orders, source: 'rest' });
@@ -56,7 +55,7 @@ export async function GET(req: NextRequest) {
     debug.restError = String(e);
   }
 
-  // Fallback: Trading API (GetMyeBayBuying) — capture raw XML for debugging
+  // Fallback: Trading API (GetMyeBayBuying)
   try {
     const soapBody = `<?xml version="1.0" encoding="utf-8"?>
 <GetMyeBayBuyingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -85,11 +84,11 @@ export async function GET(req: NextRequest) {
     });
     const xml = await tradingRes.text();
     debug.tradingStatus = tradingRes.status;
-    debug.tradingXmlSnippet = xml.slice(0, 800);
+    debug.tradingXmlSnippet = xml.slice(0, 1200);
 
     const purchased = await getEbayPurchaseHistory(token);
     debug.tradingCount = purchased.length;
-    const orders = purchased.map((item: any) => ({
+    const orders = purchased.map(item => ({
       orderId: item.itemId,
       date: item.endTime,
       items: [{ title: item.title, quantity: 1, price: item.price || null }],

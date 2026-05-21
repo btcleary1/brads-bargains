@@ -21,12 +21,14 @@ export default function EbayOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [xmlSnippet, setXmlSnippet] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch('/api/ebay-orders')
       .then(r => r.json())
       .then(d => {
+        if (d.debug?.tradingXmlSnippet) setXmlSnippet(d.debug.tradingXmlSnippet);
         if (d.error) setError(d.error);
         else setOrders(d.orders ?? []);
       })
@@ -76,7 +78,10 @@ export default function EbayOrdersPage() {
           <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
             <Package className="w-10 h-10 mx-auto mb-3" style={{ color: '#4B5563' }} />
             <p className="text-white font-medium mb-1">No orders found</p>
-            <p className="text-sm" style={{ color: '#6B7280' }}>Connect your eBay account in Settings to see purchase history.</p>
+            <p className="text-sm" style={{ color: '#6B7280' }}>No purchases found in the last 180 days, or your eBay account may need to be reconnected in Settings.</p>
+            {xmlSnippet && (
+              <pre className="mt-4 text-left text-[10px] rounded-xl p-3 overflow-x-auto" style={{ background: 'rgba(0,0,0,0.3)', color: '#9CA3AF', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{xmlSnippet}</pre>
+            )}
           </div>
         )}
 

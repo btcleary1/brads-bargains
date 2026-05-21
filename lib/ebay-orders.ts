@@ -36,17 +36,13 @@ export async function fetchEbayOrders(userId: string): Promise<Order[]> {
   const token = await getToken(userId);
   if (!token) return [];
 
-  try {
-    const items = await getEbayPurchaseHistory(token);
-    return items.map(item => ({
-      orderId: item.itemId,
-      date: item.endTime,
-      items: [{ title: item.title, quantity: 1, price: item.price || null }],
-      total: item.price || null,
-    }));
-  } catch {
-    return [];
-  }
+  const items = await getEbayPurchaseHistory(token);
+  return items.map(item => ({
+    orderId: item.itemId,
+    date: item.endTime,
+    items: [{ title: item.title, quantity: 1, price: item.price || null }],
+    total: item.price || null,
+  }));
 }
 
 export async function fetchEbayOrderTitles(userId: string): Promise<string[]> {
