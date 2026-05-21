@@ -1,4 +1,5 @@
-import { getUserPrefs, saveUserPrefs } from './tracker-data';
+import { getEbayUserTokens, saveEbayUserTokens } from './tracker-data';
+import { refreshEbayUserToken, getEbayPurchaseHistory } from './ebay-user';
 
 const EBAY_API = 'https://api.ebay.com';
 
@@ -12,38 +13,6 @@ interface EbayOrder {
   legacyOrderId: string;
   creationDate: string;
   lineItems: EbayOrderItem[];
-}
-
-async function refreshAccessToken(userId: string, prefs: any): Promise<string | null> {
-  const clientId = process.env.EBAY_CLIENT_ID!;
-  const clientSecret = process.env.EBAY_CLIENT_SECRET!;
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-
-  try {
-    const res = await fetch(`${EBAY_API}/identity/v1/oauth2/token`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: prefs.ebayRefreshToken,
-        scope: 'https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/buy.order.readonly',
-      }).toString(),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const updatedPrefs = {
-      ...prefs,
-      ebayAccessToken: data.access_token,
-      ebayTokenExpiresAt: Date.now() + data.expires_in * 1000,
-    };
-    await saveUserPrefs(userId, updatedPrefs);
-    return data.access_token;
-  } catch {
-    return null;
-  }
 }
 
 export interface OrderLineItem {
@@ -60,13 +29,22 @@ export interface Order {
 }
 
 async function getToken(userId: string): Promise<string | null> {
-  const prefs = await getUserPrefs(userId) as any;
-  if (!prefs.ebayAccessToken) return null;
-  if (!prefs.ebayTokenExpiresAt || prefs.ebayTokenExpiresAt < Date.now() + 5 * 60 * 1000) {
-    if (!prefs.ebayRefreshToken) return null;
-    return refreshAccessToken(userId, prefs);
+  const tokens = await getEbayUserTokens(userId);
+  if (!tokens) return null;
+
+  // Refresh if expiring within 5 minutes
+  if (tokens.expiresAt < Date.now() + 5 * 60 * 1000) {
+    if (!tokens.refreshToken) return null;
+    try {
+      const refreshed = await refreshEbayUserToken(tokens.refreshToken);
+      await saveEbayUserTokens(userId, { ...tokens, ...refreshed });
+      return refreshed.accessToken;
+    } catch {
+      return null;
+    }
   }
-  return prefs.ebayAccessToken;
+
+  return tokens.accessToken;
 }
 
 export async function fetchEbayOrders(userId: string): Promise<Order[]> {
