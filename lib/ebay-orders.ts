@@ -46,18 +46,32 @@ async function refreshAccessToken(userId: string, prefs: any): Promise<string | 
   }
 }
 
-export async function fetchEbayOrderTitles(userId: string): Promise<string[]> {
+export interface OrderLineItem {
+  title: string;
+  quantity: number;
+  price: number | null;
+}
+
+export interface Order {
+  orderId: string;
+  date: string;
+  items: OrderLineItem[];
+  total: number | null;
+}
+
+async function getToken(userId: string): Promise<string | null> {
   const prefs = await getUserPrefs(userId) as any;
-  if (!prefs.ebayAccessToken) return [];
-
-  let token = prefs.ebayAccessToken;
-
-  // Refresh if expired or expiring within 5 minutes
+  if (!prefs.ebayAccessToken) return null;
   if (!prefs.ebayTokenExpiresAt || prefs.ebayTokenExpiresAt < Date.now() + 5 * 60 * 1000) {
-    if (!prefs.ebayRefreshToken) return [];
-    token = await refreshAccessToken(userId, prefs) ?? '';
-    if (!token) return [];
+    if (!prefs.ebayRefreshToken) return null;
+    return refreshAccessToken(userId, prefs);
   }
+  return prefs.ebayAccessToken;
+}
+
+export async function fetchEbayOrders(userId: string): Promise<Order[]> {
+  const token = await getToken(userId);
+  if (!token) return [];
 
   try {
     const res = await fetch(`${EBAY_API}/buy/order/v2/purchase_order?limit=50`, {
@@ -67,19 +81,25 @@ export async function fetchEbayOrderTitles(userId: string): Promise<string[]> {
         'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
       },
     });
-
     if (!res.ok) return [];
     const data = await res.json();
-    const orders: EbayOrder[] = data.purchaseOrders ?? [];
+    const raw: EbayOrder[] = data.purchaseOrders ?? [];
 
-    const titles: string[] = [];
-    for (const order of orders) {
-      for (const item of order.lineItems ?? []) {
-        if (item.title) titles.push(item.title);
-      }
-    }
-    return titles;
+    return raw.map(o => {
+      const items: OrderLineItem[] = (o.lineItems ?? []).map(li => ({
+        title: li.title,
+        quantity: li.quantity ?? 1,
+        price: li.lineItemCost ? parseFloat(li.lineItemCost.value) : null,
+      }));
+      const total = items.reduce((sum, li) => sum + (li.price ?? 0) * li.quantity, 0);
+      return { orderId: o.legacyOrderId, date: o.creationDate, items, total: total || null };
+    });
   } catch {
     return [];
   }
+}
+
+export async function fetchEbayOrderTitles(userId: string): Promise<string[]> {
+  const orders = await fetchEbayOrders(userId);
+  return orders.flatMap(o => o.items.map(i => i.title));
 }
