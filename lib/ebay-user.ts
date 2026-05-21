@@ -187,7 +187,7 @@ export async function getEbayPurchaseHistory(accessToken: string): Promise<Purch
 
   const soapBody = `<?xml version="1.0" encoding="utf-8"?>
 <GetMyeBayBuyingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <PurchasedList>
+  <WonList>
     <Include>true</Include>
     <NumberOfDays>180</NumberOfDays>
     <Sort>EndTimeDescending</Sort>
@@ -195,7 +195,7 @@ export async function getEbayPurchaseHistory(accessToken: string): Promise<Purch
       <EntriesPerPage>50</EntriesPerPage>
       <PageNumber>1</PageNumber>
     </Pagination>
-  </PurchasedList>
+  </WonList>
   <ErrorLanguage>en_US</ErrorLanguage>
   <WarningLevel>High</WarningLevel>
 </GetMyeBayBuyingRequest>`;
