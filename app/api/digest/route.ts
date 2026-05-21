@@ -8,7 +8,7 @@ import { sendDailyDigest, FlipData, buildSpotlightUrl } from '@/lib/notify';
 import { sendSMSDigest } from '@/lib/sms';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getAllUsers, getUserByEmail } from '@/lib/users';
-import { getUserPrefs, getDeals } from '@/lib/tracker-data';
+import { getUserPrefs, saveUserPrefs, getDeals } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals, inferCategoryScores, categoryKeyForTitle } from '@/lib/infer-categories';
 import { fetchEbayOrderTitles } from '@/lib/ebay-orders';
 import { searchSoldComps } from '@/lib/ebay-comps';
@@ -510,14 +510,13 @@ export async function GET(req: NextRequest) {
       await r2Put(`deal-wiz/digest-user-${userId}.json`, JSON.stringify(cache));
 
       // Record sent item IDs so they won't repeat in future digests (30-day window)
-      const { getUserPrefs: getPrefs, saveUserPrefs: savePrefs } = await import('@/lib/tracker-data');
-      const prefs = await getPrefs(userId);
+      const prefs = await getUserPrefs(userId);
       const cutoffTs = Date.now() - 30 * 24 * 60 * 60 * 1000;
       const existing = (prefs.sentItemIds ?? []).filter(s => new Date(s.sentAt).getTime() > cutoffTs);
       const nowIso = new Date().toISOString();
       const newEntries = deals.map(d => ({ itemId: d.itemId, sentAt: nowIso }));
       prefs.sentItemIds = [...existing, ...newEntries];
-      await savePrefs(userId, prefs);
+      await saveUserPrefs(userId, prefs);
     }));
 
     // Send push notifications — URL is a spotlight link so tapping opens the specific deal
