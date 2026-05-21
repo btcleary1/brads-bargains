@@ -53,6 +53,7 @@ interface CompsVerdict {
   stockxLastSale?: number | null;
   mercariAvgSold?: number | null;
   amazonPrice?: number | null;
+  fbMarketplaceAvg?: number | null;
   discountQuality?: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   discountQualityReason?: string | null;
   sourcesCount?: number | null;
@@ -90,6 +91,7 @@ interface BrowseDeal {
   stockxLastSale?: number | null;
   mercariAvgSold?: number | null;
   amazonPrice?: number | null;
+  fbMarketplaceAvg?: number | null;
   watcherVelocity?: WatcherVelocity | null;
   discountQuality?: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   discountQualityReason?: string | null;
@@ -227,9 +229,9 @@ function VerdictBadge({ verdict }: { verdict: 'buy' | 'skip' | 'maybe' }) {
   );
 }
 
-function MultiSourceBadge({ confidence, stockx, mercari, amazon }: { confidence?: string; stockx?: number | null; mercari?: number | null; amazon?: number | null }) {
+function MultiSourceBadge({ confidence, stockx, mercari, amazon, fb }: { confidence?: string; stockx?: number | null; mercari?: number | null; amazon?: number | null; fb?: number | null }) {
   if (!confidence) return null;
-  const parts = [stockx ? `StockX $${stockx}` : null, mercari ? `Mercari $${mercari}` : null, amazon ? `Amazon $${amazon}` : null].filter(Boolean);
+  const parts = [stockx ? `StockX $${stockx}` : null, mercari ? `Mercari $${mercari}` : null, amazon ? `Amazon $${amazon}` : null, fb ? `FB Mkt $${fb}` : null].filter(Boolean);
   const sourcesText = parts.join(' · ');
   const sourceCount = parts.length + 1; // +1 for eBay
   if (confidence === 'high') return (
@@ -288,7 +290,7 @@ function DiscountQualityBadge({ quality, reason }: { quality?: string; reason?: 
 
 function StatsCluster({
   avgSoldPrice, soldCount, sourcesCount, netProfit, estDaysToSell, annROI,
-  stockxLastSale, mercariAvgSold, amazonPrice,
+  stockxLastSale, mercariAvgSold, amazonPrice, fbMarketplaceAvg,
 }: {
   avgSoldPrice?: number | null;
   soldCount?: number | null;
@@ -299,6 +301,7 @@ function StatsCluster({
   stockxLastSale?: number | null;
   mercariAvgSold?: number | null;
   amazonPrice?: number | null;
+  fbMarketplaceAvg?: number | null;
 }) {
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
   const hasLine1 = avgSoldPrice != null;
@@ -313,6 +316,7 @@ function StatsCluster({
   if (stockxLastSale) sources.push({ name: 'StockX', price: stockxLastSale });
   if (mercariAvgSold) sources.push({ name: 'Mercari', price: mercariAvgSold });
   if (amazonPrice) sources.push({ name: 'Amazon', price: amazonPrice });
+  if (fbMarketplaceAvg) sources.push({ name: 'FB Mkt', price: fbMarketplaceAvg });
   const siteCount = sourcesCount ?? (sources.length > 0 ? sources.length : null);
 
   const multiSource = sources.length > 1;
@@ -630,7 +634,7 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <VerdictBadge verdict={activeComps.verdict} />
                 {preFlip && !comps && <span className="text-xs" style={{ color: '#6B7280' }}>Auto-graded</span>}
-                <MultiSourceBadge confidence={activeComps.multiSourceConfidence} stockx={activeComps.stockxLastSale} mercari={activeComps.mercariAvgSold} amazon={activeComps.amazonPrice} />
+                <MultiSourceBadge confidence={activeComps.multiSourceConfidence} stockx={activeComps.stockxLastSale} mercari={activeComps.mercariAvgSold} amazon={activeComps.amazonPrice} fb={activeComps.fbMarketplaceAvg} />
               </div>
               <div className="mb-2">
                 <StatsCluster
@@ -643,6 +647,7 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
                   stockxLastSale={activeComps.stockxLastSale}
                   mercariAvgSold={activeComps.mercariAvgSold}
                   amazonPrice={activeComps.amazonPrice}
+                  fbMarketplaceAvg={activeComps.fbMarketplaceAvg}
                 />
               </div>
               {activeComps.platformRecommendation && (
@@ -718,14 +723,14 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
           {!comps && deal.avgSoldPrice > 0 && (
             <div className="rounded-xl px-3 py-2 mb-2" style={{ background: deal.flipVerdict === 'buy' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(251,191,36,0.2)' }}>
               <span className="text-xs font-bold block mb-1" style={{ color: deal.flipVerdict === 'buy' ? '#4ADE80' : '#FCD34D' }}>{deal.flipVerdict === 'buy' ? '✓ BUY' : '~ MAYBE'}</span>
-              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={deal.sourcesCount} netProfit={deal.flipNetProfit > 0 ? deal.flipNetProfit : null} estDaysToSell={deal.estDaysToSell} annROI={deal.estDaysToSell != null && deal.estDaysToSell >= 1 && deal.flipNetProfit > 0 ? Math.round((deal.flipNetProfit / deal.price / deal.estDaysToSell) * 365 * 100) : null} stockxLastSale={deal.stockxLastSale} mercariAvgSold={deal.mercariAvgSold} amazonPrice={deal.amazonPrice} />
+              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={deal.sourcesCount} netProfit={deal.flipNetProfit > 0 ? deal.flipNetProfit : null} estDaysToSell={deal.estDaysToSell} annROI={deal.estDaysToSell != null && deal.estDaysToSell >= 1 && deal.flipNetProfit > 0 ? Math.round((deal.flipNetProfit / deal.price / deal.estDaysToSell) * 365 * 100) : null} stockxLastSale={deal.stockxLastSale} mercariAvgSold={deal.mercariAvgSold} amazonPrice={deal.amazonPrice} fbMarketplaceAvg={deal.fbMarketplaceAvg} />
             </div>
           )}
           {/* Live Check Flip result */}
           {comps && comps.noData && deal.avgSoldPrice > 0 && (
             <div className="rounded-xl px-3 py-2 mb-2" style={{ background: deal.flipVerdict === 'buy' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(251,191,36,0.2)' }}>
               <span className="text-xs font-bold block mb-1" style={{ color: deal.flipVerdict === 'buy' ? '#4ADE80' : '#FCD34D' }}>{deal.flipVerdict === 'buy' ? '✓ BUY' : '~ MAYBE'} <span className="font-normal opacity-60">(email data)</span></span>
-              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={deal.sourcesCount} netProfit={deal.flipNetProfit} estDaysToSell={deal.estDaysToSell} annROI={null} stockxLastSale={deal.stockxLastSale} mercariAvgSold={deal.mercariAvgSold} amazonPrice={deal.amazonPrice} />
+              <StatsCluster avgSoldPrice={deal.avgSoldPrice} soldCount={deal.soldCount} sourcesCount={deal.sourcesCount} netProfit={deal.flipNetProfit} estDaysToSell={deal.estDaysToSell} annROI={null} stockxLastSale={deal.stockxLastSale} mercariAvgSold={deal.mercariAvgSold} amazonPrice={deal.amazonPrice} fbMarketplaceAvg={deal.fbMarketplaceAvg} />
             </div>
           )}
           {comps && comps.noData && deal.avgSoldPrice <= 0 && (
@@ -739,7 +744,7 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
                 <VerdictBadge verdict={comps.verdict} />
               </div>
               <div className="mb-2">
-                <StatsCluster avgSoldPrice={comps.avgSoldPrice} soldCount={comps.soldCount} sourcesCount={comps.sourcesCount} netProfit={comps.netProfit} estDaysToSell={comps.daysToSell} annROI={comps.capitalEfficiency} stockxLastSale={comps.stockxLastSale} mercariAvgSold={comps.mercariAvgSold} amazonPrice={comps.amazonPrice} />
+                <StatsCluster avgSoldPrice={comps.avgSoldPrice} soldCount={comps.soldCount} sourcesCount={comps.sourcesCount} netProfit={comps.netProfit} estDaysToSell={comps.daysToSell} annROI={comps.capitalEfficiency} stockxLastSale={comps.stockxLastSale} mercariAvgSold={comps.mercariAvgSold} amazonPrice={comps.amazonPrice} fbMarketplaceAvg={comps.fbMarketplaceAvg} />
               </div>
               {comps.reasoning && <p className="text-xs leading-relaxed" style={{ color: '#9CA3AF' }}>{comps.reasoning}</p>}
             </div>
@@ -1582,6 +1587,7 @@ function DealsPageContent() {
                         stockxLastSale={pickedFlip.stockxLastSale}
                         mercariAvgSold={pickedFlip.mercariAvgSold}
                         amazonPrice={pickedFlip.amazonPrice}
+                        fbMarketplaceAvg={pickedFlip.fbMarketplaceAvg}
                       />
                     </div>
                   )}
@@ -1856,7 +1862,7 @@ function DealsPageContent() {
 
             {!browseLoading && browseItems.length > 0 && (
               <div className="space-y-3">
-                {browseItems.map(deal => (
+                {browseItems.filter(deal => deal.flipVerdict === 'buy').map(deal => (
                   <div key={deal.itemId} className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(251,191,36,0.2)' }}>
                     <div className="flex gap-3 p-4">
                       {deal.imageUrl && (
@@ -1891,6 +1897,7 @@ function DealsPageContent() {
                             stockxLastSale={deal.stockxLastSale}
                             mercariAvgSold={deal.mercariAvgSold}
                             amazonPrice={deal.amazonPrice}
+                            fbMarketplaceAvg={deal.fbMarketplaceAvg}
                           />
                         </div>
                         <div className="text-xs mb-2" style={{ color: '#6B7280' }}>{deal.condition}</div>
@@ -2001,6 +2008,7 @@ function DealsPageContent() {
                               stockxLastSale={trendingFlips[item.itemId].stockxLastSale}
                               mercariAvgSold={trendingFlips[item.itemId].mercariAvgSold}
                               amazonPrice={trendingFlips[item.itemId].amazonPrice}
+                              fbMarketplaceAvg={trendingFlips[item.itemId].fbMarketplaceAvg}
                             />
                           </div>
                         ) : (
