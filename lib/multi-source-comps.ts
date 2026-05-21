@@ -23,12 +23,24 @@ export interface MultiSourceCompsResult {
 
 const COLLECTIBLE_RE = /jordan|nike\s+dunk|adidas|yeezy|sneaker|pokemon|trading\s+card|sports\s+card|psa|bgs|sgc|lego|funko|comic/i;
 
+// Amazon and StockX only sell NEW items. For used/pre-owned listings they should
+// act as price ceilings (buyers won't pay above new price), not blended averages.
+// Mercari skews used, so it gets more weight when the listing is used.
+function conditionTier(condition: string): 'new' | 'like-new' | 'used' {
+  const c = condition.toLowerCase();
+  if (/\bnew\b/.test(c) && !/like.?new|open.?box/.test(c)) return 'new';
+  if (/like.?new|open.?box|sealed/.test(c)) return 'like-new';
+  return 'used'; // used, pre-owned, good, acceptable, fair, for parts
+}
+
 export async function getMultiSourceComps(
   title: string,
   maxEbayResults = 15,
+  condition = '',
 ): Promise<MultiSourceCompsResult | null> {
   const modelQuery = extractModelQuery(title);
   const isCollectible = COLLECTIBLE_RE.test(title);
+  const tier = conditionTier(condition);
 
   // Fire all sources in parallel using the refined model query
   const [ebayResult, mercariResult, stockxResult, amazonResult] = await Promise.allSettled([
@@ -38,58 +50,77 @@ export async function getMultiSourceComps(
     searchAmazonPrice(modelQuery),
   ]);
 
-  const ebay  = ebayResult.status   === 'fulfilled' ? ebayResult.value   : null;
+  const ebay    = ebayResult.status   === 'fulfilled' ? ebayResult.value   : null;
   const mercari = mercariResult.status === 'fulfilled' ? mercariResult.value : null;
   const stockx  = stockxResult.status  === 'fulfilled' ? stockxResult.value  : null;
   const amazon  = amazonResult.status  === 'fulfilled' ? amazonResult.value  : null;
 
-  const ebayAvg       = ebay && ebay.count >= 2 ? ebay.avgSoldPrice : null;
-  const mercariAvg    = mercari?.avgSoldPrice && mercari.soldCount >= 2 ? mercari.avgSoldPrice : null;
+  const ebayAvg        = ebay && ebay.count >= 2 ? ebay.avgSoldPrice : null;
+  const mercariAvg     = mercari?.avgSoldPrice && mercari.soldCount >= 2 ? mercari.avgSoldPrice : null;
   const stockxLastSale = stockx?.lastSalePrice && stockx.lastSalePrice > 0 ? stockx.lastSalePrice : null;
-  const amazonPrice   = amazon?.lowestPrice && amazon.lowestPrice > 0 ? amazon.lowestPrice : null;
+  const amazonPrice    = amazon?.lowestPrice && amazon.lowestPrice > 0 ? amazon.lowestPrice : null;
 
   // eBay is required — it's the primary market for resale
   if (!ebayAvg) return null;
 
-  // --- Weighted average ---
-  // Base weights (out of 100): eBay 50, Mercari 15, StockX 15, Amazon 20
-  // Amazon contributes current listing price (not historical sold), so it acts as a
-  // ceiling reference: if Amazon is cheaper than eBay avg, buyers will go to Amazon —
-  // we cap the weighted avg rather than blindly blending.
+  // --- Condition-aware weighted average ---
+  // New:       eBay 50 | Amazon 20 (blend)   | StockX 15 | Mercari 10
+  // Like-new:  eBay 50 | Amazon 15 (blend)   | StockX 10 | Mercari 15
+  // Used:      eBay 50 | Amazon ceiling-only  | StockX ceiling-only | Mercari 20
+  //
+  // "Ceiling-only" means the source price caps the weighted avg rather than
+  // contributing to it — buyers won't pay more than the new price on Amazon/StockX.
 
   let weightedSum = ebayAvg * 50;
   let totalWeight = 50;
   const sourcesUsed: string[] = ['eBay'];
 
+  // Mercari weight varies by condition
   if (mercariAvg) {
-    weightedSum += mercariAvg * 15;
-    totalWeight += 15;
+    const mercariWeight = tier === 'used' ? 20 : tier === 'like-new' ? 15 : 10;
+    weightedSum += mercariAvg * mercariWeight;
+    totalWeight += mercariWeight;
     sourcesUsed.push('Mercari');
   }
 
+  // StockX: blend for new/like-new collectibles; ceiling-only for used
+  let stockxIsCeiling = false;
   if (stockxLastSale && isCollectible) {
-    weightedSum += stockxLastSale * 15;
-    totalWeight += 15;
     sourcesUsed.push('StockX');
+    if (tier === 'used') {
+      stockxIsCeiling = true;
+    } else {
+      const stockxWeight = tier === 'new' ? 15 : 10;
+      weightedSum += stockxLastSale * stockxWeight;
+      totalWeight += stockxWeight;
+    }
   }
 
+  // Amazon: blend for new/like-new; ceiling-only for used OR if it undercuts eBay by >15%
   let amazonIsCeiling = false;
   if (amazonPrice) {
     sourcesUsed.push('Amazon');
-    // If Amazon is >15% cheaper than eBay avg: act as ceiling instead of weight
-    if (amazonPrice < ebayAvg * 0.85) {
+    if (tier === 'used') {
+      // Amazon is new price — always ceiling for used listings
+      amazonIsCeiling = true;
+    } else if (amazonPrice < ebayAvg * 0.85) {
+      // Amazon undercuts eBay — buyers will go to Amazon, so it caps resale value
       amazonIsCeiling = true;
     } else {
-      weightedSum += amazonPrice * 20;
-      totalWeight += 20;
+      const amazonWeight = tier === 'new' ? 20 : 15;
+      weightedSum += amazonPrice * amazonWeight;
+      totalWeight += amazonWeight;
     }
   }
 
   let weightedAvg = Math.round(weightedSum / totalWeight);
 
-  // Apply Amazon ceiling if it undercuts eBay — buyers won't pay above Amazon price
+  // Apply ceilings — resale price can't exceed what buyers pay for new
   if (amazonIsCeiling && amazonPrice) {
     weightedAvg = Math.min(weightedAvg, Math.round(amazonPrice * 0.97));
+  }
+  if (stockxIsCeiling && stockxLastSale) {
+    weightedAvg = Math.min(weightedAvg, Math.round(stockxLastSale * 0.97));
   }
 
   // --- Confidence ---

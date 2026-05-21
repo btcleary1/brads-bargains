@@ -12,6 +12,7 @@ export interface FlipData {
   stockxLastSale?: number | null;
   mercariAvgSold?: number | null;
   amazonPrice?: number | null;
+  fbMarketplaceAvg?: number | null;
 }
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
@@ -72,6 +73,7 @@ export function buildSpotlightUrl(deal: EbayItem, flip?: FlipData, displayNetPro
     stockxLastSale: flip?.stockxLastSale ?? null,
     mercariAvgSold: flip?.mercariAvgSold ?? null,
     amazonPrice: flip?.amazonPrice ?? null,
+    fbMarketplaceAvg: flip?.fbMarketplaceAvg ?? null,
   })).toString('base64url');
   return `${APP_URL}/deals?spotlight=${payload}`;
 }
@@ -113,6 +115,7 @@ function flipRow(flip: FlipData, annROI?: number | null): string {
   if (flip.stockxLastSale) sourceParts.push(`<span style="font-size:10px;color:#475569;">StockX&nbsp;<strong>$${flip.stockxLastSale.toFixed(0)}</strong></span>`);
   if (flip.mercariAvgSold) sourceParts.push(`<span style="font-size:10px;color:#475569;">Mercari&nbsp;<strong>$${flip.mercariAvgSold.toFixed(0)}</strong></span>`);
   if (flip.amazonPrice) sourceParts.push(`<span style="font-size:10px;color:#475569;">Amazon&nbsp;<strong>$${flip.amazonPrice.toFixed(0)}</strong></span>`);
+  if (flip.fbMarketplaceAvg) sourceParts.push(`<span style="font-size:10px;color:#475569;">FB&nbsp;Mkt&nbsp;<strong>$${flip.fbMarketplaceAvg.toFixed(0)}</strong></span>`);
   return `<div style="margin-top:8px;padding:10px 12px;background:${verdictBg};border:1px solid ${verdictBorder};border-radius:6px;">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
       <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:${verdictColor};">${label}</span>

@@ -26,6 +26,7 @@ export interface BrowseDeal extends EbayItem {
   flipMarginPct: number;
   estDaysToSell?: number | null;
   sourcesCount?: number | null;
+  multiSourceConfidence?: 'high' | 'medium' | 'low';
   watcherVelocity?: WatcherVelocity | null;
   discountQuality?: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   discountQualityReason?: string | null;
@@ -57,6 +58,7 @@ async function quickFlipVerdict(item: EbayItem): Promise<{
   marginPct: number;
   estDaysToSell: number | null;
   sourcesCount: number;
+  confidence: 'high' | 'medium' | 'low';
 } | null> {
   try {
     const comps = await getMultiSourceComps(item.title, 12);
@@ -78,7 +80,10 @@ async function quickFlipVerdict(item: EbayItem): Promise<{
     if (days != null && days > 60) verdict = 'skip';
     else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
 
-    return { verdict, netProfit, avgSoldPrice: comps.weightedAvgSoldPrice, soldCount: comps.ebayCount, marginPct, estDaysToSell: comps.estDaysToSell, sourcesCount: comps.sourcesUsed.length };
+    // Today's Picks promises "confirmed" flips — downgrade low/medium confidence buys to maybe
+    if (verdict === 'buy' && comps.confidence !== 'high') verdict = 'maybe';
+
+    return { verdict, netProfit, avgSoldPrice: comps.weightedAvgSoldPrice, soldCount: comps.ebayCount, marginPct, estDaysToSell: comps.estDaysToSell, sourcesCount: comps.sourcesUsed.length, confidence: comps.confidence };
   } catch {
     return null;
   }
@@ -225,6 +230,7 @@ export async function GET(req: NextRequest) {
         flipMarginPct: r.value.marginPct,
         estDaysToSell: r.value.estDaysToSell,
         sourcesCount: r.value.sourcesCount ?? null,
+        multiSourceConfidence: r.value.confidence,
       });
     });
 
