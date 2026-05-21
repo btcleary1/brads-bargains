@@ -1951,7 +1951,10 @@ function DealsPageContent() {
 
           {trending.length > 0 && !trendingLoading && (
             <div className="space-y-2">
-              {trending.slice(0, 8).map((item, idx) => {
+              {trending.slice(0, 8).filter(item => {
+                const flip = trendingFlips[item.itemId];
+                return !flip || flip.netProfit == null || flip.netProfit >= 20;
+              }).map((item, idx) => {
                 // No marketPrice estimate — profit shown only after Check Flip runs
                 const tracked = trendingTracked.has(item.itemId || item.title);
                 const trackItem = async () => {
