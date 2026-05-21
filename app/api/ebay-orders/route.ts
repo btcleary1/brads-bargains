@@ -26,6 +26,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const debug: Record<string, any> = {};
+
   // Try REST Buy Order API first
   try {
     const res = await fetch('https://api.ebay.com/buy/order/v2/purchase_order?limit=50', {
@@ -36,6 +38,8 @@ export async function GET(req: NextRequest) {
       },
     });
     const data = await res.json();
+    debug.restStatus = res.status;
+    debug.restResponse = JSON.stringify(data).slice(0, 500);
     if (res.ok && (data.purchaseOrders?.length ?? 0) > 0) {
       const orders = data.purchaseOrders.map((o: any) => {
         const items = (o.lineItems ?? []).map((li: any) => ({
@@ -48,22 +52,52 @@ export async function GET(req: NextRequest) {
       });
       return NextResponse.json({ orders, source: 'rest' });
     }
-    console.log('[ebay-orders] REST API response:', res.status, JSON.stringify(data).slice(0, 300));
   } catch (e) {
-    console.log('[ebay-orders] REST API error:', e);
+    debug.restError = String(e);
   }
 
-  // Fallback: Trading API (GetMyeBayBuying)
+  // Fallback: Trading API (GetMyeBayBuying) — capture raw XML for debugging
   try {
+    const soapBody = `<?xml version="1.0" encoding="utf-8"?>
+<GetMyeBayBuyingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <PurchasedList>
+    <Include>true</Include>
+    <NumberOfDays>180</NumberOfDays>
+    <Sort>EndTimeDescending</Sort>
+    <Pagination><EntriesPerPage>50</EntriesPerPage><PageNumber>1</PageNumber></Pagination>
+  </PurchasedList>
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+</GetMyeBayBuyingRequest>`;
+
+    const tradingRes = await fetch('https://api.ebay.com/ws/api.dll', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-CALL-NAME': 'GetMyeBayBuying',
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID!,
+        'X-EBAY-API-IAF-TOKEN': token,
+      },
+      body: soapBody,
+      cache: 'no-store',
+    });
+    const xml = await tradingRes.text();
+    debug.tradingStatus = tradingRes.status;
+    debug.tradingXmlSnippet = xml.slice(0, 800);
+
     const purchased = await getEbayPurchaseHistory(token);
+    debug.tradingCount = purchased.length;
     const orders = purchased.map((item: any) => ({
       orderId: item.itemId,
       date: item.endTime,
       items: [{ title: item.title, quantity: 1, price: item.price || null }],
       total: item.price || null,
     }));
-    return NextResponse.json({ orders, source: 'trading' });
+    return NextResponse.json({ orders, source: 'trading', debug });
   } catch (e) {
-    return NextResponse.json({ error: `Trading API failed: ${String(e)}`, orders: [] });
+    debug.tradingError = String(e);
+    return NextResponse.json({ error: `Trading API failed: ${String(e)}`, orders: [], debug });
   }
 }
