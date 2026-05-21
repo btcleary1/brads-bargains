@@ -1103,6 +1103,14 @@ function SettingsContent() {
                 <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
                 Connected — personalized recommendations are active
               </div>
+              <a
+                href="/ebay-orders"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-all"
+                style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', color: '#818CF8' }}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                View Purchase History
+              </a>
               <button
                 onClick={handleEbayDisconnect}
                 disabled={ebayLoading}
