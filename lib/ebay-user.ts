@@ -208,7 +208,7 @@ export async function getEbayPurchaseHistory(accessToken: string): Promise<Purch
       'X-EBAY-API-CALL-NAME': 'GetMyeBayBuying',
       'X-EBAY-API-SITEID': '0',
       'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID!,
-      Authorization: `Bearer ${accessToken}`,
+      'X-EBAY-API-IAF-TOKEN': accessToken,
     },
     body: soapBody,
     cache: 'no-store',
