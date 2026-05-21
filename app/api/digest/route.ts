@@ -9,7 +9,8 @@ import { sendSMSDigest } from '@/lib/sms';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getAllUsers, getUserByEmail } from '@/lib/users';
 import { getUserPrefs, getDeals } from '@/lib/tracker-data';
-import { inferCategoriesFromDeals } from '@/lib/infer-categories';
+import { inferCategoriesFromDeals, inferCategoryScores, categoryKeyForTitle } from '@/lib/infer-categories';
+import { fetchEbayOrderTitles } from '@/lib/ebay-orders';
 import { searchSoldComps } from '@/lib/ebay-comps';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
 import { analyzeFlip } from '@/lib/flip-agent';
@@ -232,9 +233,10 @@ export async function GET(req: NextRequest) {
       userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 60 }];
     } else {
       const users = await getAllUsers();
-      const [prefsResults, dealsResults] = await Promise.all([
+      const [prefsResults, dealsResults, orderTitleResults] = await Promise.all([
         Promise.allSettled(users.map(u => getUserPrefs(u.userId))),
         Promise.allSettled(users.map(u => getDeals(u.userId))),
+        Promise.allSettled(users.map(u => fetchEbayOrderTitles(u.userId))),
       ]);
 
       for (let i = 0; i < users.length; i++) {
@@ -248,12 +250,18 @@ export async function GET(req: NextRequest) {
         const count = prefs.digestCount ?? 5;
 
         // Use explicit categories; if none set, infer from tracker history
+        const dr = dealsResults[i];
+        const userDeals = dr.status === 'fulfilled' ? dr.value : [];
+        const orderResult = orderTitleResults[i];
+        const ebayOrderTitles = orderResult.status === 'fulfilled' ? orderResult.value : [];
+
         let activeCategories = prefs.digestCategories ?? [];
         if (activeCategories.length === 0) {
-          const dr = dealsResults[i];
-          const userDeals = dr.status === 'fulfilled' ? dr.value : [];
           activeCategories = inferCategoriesFromDeals(userDeals);
         }
+
+        // Weighted category affinity — eBay purchase history (0.7) + tracker deals (0.3)
+        const categoryAffinity = inferCategoryScores(activeCategories, [], ebayOrderTitles, userDeals);
 
         // Filter allItems by preferred categories if we have any
         let pool = allItems;
@@ -297,10 +305,16 @@ export async function GET(req: NextRequest) {
           if (personalItems.length > 0) userPool = [...personalItems, ...userPool];
         }
 
-        // Dedupe and sort by sellability, cap at 30 for comp checking
+        // Dedupe, then sort by sellability boosted by eBay purchase history affinity
         const seenIds = new Set<string>();
         userPool = userPool.filter(i => { if (seenIds.has(i.itemId)) return false; seenIds.add(i.itemId); return true; });
-        userPool = userPool.sort((a, b) => sellabilityScore(b, userPool) - sellabilityScore(a, userPool)).slice(0, 30);
+        userPool = userPool.sort((a, b) => {
+          const affinityBoost = (item: typeof a) => {
+            const key = categoryKeyForTitle(item.title);
+            return 1 + (key ? (categoryAffinity.get(key) ?? 0) * 0.5 : 0);
+          };
+          return sellabilityScore(b, userPool) * affinityBoost(b) - sellabilityScore(a, userPool) * affinityBoost(a);
+        }).slice(0, 30);
 
         userDigests.push({ userId: users[i].userId, email: recipientEmail, deals: userPool, maxDaysToSell: prefs.maxDaysToSell ?? 60 });
       }
