@@ -83,7 +83,14 @@ export async function GET(req: NextRequest) {
     for (const deal of watching) {
       try {
         const current = await getItemDetail(deal.ebayItemId);
-        if (!current) continue;
+        if (!current) {
+          // Listing sold or ended — flag it so the UI can show "Sold on eBay"
+          const idx = updatedDeals.findIndex(d => d.id === deal.id);
+          if (idx !== -1 && !updatedDeals[idx].ebayEnded) {
+            updatedDeals[idx] = { ...updatedDeals[idx], ebayEnded: true };
+          }
+          continue;
+        }
 
         const idx = updatedDeals.findIndex(d => d.id === deal.id);
         if (idx === -1) continue;

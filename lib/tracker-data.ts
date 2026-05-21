@@ -41,6 +41,8 @@ export interface TrackerDeal {
   createdAt: string;
   // Price history — one snapshot per day from price-check cron
   priceHistory?: { date: string; price: number }[];
+  // Set to true by price-check cron when the eBay listing is no longer available
+  ebayEnded?: boolean;
 }
 
 export async function getDeals(userId: string): Promise<TrackerDeal[]> {

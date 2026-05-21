@@ -40,6 +40,7 @@ interface TrackerDeal {
   listingDraft: string | null;
   createdAt: string;
   priceHistory?: { date: string; price: number }[];
+  ebayEnded?: boolean;
 }
 
 const STATUS_LABELS: Record<DealStatus, string> = {
@@ -56,7 +57,14 @@ const STATUS_COLORS: Record<DealStatus, { bg: string; border: string; text: stri
   sold:      { bg: 'rgba(34,197,94,0.12)',   border: 'rgba(34,197,94,0.3)',   text: '#4ADE80' },
 };
 
-function StatusBadge({ status }: { status: DealStatus }) {
+function StatusBadge({ status, ebayEnded }: { status: DealStatus; ebayEnded?: boolean }) {
+  if (ebayEnded && status === 'watching') {
+    return (
+      <span className="text-xs font-semibold px-2 py-1 rounded-lg" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}>
+        Sold on eBay
+      </span>
+    );
+  }
   const c = STATUS_COLORS[status];
   return (
     <span className="text-xs font-semibold px-2 py-1 rounded-lg" style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}>
@@ -244,7 +252,7 @@ function DealCard({
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <StatusBadge status={localDeal.status} />
+            <StatusBadge status={localDeal.status} ebayEnded={localDeal.ebayEnded} />
             <span className="font-semibold text-sm" style={{ color: '#34D399' }}>${localDeal.ebayPrice.toFixed(2)}</span>
             {localDeal.discountPct !== null && (
               <span className="text-xs" style={{ color: '#6B7280' }}>{localDeal.discountPct}% off</span>
