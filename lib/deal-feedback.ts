@@ -29,7 +29,9 @@ export async function addFeedback(userId: string, fb: DealFeedback): Promise<voi
 }
 
 function hmacSig(payload: string): string {
-  return createHmac('sha256', process.env.SESSION_SECRET!)
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error('SESSION_SECRET env var is not set — cannot sign feedback URLs');
+  return createHmac('sha256', secret)
     .update(payload)
     .digest('hex')
     .slice(0, 24);

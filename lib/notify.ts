@@ -222,10 +222,11 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
             </table>
 
             ${userId ? (() => {
-              const meta = { title: deal.title, category: deal.category, price: deal.price, discountPct: deal.discountPct ?? null, netProfit: netProfit ?? null, condition: deal.condition };
-              const upUrl = buildFeedbackUrl(userId, deal.itemId, 'up', meta);
-              const downUrl = buildFeedbackUrl(userId, deal.itemId, 'down', meta);
-              return `<!-- Feedback row -->
+              try {
+                const meta = { title: deal.title, category: deal.category, price: deal.price, discountPct: deal.discountPct ?? null, netProfit: netProfit ?? null, condition: deal.condition };
+                const upUrl = buildFeedbackUrl(userId, deal.itemId, 'up', meta);
+                const downUrl = buildFeedbackUrl(userId, deal.itemId, 'down', meta);
+                return `<!-- Feedback row -->
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;">
               <tr>
                 <td width="50%" style="padding-right:3px;">
@@ -236,6 +237,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
                 </td>
               </tr>
             </table>`;
+              } catch { return ''; }
             })() : ''}
 
           </td>
