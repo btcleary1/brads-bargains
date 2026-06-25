@@ -983,6 +983,7 @@ function DealsPageContent() {
   const [trendingError, setTrendingError] = useState('');
   const [trendingTracked, setTrendingTracked] = useState<Set<string>>(new Set());
   const [trendingFlips, setTrendingFlips] = useState<Record<string, CompsVerdict>>({});
+  const [dismissedTrendingIds, setDismissedTrendingIds] = useState<Set<string>>(new Set());
   const [trendingPending, setTrendingPending] = useState<Set<string>>(new Set());
   const [browseItems, setBrowseItems] = useState<BrowseDeal[]>([]);
   const [dismissedBrowseIds, setDismissedBrowseIds] = useState<Set<string>>(new Set());
@@ -2128,6 +2129,7 @@ function DealsPageContent() {
           {trending.length > 0 && !trendingLoading && (
             <div className="space-y-2">
               {trending.slice(0, 8).filter(item => {
+                if (dismissedTrendingIds.has(item.itemId || item.title)) return false;
                 const flip = trendingFlips[item.itemId];
                 return !flip || flip.netProfit == null || flip.netProfit >= 20;
               }).map((item, idx) => {
@@ -2219,6 +2221,7 @@ function DealsPageContent() {
                           discountPct={item.discountPct ?? null}
                           netProfit={trendingFlips[item.itemId]?.netProfit ?? null}
                           condition={item.condition}
+                          onDislike={() => setDismissedTrendingIds(prev => new Set([...prev, item.itemId || item.title]))}
                         />
                       </div>
                       {item.watchCount > 0 && (
