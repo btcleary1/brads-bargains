@@ -28,7 +28,8 @@ interface TrackerDeal {
   condition: string;
   imageUrl: string;
   additionalImages: string[];
-  ebayUrl: string;
+  listingUrl: string;
+  ebayUrl?: string; // deprecated
   category: string;
   status: DealStatus;
   purchasedAt: string | null;
@@ -308,13 +309,13 @@ function DealCard({
               <Tag className="w-3 h-3" /> Find Deal
             </a>
             <a
-              href={localDeal.ebayUrl}
+              href={localDeal.listingUrl || localDeal.ebayUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
               style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#9CA3AF' }}
             >
-              <ExternalLink className="w-3 h-3" /> eBay
+              <ExternalLink className="w-3 h-3" /> {localDeal.listingUrl?.includes('mac.bid') ? 'Mac.bid' : localDeal.listingUrl?.includes('vistaauctions') ? 'Vista' : 'eBay'}
             </a>
             <button
               onClick={checkFlip}

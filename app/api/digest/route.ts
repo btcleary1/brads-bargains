@@ -325,15 +325,13 @@ export async function GET(req: NextRequest) {
     // Final live-check on best5 — removes any items that sold between the initial scan and now
     if (!forceMock && process.env.EBAY_CLIENT_ID) {
       try {
-        const liveFinal = await filterLiveItems(best5.filter(i => !i.itemId.startsWith('macbid_') && !i.itemId.startsWith('vista_')));
-        const liveIds = new Set(liveFinal.map(i => i.itemId));
-        const deadCount = best5.filter(i => !i.itemId.startsWith('macbid_') && !i.itemId.startsWith('vista_') && !liveIds.has(i.itemId)).length;
-        if (deadCount > 0) {
+        const liveFinal = await filterLiveItems(best5);
+        if (liveFinal.length < best5.length) {
+          const deadCount = best5.length - liveFinal.length;
           console.log(`[digest] final live check: ${deadCount} expired item(s) removed from best5`);
-          const auctionItems = best5.filter(i => i.itemId.startsWith('macbid_') || i.itemId.startsWith('vista_'));
-          const usedIds = new Set([...liveIds, ...auctionItems.map(i => i.itemId)]);
+          const usedIds = new Set(liveFinal.map(i => i.itemId));
           const fill = candidates.filter(i => !usedIds.has(i.itemId) && flipMap.get(i.itemId)?.verdict !== 'skip');
-          best5 = [...liveFinal, ...auctionItems, ...fill].slice(0, 5);
+          best5 = [...liveFinal, ...fill].slice(0, 5);
         }
       } catch (e) { console.warn('[digest] final live check failed:', e); }
     }

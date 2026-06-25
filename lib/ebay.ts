@@ -160,12 +160,14 @@ export async function searchDeals(query: string, maxResults = 20, categoryId?: s
   return items;
 }
 
-// Filter items to only those still live on eBay — removes sold/expired listings
+// Filter items to only those still live — Mac.bid/Vista auction items pass through unchecked
 export async function filterLiveItems(items: EbayItem[]): Promise<EbayItem[]> {
-  const results = await Promise.allSettled(
-    items.map(item => getItemDetail(item.itemId))
-  );
-  return items.filter((_, i) => results[i].status === 'fulfilled' && results[i].value !== null);
+  const auctionItems = items.filter(i => i.itemId.startsWith('macbid_') || i.itemId.startsWith('vista_'));
+  const ebayItems = items.filter(i => !i.itemId.startsWith('macbid_') && !i.itemId.startsWith('vista_'));
+  if (ebayItems.length === 0) return auctionItems;
+  const results = await Promise.allSettled(ebayItems.map(item => getItemDetail(item.itemId)));
+  const liveEbay = ebayItems.filter((_, i) => results[i].status === 'fulfilled' && (results[i] as PromiseFulfilledResult<EbayItem | null>).value !== null);
+  return [...auctionItems, ...liveEbay];
 }
 
 export async function getItemDetail(itemId: string): Promise<EbayItem | null> {

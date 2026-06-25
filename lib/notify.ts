@@ -31,6 +31,12 @@ function safe(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function viewListingLabel(seller: string): string {
+  if (seller === 'Mac.bid') return 'View on Mac.bid';
+  if (seller === 'Vista Auction') return 'View on Vista';
+  return 'View on eBay';
+}
+
 function categoryLabel(category: string): string {
   const c = category.toLowerCase();
   if (c.includes('phone') || c.includes('iphone')) return 'Phone';
@@ -90,7 +96,7 @@ function buildTrackUrl(deal: EbayItem): string {
     discountPct: deal.discountPct,
     condition: deal.condition,
     imageUrl: deal.imageUrl,
-    ebayUrl: deal.itemUrl,
+    listingUrl: deal.itemUrl,
     category: deal.category,
     shippingCost: deal.shippingCost,
   })).toString('base64url');
@@ -212,7 +218,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
               <tr>
                 <td width="33%" style="padding-right:3px;">
                   <a href="${deal.itemUrl}"
-                    style="display:block;text-align:center;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">View on eBay</a>
+                    style="display:block;text-align:center;background:#0F172A;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">${viewListingLabel(deal.seller)}</a>
                 </td>
                 <td width="34%" style="padding:0 2px;">
                   <a href="${buildSpotlightUrl(deal, flip, netProfit)}"

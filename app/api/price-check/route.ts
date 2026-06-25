@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
             oldPrice: deal.ebayPrice,
             newPrice: current.price,
             saving: deal.ebayPrice - current.price,
-            url: deal.ebayUrl,
+            url: deal.listingUrl || deal.ebayUrl || '',
           });
           updatedDeals[idx] = { ...updatedDeals[idx], ebayPrice: current.price };
         }

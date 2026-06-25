@@ -198,6 +198,12 @@ function itemModelYear(title: string): number | null {
   return null;
 }
 
+function viewListingLabel(seller?: string): string {
+  if (seller === 'Mac.bid') return 'View on Mac.bid';
+  if (seller === 'Vista Auction') return 'View on Vista';
+  return 'View on eBay';
+}
+
 function listingAge(dateStr: string | null): string | null {
   if (!dateStr) return null;
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -430,7 +436,7 @@ function BrowseTrackButton({ deal }: { deal: BrowseDeal }) {
     const res = await fetch('/api/tracker', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ebayItemId: deal.itemId, title: deal.title, ebayPrice: deal.price, marketPrice: deal.marketPrice, discountPct: deal.discountPct, condition: deal.condition, imageUrl: deal.imageUrl, ebayUrl: deal.itemUrl, category: deal.category, shippingCost: deal.shippingCost }),
+      body: JSON.stringify({ ebayItemId: deal.itemId, title: deal.title, ebayPrice: deal.price, marketPrice: deal.marketPrice, discountPct: deal.discountPct, condition: deal.condition, imageUrl: deal.imageUrl, listingUrl: deal.itemUrl, category: deal.category, shippingCost: deal.shippingCost }),
     });
     if (res.ok) setTracked(true);
     setTracking(false);
@@ -596,7 +602,7 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
         condition: item.condition,
         imageUrl: item.imageUrl,
         additionalImages: item.additionalImages,
-        ebayUrl: item.itemUrl,
+        listingUrl: item.itemUrl,
         category: item.category,
         shippingCost: item.shippingCost,
       }),
@@ -676,7 +682,7 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
               className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-colors"
               style={{ border: '1px solid rgba(255,255,255,0.12)', color: '#9CA3AF' }}
             >
-              <ExternalLink className="w-3 h-3" /> View
+              <ExternalLink className="w-3 h-3" /> {viewListingLabel(item.seller)}
             </a>
             <a
               href={soldCompsUrl(item.title)}
@@ -882,7 +888,7 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
             <a href={deal.itemUrl} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
               style={{ border: '1px solid rgba(255,255,255,0.12)', color: '#9CA3AF' }}>
-              <ExternalLink className="w-3 h-3" /> View on eBay
+              <ExternalLink className="w-3 h-3" /> {viewListingLabel(deal.seller)}
             </a>
             <BrowseTrackButton deal={deal} />
             <button
@@ -2067,7 +2073,7 @@ function DealsPageContent() {
                           <a href={deal.itemUrl} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
                             style={{ border: '1px solid rgba(255,255,255,0.12)', color: '#9CA3AF' }}>
-                            <ExternalLink className="w-3 h-3" /> View on eBay
+                            <ExternalLink className="w-3 h-3" /> {viewListingLabel(deal.seller)}
                           </a>
                           <a href={soldCompsUrl(deal.title)} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-colors"
@@ -2145,7 +2151,7 @@ function DealsPageContent() {
                         ebayItemId: item.itemId || `trend-${Date.now()}`,
                         title: item.title, ebayPrice: item.price, marketPrice: item.marketPrice,
                         discountPct: item.discountPct, condition: item.condition, imageUrl: item.imageUrl,
-                        ebayUrl: item.itemUrl, category: item.category, shippingCost: null,
+                        listingUrl: item.itemUrl, category: item.category, shippingCost: null,
                         status: 'watching',
                       }),
                     });
@@ -2210,7 +2216,7 @@ function DealsPageContent() {
                           <a href={item.itemUrl} target="_blank" rel="noopener noreferrer"
                             className="text-xs px-3 py-1.5 rounded-lg"
                             style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#6B7280' }}>
-                            View on eBay
+                            {viewListingLabel(item.seller)}
                           </a>
                         </div>
                         <FeedbackButtons

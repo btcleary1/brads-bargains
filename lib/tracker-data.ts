@@ -26,7 +26,8 @@ export interface TrackerDeal {
   condition: string;
   imageUrl: string;
   additionalImages: string[];
-  ebayUrl: string;
+  listingUrl: string;
+  ebayUrl?: string; // deprecated — kept for backward compat with stored records
   category: string;
   // Tracker
   status: DealStatus;
@@ -46,7 +47,12 @@ export interface TrackerDeal {
 }
 
 export async function getDeals(userId: string): Promise<TrackerDeal[]> {
-  return (await readBlob<TrackerDeal[]>(`${PREFIX}/${userId}/deals.json`)) ?? [];
+  const raw = (await readBlob<TrackerDeal[]>(`${PREFIX}/${userId}/deals.json`)) ?? [];
+  // Migrate old records that used ebayUrl before the rename to listingUrl
+  return raw.map(d => ({
+    ...d,
+    listingUrl: d.listingUrl ?? (d as { ebayUrl?: string }).ebayUrl ?? '',
+  }));
 }
 
 export async function saveDeals(userId: string, deals: TrackerDeal[]): Promise<void> {

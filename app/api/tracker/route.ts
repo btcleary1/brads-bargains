@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     condition: body.condition ?? '',
     imageUrl: body.imageUrl ?? '',
     additionalImages: body.additionalImages ?? [],
-    ebayUrl: body.ebayUrl ?? '',
+    listingUrl: body.listingUrl ?? body.ebayUrl ?? '',
     category: body.category ?? '',
     status: 'watching',
     purchasedAt: null,
