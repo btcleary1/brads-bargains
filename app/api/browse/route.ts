@@ -8,6 +8,7 @@ import { getDeals, getUserPrefs } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals, inferCategoryScores, categoryKeyForTitle } from '@/lib/infer-categories';
 import { fetchEbayOrderTitles } from '@/lib/ebay-orders';
 import { fetchEbayBuyingActivity } from '@/lib/ebay-watchlist';
+import { computeTasteProfile } from '@/lib/user-taste';
 import { recordWatcherSnapshots, getWatcherVelocities, WatcherVelocity } from '@/lib/watcher-trends';
 import { assessDiscountQuality } from '@/lib/fake-discount';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
@@ -106,6 +107,7 @@ function pickReason(
 function personalizeResults(
   items: BrowseDeal[],
   categoryScores: Map<string, number>,
+  tasteWeights: Record<string, number>,
   explicitCategories: string[],
   ebayWonTitles: string[],
   ebayWatchedTitles: string[],
@@ -125,7 +127,11 @@ function personalizeResults(
       const bKey = categoryKeyForTitle(b.title);
       const aScore = aKey ? (categoryScores.get(aKey) ?? 0) : 0;
       const bScore = bKey ? (categoryScores.get(bKey) ?? 0) : 0;
-      if (bScore !== aScore) return bScore - aScore;
+      const aTaste = aKey ? (tasteWeights[aKey] ?? 1.0) : 1.0;
+      const bTaste = bKey ? (tasteWeights[bKey] ?? 1.0) : 1.0;
+      const aRank = (1 + aScore) * aTaste;
+      const bRank = (1 + bScore) * bTaste;
+      if (Math.abs(bRank - aRank) > 0.01) return bRank - aRank;
       if (a.flipVerdict !== b.flipVerdict) return a.flipVerdict === 'buy' ? -1 : 1;
       return b.flipNetProfit - a.flipNetProfit;
     });
@@ -138,16 +144,18 @@ export async function GET(req: NextRequest) {
   const forceRefresh = req.nextUrl.searchParams.get('refresh') === '1';
 
   // Load all personalization signals in parallel
-  const [userDeals, userPrefs, ebayTitles, ebayActivity] = await Promise.allSettled([
+  const [userDeals, userPrefs, ebayTitles, ebayActivity, tasteResult] = await Promise.allSettled([
     getDeals(session.userId),
     getUserPrefs(session.userId),
     fetchEbayOrderTitles(session.userId),
     fetchEbayBuyingActivity(session.userId),
+    computeTasteProfile(session.userId),
   ]);
   const deals = userDeals.status === 'fulfilled' ? userDeals.value : [];
   const prefs = userPrefs.status === 'fulfilled' ? userPrefs.value : {};
   const orderTitles = ebayTitles.status === 'fulfilled' ? ebayTitles.value : [];
   const buying = ebayActivity.status === 'fulfilled' ? ebayActivity.value : { watchedTitles: [], wonTitles: [] };
+  const tasteWeights = tasteResult.status === 'fulfilled' ? tasteResult.value.categoryWeights : {};
 
   // Merge won titles from both sources (buy order API + trading API)
   const wonSet = new Set(orderTitles);
@@ -172,7 +180,7 @@ export async function GET(req: NextRequest) {
   const cacheHasItems = cached && cached.generatedAt && cached.items.length > 0;
 
   const serveCache = (stale = false) => {
-    let items = personalizeResults(cached!.items, categoryScores, explicitCategories, allWonTitles, buying.watchedTitles);
+    let items = personalizeResults(cached!.items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles);
     items = items.filter(i => i.estDaysToSell == null || i.estDaysToSell <= maxDays);
     const matchedFromEbay = items.filter(i => {
       const key = categoryKeyForTitle(i.title);
@@ -266,7 +274,7 @@ export async function GET(req: NextRequest) {
     };
 
     await r2Put(BROWSE_CACHE_KEY, JSON.stringify(result));
-    const personalizedItems = personalizeResults(result.items, categoryScores, explicitCategories, allWonTitles, buying.watchedTitles);
+    const personalizedItems = personalizeResults(result.items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles);
     const matchedFromEbay = personalizedItems.filter(i => {
       const key = categoryKeyForTitle(i.title);
       return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;
