@@ -457,9 +457,10 @@ const UP_REASONS = [
   { key: 'underpriced_gem',  label: 'Hidden gem' },
 ] as const;
 
-function FeedbackButtons({ itemId, title, category, price, discountPct, netProfit, condition }: {
+function FeedbackButtons({ itemId, title, category, price, discountPct, netProfit, condition, onDislike }: {
   itemId: string; title: string; category: string; price: number;
   discountPct: number | null; netProfit: number | null; condition: string;
+  onDislike?: () => void;
 }) {
   const [voted, setVoted] = useState<'up' | 'down' | null>(null);
   const [phase, setPhase] = useState<'idle' | 'reason' | 'done'>('idle');
@@ -486,6 +487,7 @@ function FeedbackButtons({ itemId, title, category, price, discountPct, netProfi
     }).catch(() => {});
     setSaving(false);
     setPhase('done');
+    if (voted === 'down') onDislike?.();
   };
 
   const reasons = voted === 'up' ? UP_REASONS : DOWN_REASONS;
@@ -983,6 +985,7 @@ function DealsPageContent() {
   const [trendingFlips, setTrendingFlips] = useState<Record<string, CompsVerdict>>({});
   const [trendingPending, setTrendingPending] = useState<Set<string>>(new Set());
   const [browseItems, setBrowseItems] = useState<BrowseDeal[]>([]);
+  const [dismissedBrowseIds, setDismissedBrowseIds] = useState<Set<string>>(new Set());
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseGeneratedAt, setBrowseGeneratedAt] = useState<string | null>(null);
   const [bulkFlips, setBulkFlips] = useState<Record<string, CompsVerdict>>({});
@@ -2019,7 +2022,7 @@ function DealsPageContent() {
 
             {!browseLoading && browseItems.length > 0 && (
               <div className="space-y-3">
-                {browseItems.filter(deal => deal.flipNetProfit >= 20 || deal.pickReason?.startsWith('🔍') || deal.pickReason?.startsWith('🛍')).map(deal => (
+                {browseItems.filter(deal => !dismissedBrowseIds.has(deal.itemId) && (deal.flipNetProfit >= 20 || deal.pickReason?.startsWith('🔍') || deal.pickReason?.startsWith('🛍'))).map(deal => (
                   <div key={deal.itemId} className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(251,191,36,0.2)' }}>
                     <div className="flex gap-3 p-4">
                       {deal.imageUrl && (
@@ -2080,6 +2083,7 @@ function DealsPageContent() {
                           discountPct={deal.discountPct}
                           netProfit={deal.flipNetProfit > 0 ? deal.flipNetProfit : null}
                           condition={deal.condition}
+                          onDislike={() => setDismissedBrowseIds(prev => new Set([...prev, deal.itemId]))}
                         />
                       </div>
                     </div>
