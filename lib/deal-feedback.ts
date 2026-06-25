@@ -1,6 +1,10 @@
 import { createHmac } from 'crypto';
 import { r2Get, r2Put } from './r2';
 
+export type DownReason = 'not_my_niche' | 'profit_too_low' | 'bad_listing' | 'too_dated';
+export type UpReason = 'my_kind_of_flip' | 'great_margin' | 'underpriced_gem';
+export type FeedbackReason = DownReason | UpReason;
+
 export interface DealFeedback {
   itemId: string;
   title: string;
@@ -10,6 +14,7 @@ export interface DealFeedback {
   netProfit: number | null;
   condition: string;
   verdict: 'up' | 'down';
+  reason?: FeedbackReason;
   source: 'app' | 'email';
   feedbackAt: string;
 }

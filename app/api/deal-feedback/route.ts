@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
-import { addFeedback, verifyFeedbackPayload, DealFeedback } from '@/lib/deal-feedback';
+import { addFeedback, verifyFeedbackPayload, DealFeedback, FeedbackReason } from '@/lib/deal-feedback';
 
 export const runtime = 'nodejs';
 

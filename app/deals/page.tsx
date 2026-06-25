@@ -110,6 +110,7 @@ interface TrendingItem {
   condition: string;
   imageUrl: string;
   itemUrl: string;
+  seller?: string;
   watchCount: number;
   listingDate: string | null;
   category: string;
