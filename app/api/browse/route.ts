@@ -138,6 +138,56 @@ function personalizeResults(
 }
 
 export async function GET(req: NextRequest) {
+  const BROWSE_SECRET = process.env.BROWSE_SECRET ?? 'browse-2026';
+  const warmMode = req.nextUrl.searchParams.get('warm') === BROWSE_SECRET;
+
+  // Cache-warm mode: called from cron, no user session needed. Runs searches + comps and saves cache.
+  if (warmMode) {
+    const existing = await r2Get<BrowseCache>(BROWSE_CACHE_KEY()).catch(() => null);
+    if (existing && existing.items.length > 0) {
+      const age = Date.now() - new Date(existing.generatedAt).getTime();
+      if (age < CACHE_TTL_MS) {
+        return NextResponse.json({ warmed: false, reason: 'cache already fresh', age: Math.round(age / 60000) + 'm' });
+      }
+    }
+    if (!process.env.EBAY_CLIENT_ID) return NextResponse.json({ warmed: false, reason: 'no EBAY_CLIENT_ID' });
+    try {
+      const warmResults = await Promise.allSettled(
+        BROWSE_CATEGORIES.map(c => searchDeals(c.query, 20, undefined, c.maxPrice))
+      );
+      const warmItems: EbayItem[] = [];
+      const warmSeen = new Set<string>();
+      warmResults.forEach((r, idx) => {
+        if (r.status !== 'fulfilled') return;
+        let picked = 0;
+        for (const item of [...r.value].sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0))) {
+          if (picked >= 2) break;
+          if (!warmSeen.has(item.itemId) && !isJunk(item) && isFlippableItem(item.title)) {
+            warmSeen.add(item.itemId);
+            warmItems.push(item);
+            picked++;
+          }
+        }
+      });
+      const flipResults = await Promise.allSettled(warmItems.map(item => quickFlipVerdict(item)));
+      const browsed: BrowseDeal[] = [];
+      warmItems.forEach((item, i) => {
+        const r = flipResults[i];
+        if (r.status !== 'fulfilled' || !r.value || r.value.verdict === 'skip') return;
+        browsed.push({ ...item, flipVerdict: r.value.verdict, avgSoldPrice: r.value.avgSoldPrice, soldCount: r.value.soldCount, flipNetProfit: r.value.netProfit, flipMarginPct: r.value.marginPct, estDaysToSell: r.value.estDaysToSell, sourcesCount: r.value.sourcesCount ?? null, multiSourceConfidence: r.value.confidence });
+      });
+      browsed.sort((a, b) => { if (a.flipVerdict !== b.flipVerdict) return a.flipVerdict === 'buy' ? -1 : 1; return b.flipNetProfit - a.flipNetProfit; });
+      if (browsed.length > 0) {
+        const cache: BrowseCache = { items: browsed.slice(0, 15), generatedAt: new Date().toISOString() };
+        await r2Put(BROWSE_CACHE_KEY(), JSON.stringify(cache));
+        return NextResponse.json({ warmed: true, items: browsed.length });
+      }
+      return NextResponse.json({ warmed: false, reason: 'no qualifying items', searched: warmItems.length });
+    } catch (err) {
+      return NextResponse.json({ warmed: false, error: String(err) });
+    }
+  }
+
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

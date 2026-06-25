@@ -5,6 +5,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/browse?warm=browse-2026",
+      "schedule": "0 11 * * *"
+    },
+    {
       "path": "/api/digest?secret=digest-2026",
       "schedule": "0 13 * * *"
     },
