@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
   // ?check=1 returns diagnostic state without running the digest
   if (req.nextUrl.searchParams.get('check') === '1') {
-    const state = await r2Get<{ lastSentDate: string }>(DIGEST_STATE_PATH);
+    const state = await r2Get<{ lastSentDate: string; lastRunResult?: string; lastRunDeals?: number; lastRunError?: string }>(DIGEST_STATE_PATH);
     const users = await getAllUsers();
     const userPrefsResults = await Promise.allSettled(users.map(u => getUserPrefs(u.userId)));
     const recipients = userPrefsResults
@@ -51,6 +51,9 @@ export async function GET(req: NextRequest) {
       .filter(Boolean);
     return NextResponse.json({
       lastSentDate: state?.lastSentDate ?? null,
+      lastRunResult: state?.lastRunResult ?? null,
+      lastRunDeals: state?.lastRunDeals ?? null,
+      lastRunError: state?.lastRunError ?? null,
       todayKey: todayKey(),
       wouldSkip: state?.lastSentDate === todayKey(),
       userCount: users.length,
@@ -469,16 +472,15 @@ export async function GET(req: NextRequest) {
     // Minimum net profit to include a deal in the digest
     const MIN_NET_PROFIT = 15;
 
-    // Apply strict profit filter — never pad with SKIP or low-margin deals
+    // Apply profit filter — prefer items with verified comps, but fall back to best-discount items
+    // so the cron always sends something even when comp APIs are down.
     userDigests = userDigests.map(d => {
-      const finalDeals = d.deals
-        // Apply user's maxDaysToSell — null estDaysToSell always passes through
+      // Tier 1: items with comp data, positive profit, not skipped
+      const withComps = d.deals
         .filter(item => { const flip = flipMap.get(item.itemId); return !flip || flip.estDaysToSell == null || flip.estDaysToSell <= d.maxDaysToSell; })
-        // Require meaningful net profit and exclude explicit SKIP verdicts
-        // minNetProfit is lowered automatically when user's taste profile shows they like lower-margin deals
         .filter(i => {
           const flip = flipMap.get(i.itemId);
-          if (!flip) return false; // no comp data = exclude
+          if (!flip) return false;
           if (flip.verdict === 'skip') return false;
           return flip.netProfit >= (d.minNetProfit ?? MIN_NET_PROFIT);
         })
@@ -499,6 +501,18 @@ export async function GET(req: NextRequest) {
           return acc;
         }, [])
         .slice(0, 5);
+
+      // Tier 2 fallback: when comps fail for everything, take top items by eBay discount
+      // This ensures the cron always sends deals even when external APIs are unavailable.
+      let finalDeals = withComps;
+      if (finalDeals.length === 0) {
+        console.warn(`[digest] user ${d.userId} — 0 comp-verified deals; falling back to top-discount items`);
+        finalDeals = [...d.deals]
+          .filter(i => flipMap.get(i.itemId)?.verdict !== 'skip')
+          .sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0))
+          .slice(0, 5);
+      }
+
       console.log(`[digest] user ${d.userId} qualified deals: ${finalDeals.length}, profits: ${finalDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
       return { ...d, deals: finalDeals };
     });
@@ -674,18 +688,21 @@ export async function GET(req: NextRequest) {
     const actualSendCount = userDigests.filter((d, i) => sendResults[i].status === 'fulfilled' && d.deals.length > 0).length;
 
     if (successCount === 0 || actualSendCount === 0) {
+      const failReason = actualSendCount === 0 ? 'No deals to send' : 'All emails failed';
+      // Persist failure reason so ?check=1 can surface it
+      await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey(), lastRunResult: 'failed', lastRunDeals: userDigests[0]?.deals.length ?? 0, lastRunError: failReason })).catch(() => {});
       // Return 200 so Vercel does not retry the cron — a 5xx triggers automatic retries
-      return NextResponse.json({ sent: false, reason: actualSendCount === 0 ? 'No deals to send' : 'All emails failed', errors });
+      return NextResponse.json({ sent: false, reason: failReason, errors });
     }
 
-    // Record send date to prevent duplicates
-    await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey() }));
+    // Record send date + success so ?check=1 shows last run result
+    const dealCount = userDigests[0]?.deals.length ?? 0;
+    await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey(), lastRunResult: 'sent', lastRunDeals: dealCount }));
 
     return NextResponse.json({
       sent: true,
       date: todayKey(),
       recipients: successCount,
-
       rawItemCount: allItems.length,
       nonRefurbCount: nonRefurb.length,
       aiPick: userDigests[0]?.aiPick ?? null,
@@ -701,6 +718,8 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     // Return 200 so Vercel does not retry the cron — retries cause duplicate emails
     console.error('[digest] Unhandled error:', err);
+    // Persist error so ?check=1 can surface it
+    await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey(), lastRunResult: 'error', lastRunError: String(err) })).catch(() => {});
     return NextResponse.json({ sent: false, error: String(err) });
   }
 }
