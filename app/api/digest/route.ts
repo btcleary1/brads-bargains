@@ -688,9 +688,11 @@ export async function GET(req: NextRequest) {
     const actualSendCount = userDigests.filter((d, i) => sendResults[i].status === 'fulfilled' && d.deals.length > 0).length;
 
     if (successCount === 0 || actualSendCount === 0) {
-      const failReason = actualSendCount === 0 ? 'No deals to send' : 'All emails failed';
+      const hasDeals = userDigests.some(d => d.deals.length > 0);
+      const failReason = !hasDeals ? 'No deals to send' : 'All emails failed';
+      const failError = errors.length > 0 ? errors[0] : failReason;
       // Persist failure reason so ?check=1 can surface it
-      await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey(), lastRunResult: 'failed', lastRunDeals: userDigests[0]?.deals.length ?? 0, lastRunError: failReason })).catch(() => {});
+      await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey(), lastRunResult: 'failed', lastRunDeals: userDigests[0]?.deals.length ?? 0, lastRunError: failError })).catch(() => {});
       // Return 200 so Vercel does not retry the cron — a 5xx triggers automatic retries
       return NextResponse.json({ sent: false, reason: failReason, errors });
     }
