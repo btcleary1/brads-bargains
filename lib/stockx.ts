@@ -1,6 +1,10 @@
-// StockX market data via Algolia search (public search-only credentials)
-// Returns best-effort data — gracefully returns null if blocked or unavailable
+// StockX market data
+// Primary: Algolia public search (when credentials are valid)
+// Fallback: Google Shopping scrape for last-sale price signals
 
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// Public search-only Algolia credentials for StockX — may rotate; fallback handles expiry
 const ALGOLIA_APP_ID = 'XW7SBCT9V6';
 const ALGOLIA_SEARCH_KEY = '6b5e76b8de8bf9f8d7f4c09a726c1c5f';
 const ALGOLIA_URL = `https://${ALGOLIA_APP_ID}-dsn.algolia.net/1/indexes/products/query`;
@@ -15,8 +19,7 @@ export interface StockXResult {
   volatility: number | null;
 }
 
-export async function searchStockX(query: string): Promise<StockXResult | null> {
-  if (!query) return null;
+async function tryAlgolia(query: string): Promise<StockXResult | null> {
   try {
     const res = await fetch(ALGOLIA_URL, {
       method: 'POST',
@@ -35,9 +38,12 @@ export async function searchStockX(query: string): Promise<StockXResult | null> 
     if (!hit) return null;
 
     const market = hit.market ?? {};
+    const lastSale = market.lastSale ?? market.lastSalePrice ?? 0;
+    if (!lastSale || lastSale <= 0) return null;
+
     return {
       name: hit.title ?? hit.name ?? query,
-      lastSalePrice: market.lastSale ?? market.lastSalePrice ?? 0,
+      lastSalePrice: lastSale,
       lowestAsk: market.lowestAsk ?? null,
       highestBid: market.highestBid ?? null,
       retailPrice: hit.retailPrice ?? null,
@@ -47,4 +53,46 @@ export async function searchStockX(query: string): Promise<StockXResult | null> 
   } catch {
     return null;
   }
+}
+
+async function tryGoogleShopping(query: string): Promise<StockXResult | null> {
+  try {
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query + ' site:stockx.com')}&tbm=shop`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': BROWSER_UA, 'Accept': 'text/html', 'Accept-Language': 'en-US,en;q=0.9' },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    // Extract price near stockx.com mentions
+    const priceMatch = html.match(/stockx\.com[^$]*?\$\s*(\d{1,4}(?:[.,]\d{2})?)/i)
+      ?? html.match(/\$\s*(\d{1,4}(?:[.,]\d{2})?)[^0-9]*stockx/i);
+    if (!priceMatch) return null;
+
+    const price = parseFloat(priceMatch[1].replace(',', ''));
+    if (!price || price <= 0) return null;
+
+    return {
+      name: query,
+      lastSalePrice: price,
+      lowestAsk: null,
+      highestBid: null,
+      retailPrice: null,
+      salesLast72Hours: null,
+      volatility: null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function searchStockX(query: string): Promise<StockXResult | null> {
+  if (!query) return null;
+
+  const algolia = await tryAlgolia(query);
+  if (algolia) return algolia;
+
+  // Algolia credentials expired — fall back to Google Shopping
+  return tryGoogleShopping(query);
 }
