@@ -2,22 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { searchDeals, EbayItem } from '@/lib/ebay';
 import { searchSoldComps } from '@/lib/ebay-comps';
-import { topDeals } from '@/lib/deal-score';
+import { isJunk } from '@/lib/deal-score';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getDeals, getUserPrefs } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals, inferCategoryScores, categoryKeyForTitle } from '@/lib/infer-categories';
-import { fetchEbayOrderTitles } from '@/lib/ebay-orders';
+import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
+import { fetchEbayOrderTitles, getEbayAccessToken } from '@/lib/ebay-orders';
 import { fetchEbayBuyingActivity } from '@/lib/ebay-watchlist';
+import { getEbaySavedSearches } from '@/lib/ebay-user';
 import { computeTasteProfile } from '@/lib/user-taste';
+import { getFeedback } from '@/lib/deal-feedback';
 import { recordWatcherSnapshots, getWatcherVelocities, WatcherVelocity } from '@/lib/watcher-trends';
 import { assessDiscountQuality } from '@/lib/fake-discount';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
+import { checkItemQuality, isFlippableItem } from '@/lib/item-quality';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
-const BROWSE_CACHE_KEY = 'deal-wiz/browse-cache.json';
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// Fixed cache key with TTL — serves yesterday's cache immediately on first login
+// so users never see a cold-start spinner. The warm cron (11 AM UTC) regenerates it daily.
+const BROWSE_CACHE_KEY = () => `deal-wiz/browse-cache.json`;
+const CACHE_TTL_MS = 23 * 60 * 60 * 1000; // 23 hours — refreshes daily via cron
 
 export interface BrowseDeal extends EbayItem {
   flipVerdict: 'buy' | 'maybe';
@@ -39,16 +45,55 @@ interface BrowseCache {
   generatedAt: string;
 }
 
-// Categories with highest resale liquidity — ordered by demand (kept small to stay within eBay rate limits)
-const BROWSE_CATEGORIES = [
-  'iPhone unlocked used',
-  'MacBook Air used',
-  'Nintendo Switch OLED',
-  'AirPods Pro',
-  'Air Jordan sneakers new',
-  'PS5 console',
-  'Pokemon card PSA 10',
-  'Samsung Galaxy unlocked used',
+// Maps broad categoryKeyForTitle keys → DIGEST_CATEGORIES keys covered by BROWSE_CATEGORIES
+const BROWSE_COVERED_KEYS = new Set([
+  'cell_phones', 'computers', 'video_games', 'consumer_elec', 'clothing', 'sports_cards',
+]);
+
+// Maps broad category key → best DIGEST_CATEGORIES entry to search when not in standard pool
+const INTEREST_CATEGORY_MAP: Record<string, string> = {
+  tools_industrial: 'dewalt_tool',
+  toys_hobbies:     'lego_sealed',
+  cameras:          'sony_camera',
+  jewelry_watches:  'rolex_watch',
+  sporting_goods:   'jordan_shoes',
+  collectibles:     'sports_card_psa',
+  coins:            'sports_card_psa',
+  musical_inst:     'rtx_gpu',
+  home_garden:      'dewalt_tool',
+  books_comics:     'sports_card_psa',
+  music:            'lego_sealed',
+  dvds_movies:      'lego_sealed',
+};
+
+// Returns DIGEST_CATEGORIES searches for user interest keys not already in BROWSE_CATEGORIES
+function getInterestSearches(categoryScores: Map<string, number>): { query: string; maxPrice?: number }[] {
+  const searches: { query: string; maxPrice?: number }[] = [];
+  for (const [key, score] of categoryScores.entries()) {
+    if (score <= 0 || BROWSE_COVERED_KEYS.has(key)) continue;
+    const digestKey = INTEREST_CATEGORY_MAP[key];
+    if (!digestKey) continue;
+    const cat = DIGEST_CATEGORIES.find(c => c.key === digestKey);
+    if (cat) searches.push({ query: cat.query, maxPrice: cat.maxPrice });
+  }
+  return searches.slice(0, 4);
+}
+
+// Categories with price ceilings — search only for listings that could realistically flip for profit.
+// maxPrice is set ~20-30% below typical resale so we only evaluate potentially underpriced items.
+const BROWSE_CATEGORIES: { query: string; maxPrice?: number }[] = [
+  { query: 'iPhone 13 unlocked used',          maxPrice: 220 },
+  { query: 'iPhone 14 unlocked used',          maxPrice: 300 },
+  { query: 'iPhone 15 unlocked used',          maxPrice: 420 },
+  { query: 'MacBook Air M1 used',              maxPrice: 600 },
+  { query: 'MacBook Air M2 used',              maxPrice: 750 },
+  { query: 'Nintendo Switch OLED used',        maxPrice: 220 },
+  { query: 'AirPods Pro 2nd gen',              maxPrice: 150 },
+  { query: 'Air Jordan 1 size 10',             maxPrice: 140 },
+  { query: 'PS5 console disc used',            maxPrice: 350 },
+  { query: 'Pokemon card PSA 10',              maxPrice: 150 },
+  { query: 'Samsung Galaxy S23 unlocked used', maxPrice: 280 },
+  { query: 'iPad Air used',                    maxPrice: 300 },
 ];
 
 async function quickFlipVerdict(item: EbayItem): Promise<{
@@ -62,27 +107,30 @@ async function quickFlipVerdict(item: EbayItem): Promise<{
   confidence: 'high' | 'medium' | 'low';
 } | null> {
   try {
+    const quality = await checkItemQuality(item.itemId, item.title);
+    if (quality.broken) return null;
+
     const comps = await getMultiSourceComps(item.title, 12);
-    if (!comps || comps.ebayCount < 3) return null;
+    if (!comps || comps.ebayCount < 2) return null;
+
+    // Sanity check: sold avg > 2× listing price means comp query matched wrong items
+    if (comps.weightedAvgSoldPrice > item.price * 2) return null;
 
     const netProfit = Math.round(comps.weightedAvgSoldPrice * 0.85 - item.price - (item.shippingCost ?? 0));
     const marginPct = Math.round((netProfit / item.price) * 100);
 
     let verdict: 'buy' | 'maybe' | 'skip';
-    if (netProfit > 50 || (netProfit > 30 && marginPct > 20)) verdict = 'buy';
-    else if (netProfit < 10 || (netProfit < 20 && marginPct < 10)) verdict = 'skip';
+    if (netProfit > 30 || (netProfit > 20 && marginPct > 15)) verdict = 'buy';
+    else if (netProfit < 5) verdict = 'skip';
     else verdict = 'maybe';
 
     // Never skip strong absolute profit
-    if (netProfit >= 40 && verdict === 'skip') verdict = 'maybe';
+    if (netProfit >= 25 && verdict === 'skip') verdict = 'maybe';
 
     // Days-to-sell overrides: >60d = skip (capital tied up too long), >30d = downgrade buy→maybe
     const days = comps.estDaysToSell;
     if (days != null && days > 60) verdict = 'skip';
     else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
-
-    // Today's Picks promises "confirmed" flips — downgrade low/medium confidence buys to maybe
-    if (verdict === 'buy' && comps.confidence !== 'high') verdict = 'maybe';
 
     return { verdict, netProfit, avgSoldPrice: comps.weightedAvgSoldPrice, soldCount: comps.ebayCount, marginPct, estDaysToSell: comps.estDaysToSell, sourcesCount: comps.sourcesUsed.length, confidence: comps.confidence };
   } catch {
@@ -98,9 +146,15 @@ function pickReason(
   ebayWatchKeys: Set<string>,
 ): string | null {
   if (!key || score === 0) return null;
-  if (explicitSet.has(key)) return '★ Matches your preferences';
-  if (ebayWonKeys.has(key)) return '🛍 You buy this category on eBay';
-  if (ebayWatchKeys.has(key)) return '👀 In your eBay watch list';
+  const inPrefs   = explicitSet.has(key);
+  const inPurchases = ebayWonKeys.has(key);
+  const inWatchlist = ebayWatchKeys.has(key);
+
+  if (inPrefs && inPurchases) return '★ In your preferences & purchase history';
+  if (inPrefs && inWatchlist) return '★ In your preferences & watch list';
+  if (inPrefs)       return '★ Matches your preferences';
+  if (inPurchases)   return '🛍 You buy this category on eBay';
+  if (inWatchlist)   return '👀 In your eBay watch list';
   return null;
 }
 
@@ -111,30 +165,45 @@ function personalizeResults(
   explicitCategories: string[],
   ebayWonTitles: string[],
   ebayWatchedTitles: string[],
+  hasEbayHistory: boolean,
 ): BrowseDeal[] {
   const explicitSet = new Set(explicitCategories);
   const ebayWonKeys = new Set(ebayWonTitles.map(t => categoryKeyForTitle(t)).filter(Boolean) as string[]);
   const ebayWatchKeys = new Set(ebayWatchedTitles.map(t => categoryKeyForTitle(t)).filter(Boolean) as string[]);
 
-  return [...items]
-    .map(item => {
+  const scored = [...items].map(item => {
+    if (item.pickReason?.startsWith('🔍') || item.pickReason?.startsWith('🛍')) return item;
+    const key = categoryKeyForTitle(item.title);
+    const score = key ? (categoryScores.get(key) ?? 0) : 0;
+    return { ...item, pickReason: pickReason(key, score, explicitSet, ebayWonKeys, ebayWatchKeys) };
+  });
+
+  const sorted = scored.sort((a, b) => {
+    const aKey = categoryKeyForTitle(a.title);
+    const bKey = categoryKeyForTitle(b.title);
+    const aScore = aKey ? (categoryScores.get(aKey) ?? 0) : 0;
+    const bScore = bKey ? (categoryScores.get(bKey) ?? 0) : 0;
+    const aTaste = aKey ? (tasteWeights[aKey] ?? 1.0) : 1.0;
+    const bTaste = bKey ? (tasteWeights[bKey] ?? 1.0) : 1.0;
+    const aRank = (1 + aScore) * aTaste;
+    const bRank = (1 + bScore) * bTaste;
+    if (Math.abs(bRank - aRank) > 0.01) return bRank - aRank;
+    if (a.flipVerdict !== b.flipVerdict) return a.flipVerdict === 'buy' ? -1 : 1;
+    return b.flipNetProfit - a.flipNetProfit;
+  });
+
+  // When the user has eBay history, filter out categories they have no affinity for.
+  // Saved-search items (🔍) always pass through. Fall back to all items if fewer than 3 match.
+  if (hasEbayHistory) {
+    const filtered = sorted.filter(item => {
+      if (item.pickReason?.startsWith('🔍') || item.pickReason?.startsWith('🛍')) return true;
       const key = categoryKeyForTitle(item.title);
-      const score = key ? (categoryScores.get(key) ?? 0) : 0;
-      return { ...item, pickReason: pickReason(key, score, explicitSet, ebayWonKeys, ebayWatchKeys) };
-    })
-    .sort((a, b) => {
-      const aKey = categoryKeyForTitle(a.title);
-      const bKey = categoryKeyForTitle(b.title);
-      const aScore = aKey ? (categoryScores.get(aKey) ?? 0) : 0;
-      const bScore = bKey ? (categoryScores.get(bKey) ?? 0) : 0;
-      const aTaste = aKey ? (tasteWeights[aKey] ?? 1.0) : 1.0;
-      const bTaste = bKey ? (tasteWeights[bKey] ?? 1.0) : 1.0;
-      const aRank = (1 + aScore) * aTaste;
-      const bRank = (1 + bScore) * bTaste;
-      if (Math.abs(bRank - aRank) > 0.01) return bRank - aRank;
-      if (a.flipVerdict !== b.flipVerdict) return a.flipVerdict === 'buy' ? -1 : 1;
-      return b.flipNetProfit - a.flipNetProfit;
+      return key ? (categoryScores.get(key) ?? 0) > 0 : false;
     });
+    if (filtered.length >= 3) return filtered;
+  }
+
+  return sorted;
 }
 
 export async function GET(req: NextRequest) {
@@ -219,18 +288,24 @@ export async function GET(req: NextRequest) {
   }));
 
   // Load all personalization signals in parallel
-  const [userDeals, userPrefs, ebayTitles, ebayActivity, tasteResult] = await Promise.allSettled([
+  const ebayToken = await getEbayAccessToken(session.userId).catch(() => null);
+  const [userDeals, userPrefs, ebayTitles, ebayActivity, savedSearches, tasteResult, feedbackResult] = await Promise.allSettled([
     getDeals(session.userId),
     getUserPrefs(session.userId),
     fetchEbayOrderTitles(session.userId),
     fetchEbayBuyingActivity(session.userId),
+    ebayToken ? getEbaySavedSearches(ebayToken) : Promise.resolve([] as string[]),
     computeTasteProfile(session.userId),
+    getFeedback(session.userId),
   ]);
   const deals = userDeals.status === 'fulfilled' ? userDeals.value : [];
   const prefs = userPrefs.status === 'fulfilled' ? userPrefs.value : {};
   const orderTitles = ebayTitles.status === 'fulfilled' ? ebayTitles.value : [];
   const buying = ebayActivity.status === 'fulfilled' ? ebayActivity.value : { watchedTitles: [], wonTitles: [] };
+  const userSavedSearches = savedSearches.status === 'fulfilled' ? savedSearches.value : [];
   const tasteWeights = tasteResult.status === 'fulfilled' ? tasteResult.value.categoryWeights : {};
+  const feedbackList = feedbackResult.status === 'fulfilled' ? feedbackResult.value : [];
+  const dislikedIds = new Set(feedbackList.filter(f => f.verdict === 'down').map(f => f.itemId));
 
   // Merge won titles from both sources (buy order API + trading API)
   const wonSet = new Set(orderTitles);
@@ -251,11 +326,14 @@ export async function GET(req: NextRequest) {
   const maxDays = prefs && (prefs as any).maxDaysToSell != null ? (prefs as any).maxDaysToSell as number : 60;
 
   // Serve from cache if fresh — personalize order before returning
-  const cached = await r2Get<BrowseCache>(BROWSE_CACHE_KEY);
+  const cached = await r2Get<BrowseCache>(BROWSE_CACHE_KEY());
   const cacheHasItems = cached && cached.generatedAt && cached.items.length > 0;
 
   const serveCache = (stale = false) => {
-    let items = personalizeResults(cached!.items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles);
+    // Re-apply sanity filter even on cached items — guards against stale bad data surviving a refresh
+    const hasHistory = allWonTitles.length > 0 || buying.watchedTitles.length > 0;
+    let items = cached!.items.filter(i => i.flipNetProfit <= i.price && !dislikedIds.has(i.itemId));
+    items = personalizeResults(items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles, hasHistory);
     items = items.filter(i => i.estDaysToSell == null || i.estDaysToSell <= maxDays);
 
     // Add auction deals not already in the cache (dedup by itemId)
@@ -293,28 +371,53 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Fetch all categories in parallel
+    // Fetch standard categories + saved searches + interest-category searches in parallel
+    const savedSearchQueries = userSavedSearches.slice(0, 4);
+    const interestSearches = getInterestSearches(categoryScores);
+    const allSearches = [
+      ...BROWSE_CATEGORIES.map(c => ({ query: c.query, maxPrice: c.maxPrice, isSavedSearch: false, isInterest: false })),
+      ...savedSearchQueries.map(q => ({ query: q, maxPrice: undefined, isSavedSearch: true, isInterest: false })),
+      ...interestSearches.map(c => ({ query: c.query, maxPrice: c.maxPrice, isSavedSearch: false, isInterest: true })),
+    ];
     const searchResults = await Promise.allSettled(
-      BROWSE_CATEGORIES.map(q => searchDeals(q, 30))
+      allSearches.map(c => searchDeals(c.query, 20, undefined, c.maxPrice))
     );
 
     const allItems: EbayItem[] = [];
+    const savedSearchItems: EbayItem[] = [];
+    const interestItems: EbayItem[] = [];
     const seen = new Set<string>();
-    searchResults.forEach(r => {
+    // Cap at 2 candidates per category. Saved-search and interest items skip the flippable whitelist.
+    searchResults.forEach((r, idx) => {
       if (r.status === 'fulfilled') {
-        r.value.forEach(item => {
-          if (!seen.has(item.itemId)) { seen.add(item.itemId); allItems.push(item); }
-        });
+        let picked = 0;
+        const { isSavedSearch, isInterest } = allSearches[idx];
+        const sorted = [...r.value].sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0) || b.price - a.price);
+        for (const item of sorted) {
+          if (picked >= 2) break;
+          const passesFilter = !isJunk(item) && (isSavedSearch || isInterest || isFlippableItem(item.title));
+          if (!seen.has(item.itemId) && passesFilter) {
+            seen.add(item.itemId);
+            allItems.push(item);
+            if (isSavedSearch) savedSearchItems.push(item);
+            if (isInterest) interestItems.push(item);
+            picked++;
+          }
+        }
       }
     });
 
-    // Score and pick top 12 candidates (fewer comps calls = fewer eBay API hits)
-    const candidates = topDeals(allItems, 12, 50);
+    const candidates = allItems;
     if (candidates.length === 0) {
-      // All eBay searches failed or returned nothing — serve stale cache if available
       if (cacheHasItems) return serveCache(true);
       return NextResponse.json({ items: [], generatedAt: new Date().toISOString(), fromCache: false });
     }
+
+    // Track personalized candidates before comps so we can pass them through even if 'skip'
+    const personalizedCandidateIds = new Set([
+      ...savedSearchItems.map(i => i.itemId),
+      ...interestItems.map(i => i.itemId),
+    ]);
 
     // Run sold comps on all candidates in parallel
     const flipResults = await Promise.allSettled(candidates.map(item => quickFlipVerdict(item)));
@@ -322,10 +425,13 @@ export async function GET(req: NextRequest) {
     const browsed: BrowseDeal[] = [];
     candidates.forEach((item, i) => {
       const r = flipResults[i];
-      if (r.status !== 'fulfilled' || !r.value || r.value.verdict === 'skip') return;
+      if (r.status !== 'fulfilled' || !r.value) return;
+      const isPersonalized = personalizedCandidateIds.has(item.itemId);
+      // Standard items must pass the flip verdict; personalized items pass through even if 'skip'
+      if (r.value.verdict === 'skip' && !isPersonalized) return;
       browsed.push({
         ...item,
-        flipVerdict: r.value.verdict,
+        flipVerdict: r.value.verdict === 'skip' ? 'maybe' : r.value.verdict,
         avgSoldPrice: r.value.avgSoldPrice,
         soldCount: r.value.soldCount,
         flipNetProfit: r.value.netProfit,
@@ -362,18 +468,52 @@ export async function GET(req: NextRequest) {
       return b.flipNetProfit - a.flipNetProfit;
     });
 
+    const savedSearchCandidateIds = new Set(savedSearchItems.map(i => i.itemId));
+    const interestCandidateIds = new Set(interestItems.map(i => i.itemId));
+
+    // Priority: saved-search picks (2 slots) → interest-category picks (4 slots) → standard pool
+    const savedSearchPicks = filteredBrowsed.filter(i => savedSearchCandidateIds.has(i.itemId)).slice(0, 2);
+    const savedSearchPickIds = new Set(savedSearchPicks.map(i => i.itemId));
+    const interestPicks = filteredBrowsed.filter(i => interestCandidateIds.has(i.itemId) && !savedSearchPickIds.has(i.itemId)).slice(0, 4);
+    const interestPickIds = new Set(interestPicks.map(i => i.itemId));
+    const standardPicks = filteredBrowsed.filter(i => !savedSearchPickIds.has(i.itemId) && !interestPickIds.has(i.itemId)).slice(0, 9);
+    const merged = [...savedSearchPicks, ...interestPicks, ...standardPicks].slice(0, 15);
+
+    // Tag items with their source
+    merged.forEach(item => {
+      if (savedSearchPickIds.has(item.itemId)) {
+        (item as any).pickReason = '🔍 From your eBay saved searches';
+      } else if (interestPickIds.has(item.itemId)) {
+        (item as any).pickReason = '🛍 Matches your purchase history';
+      }
+    });
+
     const result: BrowseCache = {
-      items: filteredBrowsed.slice(0, 15),
+      items: merged,
       generatedAt: new Date().toISOString(),
     };
 
-    await r2Put(BROWSE_CACHE_KEY, JSON.stringify(result));
-    const personalizedItems = personalizeResults(result.items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles);
+    const _savedDebug = {
+      hadToken: !!ebayToken,
+      savedSearchQueries: userSavedSearches,
+      savedSearchItemsFound: savedSearchItems.length,
+      savedSearchPicks: savedSearchPicks.map(i => i.title.slice(0, 50)),
+    };
+
+    // Never poison the cache with empty results — fall back to stale cache
+    if (result.items.length === 0 && cacheHasItems) return serveCache(true);
+
+    if (result.items.length > 0) {
+      await r2Put(BROWSE_CACHE_KEY(), JSON.stringify(result));
+    }
+    const hasHistory = allWonTitles.length > 0 || buying.watchedTitles.length > 0;
+    const personalizedItems = personalizeResults(result.items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles, hasHistory)
+      .filter(i => !dislikedIds.has(i.itemId));
     const matchedFromEbay = personalizedItems.filter(i => {
       const key = categoryKeyForTitle(i.title);
       return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;
     }).length;
-    return NextResponse.json({ ...result, items: personalizedItems, fromCache: false, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay } });
+    return NextResponse.json({ ...result, items: personalizedItems, fromCache: false, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay }, _savedDebug });
 
   } catch (err: any) {
     // eBay rate limited — serve stale cache if available rather than returning an error
