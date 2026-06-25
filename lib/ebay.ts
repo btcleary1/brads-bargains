@@ -125,7 +125,7 @@ function toEbayItem(raw: any): EbayItem {
   };
 }
 
-export async function searchDeals(query: string, maxResults = 20, categoryId?: string): Promise<EbayItem[]> {
+export async function searchDeals(query: string, maxResults = 20, categoryId?: string, maxPrice?: number): Promise<EbayItem[]> {
   const token = await getEbayToken();
 
   // Build base params without filter (URLSearchParams encodes {|} which breaks eBay filter syntax)
@@ -136,10 +136,11 @@ export async function searchDeals(query: string, maxResults = 20, categoryId?: s
   };
   if (categoryId) paramObj.category_ids = categoryId;
   const params = new URLSearchParams(paramObj);
+  const priceFilter = maxPrice ? `,price:[..${maxPrice}]` : '';
   // Append filter unencoded — eBay requires literal {|} characters
   // Condition IDs: 1000=New, 1500=Open Box, 3000=Used, 4000=Very Good, 5000=Good
   // Excludes refurbished (2000-2500 range)
-  const url = `${base()}/buy/browse/v1/item_summary/search?${params}&filter=buyingOptions:{FIXED_PRICE},priceCurrency:USD,conditionIds:{1000|1500|3000|4000|5000}`;
+  const url = `${base()}/buy/browse/v1/item_summary/search?${params}&filter=buyingOptions:{FIXED_PRICE},priceCurrency:USD,conditionIds:{1000|1500|3000|4000|5000}${priceFilter}`;
 
   const res = await fetch(url, {
     headers: {

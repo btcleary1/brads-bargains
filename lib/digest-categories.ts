@@ -3,6 +3,7 @@ export interface DigestCategory {
   label: string;
   query: string;
   categoryId: string;
+  maxPrice?: number;
 }
 
 export const DIGEST_CATEGORIES: DigestCategory[] = [

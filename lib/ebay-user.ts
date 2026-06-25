@@ -265,3 +265,43 @@ export function extractSearchKeywords(purchases: PurchasedEbayItem[]): string[] 
 
   return Array.from(keywords).slice(0, 5);
 }
+
+export async function getEbaySavedSearches(accessToken: string): Promise<string[]> {
+  const tradingUrl = isSandbox() ? EBAY_SBX_TRADING_URL : EBAY_TRADING_URL;
+
+  const soapBody = `<?xml version="1.0" encoding="utf-8"?>
+<GetSavedSearchesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+</GetSavedSearchesRequest>`;
+
+  try {
+    const res = await fetch(tradingUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-CALL-NAME': 'GetSavedSearches',
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID!,
+        'X-EBAY-API-IAF-TOKEN': accessToken,
+      },
+      body: soapBody,
+      cache: 'no-store',
+    });
+
+    if (!res.ok) return [];
+    const xml = await res.text();
+    if (xml.includes('<SeverityCode>Error</SeverityCode>')) return [];
+
+    const queries: string[] = [];
+    const matches = Array.from(xml.matchAll(/<SavedSearch>([\s\S]*?)<\/SavedSearch>/g));
+    for (const m of matches) {
+      const query = extractXmlTag(m[1], 'SearchQuery');
+      if (query && query.trim()) queries.push(query.trim());
+    }
+    return queries.slice(0, 10);
+  } catch {
+    return [];
+  }
+}

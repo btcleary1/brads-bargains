@@ -1,5 +1,5 @@
 import { getEbayUserTokens, saveEbayUserTokens } from './tracker-data';
-import { refreshEbayUserToken, getEbayPurchaseHistory } from './ebay-user';
+import { refreshEbayUserToken, getEbayPurchaseHistory, getEbaySavedSearches } from './ebay-user';
 
 export interface OrderLineItem {
   title: string;
@@ -12,6 +12,10 @@ export interface Order {
   date: string;
   items: OrderLineItem[];
   total: number | null;
+}
+
+export async function getEbayAccessToken(userId: string): Promise<string | null> {
+  return getToken(userId);
 }
 
 async function getToken(userId: string): Promise<string | null> {
@@ -48,4 +52,14 @@ export async function fetchEbayOrders(userId: string): Promise<Order[]> {
 export async function fetchEbayOrderTitles(userId: string): Promise<string[]> {
   const orders = await fetchEbayOrders(userId);
   return orders.flatMap(o => o.items.map(i => i.title));
+}
+
+export async function fetchEbaySavedSearchQueries(userId: string): Promise<string[]> {
+  const token = await getToken(userId);
+  if (!token) return [];
+  try {
+    return await getEbaySavedSearches(token);
+  } catch {
+    return [];
+  }
 }
