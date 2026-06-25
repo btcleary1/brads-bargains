@@ -57,6 +57,8 @@ interface CompsVerdict {
   discountQuality?: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   discountQualityReason?: string | null;
   sourcesCount?: number | null;
+  highVarianceWarning?: boolean;
+  attributeWarning?: string | null;
   noData?: boolean;
 }
 
@@ -88,6 +90,7 @@ interface BrowseDeal {
   flipMarginPct: number;
   estDaysToSell?: number | null;
   sourcesCount?: number | null;
+  multiSourceConfidence?: 'high' | 'medium' | 'low';
   stockxLastSale?: number | null;
   mercariAvgSold?: number | null;
   amazonPrice?: number | null;
@@ -229,8 +232,12 @@ function VerdictBadge({ verdict }: { verdict: 'buy' | 'skip' | 'maybe' }) {
   );
 }
 
-function MultiSourceBadge({ confidence, stockx, mercari, amazon, fb }: { confidence?: string; stockx?: number | null; mercari?: number | null; amazon?: number | null; fb?: number | null }) {
+function MultiSourceBadge({ confidence, stockx, mercari, amazon, fb, verdict, netProfit }: { confidence?: string; stockx?: number | null; mercari?: number | null; amazon?: number | null; fb?: number | null; verdict?: string; netProfit?: number | null }) {
   if (!confidence) return null;
+  // Never show confidence badges for SKIP verdicts or negative/zero profit — data quality
+  // is irrelevant when the deal itself is bad; showing "High Confidence" implies a good deal
+  const isBadDeal = verdict === 'skip' || (netProfit != null && netProfit <= 0);
+  if (isBadDeal) return null;
   const parts = [stockx ? `StockX $${stockx}` : null, mercari ? `Mercari $${mercari}` : null, amazon ? `Amazon $${amazon}` : null, fb ? `FB Mkt $${fb}` : null].filter(Boolean);
   const sourcesText = parts.join(' · ');
   const sourceCount = parts.length + 1; // +1 for eBay
@@ -306,7 +313,7 @@ function StatsCluster({
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
   const hasLine1 = avgSoldPrice != null;
   const line2: { text: string; color: string; bold?: boolean }[] = [];
-  if (netProfit != null) line2.push({ text: `${netProfit >= 0 ? '+' : ''}$${Math.abs(netProfit).toFixed(0)} Net Profit`, color: netProfit > 0 ? '#4ADE80' : '#F87171', bold: true });
+  if (netProfit != null) line2.push({ text: `${netProfit >= 0 ? '+' : '-'}$${Math.abs(netProfit).toFixed(0)} Net Profit`, color: netProfit > 0 ? '#4ADE80' : '#F87171', bold: true });
   if (estDaysToSell != null && estDaysToSell >= 1) line2.push({ text: `Est. ${estDaysToSell}d to sell`, color: '#6B7280' });
   if (annROI != null && annROI > 0 && annROI <= 2000) line2.push({ text: `${Math.round(annROI)}% ann. ROI`, color: annROI >= 200 ? '#4ADE80' : annROI >= 100 ? '#FCD34D' : '#9CA3AF' });
   if (!hasLine1 && line2.length === 0) return null;
@@ -437,51 +444,102 @@ function BrowseTrackButton({ deal }: { deal: BrowseDeal }) {
   );
 }
 
+const DOWN_REASONS = [
+  { key: 'not_my_niche',  label: 'Not my niche' },
+  { key: 'profit_too_low', label: 'Profit too low' },
+  { key: 'bad_listing',   label: 'Bad listing' },
+  { key: 'too_dated',     label: 'Too outdated' },
+] as const;
+
+const UP_REASONS = [
+  { key: 'my_kind_of_flip',  label: 'My kind of flip' },
+  { key: 'great_margin',     label: 'Great margin' },
+  { key: 'underpriced_gem',  label: 'Hidden gem' },
+] as const;
+
 function FeedbackButtons({ itemId, title, category, price, discountPct, netProfit, condition }: {
   itemId: string; title: string; category: string; price: number;
   discountPct: number | null; netProfit: number | null; condition: string;
 }) {
   const [voted, setVoted] = useState<'up' | 'down' | null>(null);
+  const [phase, setPhase] = useState<'idle' | 'reason' | 'done'>('idle');
   const [saving, setSaving] = useState(false);
 
-  const vote = async (verdict: 'up' | 'down') => {
-    if (saving) return;
-    setSaving(true);
-    const next = voted === verdict ? null : verdict;
-    setVoted(next);
-    if (next) {
-      fetch('/api/deal-feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId, title, category, price, discountPct, netProfit, condition, verdict: next }),
-      }).catch(() => {});
+  const selectVerdict = (verdict: 'up' | 'down') => {
+    if (phase === 'done') return;
+    if (voted === verdict && phase === 'reason') {
+      setVoted(null);
+      setPhase('idle');
+      return;
     }
-    setSaving(false);
+    setVoted(verdict);
+    setPhase('reason');
   };
 
+  const selectReason = async (reason: string) => {
+    if (!voted || saving) return;
+    setSaving(true);
+    fetch('/api/deal-feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId, title, category, price, discountPct, netProfit, condition, verdict: voted, reason }),
+    }).catch(() => {});
+    setSaving(false);
+    setPhase('done');
+  };
+
+  const reasons = voted === 'up' ? UP_REASONS : DOWN_REASONS;
+  const isUp = voted === 'up';
+
   return (
-    <div className="flex gap-1 items-center">
-      <span className="text-xs mr-1" style={{ color: '#4B5563' }}>Rate:</span>
-      <button
-        onClick={() => vote('up')}
-        title="Good deal"
-        className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg transition-all"
-        style={voted === 'up'
-          ? { background: 'rgba(34,197,94,0.2)', border: '1px solid rgba(34,197,94,0.4)', color: '#4ADE80' }
-          : { border: '1px solid rgba(255,255,255,0.1)', color: '#6B7280' }}
-      >
-        <ThumbsUp className="w-3 h-3" />
-      </button>
-      <button
-        onClick={() => vote('down')}
-        title="Not for me"
-        className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg transition-all"
-        style={voted === 'down'
-          ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#FCA5A5' }
-          : { border: '1px solid rgba(255,255,255,0.1)', color: '#6B7280' }}
-      >
-        <ThumbsDown className="w-3 h-3" />
-      </button>
+    <div className="mt-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium" style={{ color: '#9CA3AF' }}>
+          {phase === 'done' ? '' : phase === 'reason' ? (isUp ? 'What did you like?' : 'What was the issue?') : 'Was this a good deal?'}
+        </span>
+        <button
+          onClick={() => selectVerdict('up')}
+          disabled={phase === 'done'}
+          className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-all"
+          style={voted === 'up'
+            ? { background: 'rgba(34,197,94,0.25)', border: '1px solid rgba(34,197,94,0.5)', color: '#4ADE80' }
+            : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#9CA3AF' }}
+        >
+          <ThumbsUp className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => selectVerdict('down')}
+          disabled={phase === 'done'}
+          className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-all"
+          style={voted === 'down'
+            ? { background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.5)', color: '#FCA5A5' }
+            : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#9CA3AF' }}
+        >
+          <ThumbsDown className="w-3.5 h-3.5" />
+        </button>
+        {phase === 'done' && (
+          <span className="text-xs" style={{ color: '#6B7280' }}>Thanks for the feedback!</span>
+        )}
+      </div>
+      {phase === 'reason' && (
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {reasons.map(r => (
+            <button
+              key={r.key}
+              onClick={() => selectReason(r.key)}
+              disabled={saving}
+              className="text-xs px-2.5 py-1 rounded-full transition-all"
+              style={{
+                background: isUp ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                border: isUp ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(239,68,68,0.3)',
+                color: isUp ? '#86EFAC' : '#FCA5A5',
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -664,16 +722,16 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
                 : 'Check Flip'
               }
             </button>
-            <FeedbackButtons
-              itemId={item.itemId}
-              title={item.title}
-              category={item.category}
-              price={item.price}
-              discountPct={item.discountPct}
-              netProfit={activeComps?.netProfit ?? null}
-              condition={item.condition}
-            />
           </div>
+          <FeedbackButtons
+            itemId={item.itemId}
+            title={item.title}
+            category={item.category}
+            price={item.price}
+            discountPct={item.discountPct}
+            netProfit={activeComps?.netProfit ?? null}
+            condition={item.condition}
+          />
 
           {/* Comps verdict */}
           {compsLoading && (
@@ -692,7 +750,7 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <VerdictBadge verdict={activeComps.verdict} />
                 {preFlip && !comps && <span className="text-xs" style={{ color: '#6B7280' }}>Auto-graded</span>}
-                <MultiSourceBadge confidence={activeComps.multiSourceConfidence} stockx={activeComps.stockxLastSale} mercari={activeComps.mercariAvgSold} amazon={activeComps.amazonPrice} fb={activeComps.fbMarketplaceAvg} />
+                <MultiSourceBadge confidence={activeComps.multiSourceConfidence} stockx={activeComps.stockxLastSale} mercari={activeComps.mercariAvgSold} amazon={activeComps.amazonPrice} fb={activeComps.fbMarketplaceAvg} verdict={activeComps.verdict} netProfit={activeComps.netProfit} />
               </div>
               <div className="mb-2">
                 <StatsCluster
@@ -715,6 +773,11 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
               )}
               {activeComps.discountQualityReason && (
                 <DiscountQualityBadge quality={activeComps.discountQuality} reason={activeComps.discountQualityReason} />
+              )}
+              {activeComps.highVarianceWarning && (
+                <div className="rounded-lg px-3 py-2 mt-2 text-xs" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', color: '#FCD34D' }}>
+                  ⚠ Price varies by grade/edition/variant — verify comps match this exact item{activeComps.attributeWarning ? `: ${activeComps.attributeWarning}` : '.'}
+                </div>
               )}
               {activeComps.reasoning && <p className="text-xs leading-relaxed mt-2" style={{ color: '#9CA3AF' }}>{activeComps.reasoning}</p>}
             </div>
@@ -804,6 +867,11 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
               <div className="mb-2">
                 <StatsCluster avgSoldPrice={comps.avgSoldPrice} soldCount={comps.soldCount} sourcesCount={comps.sourcesCount} netProfit={comps.netProfit} estDaysToSell={comps.daysToSell} annROI={comps.capitalEfficiency} stockxLastSale={comps.stockxLastSale} mercariAvgSold={comps.mercariAvgSold} amazonPrice={comps.amazonPrice} fbMarketplaceAvg={comps.fbMarketplaceAvg} />
               </div>
+              {comps.highVarianceWarning && (
+                <div className="rounded-lg px-3 py-2 mb-2 text-xs" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', color: '#FCD34D' }}>
+                  ⚠ Price varies by grade/edition/variant — verify comps match this exact item{comps.attributeWarning ? `: ${comps.attributeWarning}` : '.'}
+                </div>
+              )}
               {comps.reasoning && <p className="text-xs leading-relaxed" style={{ color: '#9CA3AF' }}>{comps.reasoning}</p>}
             </div>
           )}
@@ -831,16 +899,16 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
               {compsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FlaskConical className="w-3 h-3" />}
               {compsLoading ? 'Checking…' : comps ? (comps.verdict === 'buy' ? 'BUY' : comps.verdict === 'skip' ? 'SKIP' : 'MAYBE') : 'Check Flip'}
             </button>
-            <FeedbackButtons
-              itemId={deal.itemId}
-              title={deal.title}
-              category={deal.category}
-              price={deal.price}
-              discountPct={deal.discountPct}
-              netProfit={comps?.netProfit ?? (deal.flipNetProfit > 0 ? deal.flipNetProfit : null)}
-              condition={deal.condition}
-            />
           </div>
+          <FeedbackButtons
+            itemId={deal.itemId}
+            title={deal.title}
+            category={deal.category}
+            price={deal.price}
+            discountPct={deal.discountPct}
+            netProfit={comps?.netProfit ?? (deal.flipNetProfit > 0 ? deal.flipNetProfit : null)}
+            condition={deal.condition}
+          />
         </div>
       </div>
     </div>
@@ -1817,6 +1885,20 @@ function DealsPageContent() {
                   )}
                 </div>
                 <p className="text-sm" style={{ color: '#C7D2FE' }}>{digestAiPick}</p>
+                {digestAiPickItemId && (() => {
+                  const aiItem = digestItems.find(d => d.itemId === digestAiPickItemId);
+                  return aiItem ? (
+                    <FeedbackButtons
+                      itemId={aiItem.itemId}
+                      title={aiItem.title}
+                      category={aiItem.category}
+                      price={aiItem.price}
+                      discountPct={aiItem.discountPct ?? null}
+                      netProfit={aiItem.flipNetProfit > 0 ? aiItem.flipNetProfit : null}
+                      condition={aiItem.condition}
+                    />
+                  ) : null;
+                })()}
               </div>
             )}
             {digestLoading && (
@@ -1903,6 +1985,14 @@ function DealsPageContent() {
                       <> · updated {Math.round((Date.now() - new Date(browseGeneratedAt).getTime()) / 60000)}m ago</>
                     )}
                   </p>
+                  {ebayConnected && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#A5B4FC' }}>
+                        ✦ Personalized with your eBay purchase history &amp; saved searches
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <button
@@ -1929,7 +2019,7 @@ function DealsPageContent() {
 
             {!browseLoading && browseItems.length > 0 && (
               <div className="space-y-3">
-                {browseItems.filter(deal => deal.flipVerdict === 'buy').map(deal => (
+                {browseItems.filter(deal => deal.flipNetProfit >= 20 || deal.pickReason?.startsWith('🔍') || deal.pickReason?.startsWith('🛍')).map(deal => (
                   <div key={deal.itemId} className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: deal.flipVerdict === 'buy' ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(251,191,36,0.2)' }}>
                     <div className="flex gap-3 p-4">
                       {deal.imageUrl && (
@@ -1945,6 +2035,7 @@ function DealsPageContent() {
                         )}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <VerdictBadge verdict={deal.flipVerdict} />
+                          <MultiSourceBadge confidence={deal.multiSourceConfidence} stockx={deal.stockxLastSale} mercari={deal.mercariAvgSold} amazon={deal.amazonPrice} fb={deal.fbMarketplaceAvg} verdict={deal.flipVerdict} netProfit={deal.flipNetProfit} />
                           <WatcherBadge velocity={deal.watcherVelocity} />
                           <span className="text-lg font-bold" style={{ color: '#34D399' }}>${deal.price.toFixed(2)}</span>
                           {deal.marketPrice && <span className="text-sm line-through" style={{ color: '#4B5563' }}>${deal.marketPrice.toFixed(0)}</span>}
@@ -1976,6 +2067,15 @@ function DealsPageContent() {
                           </a>
                           <BrowseTrackButton deal={deal} />
                         </div>
+                        <FeedbackButtons
+                          itemId={deal.itemId}
+                          title={deal.title}
+                          category={deal.category}
+                          price={deal.price}
+                          discountPct={deal.discountPct}
+                          netProfit={deal.flipNetProfit > 0 ? deal.flipNetProfit : null}
+                          condition={deal.condition}
+                        />
                       </div>
                     </div>
                   </div>
@@ -2102,6 +2202,15 @@ function DealsPageContent() {
                             View on eBay
                           </a>
                         </div>
+                        <FeedbackButtons
+                          itemId={item.itemId || item.title}
+                          title={item.title}
+                          category={item.category}
+                          price={item.price}
+                          discountPct={item.discountPct ?? null}
+                          netProfit={trendingFlips[item.itemId]?.netProfit ?? null}
+                          condition={item.condition}
+                        />
                       </div>
                       {item.watchCount > 0 && (
                         <div className="shrink-0 text-xs text-right" style={{ color: '#6B7280' }}>{item.watchCount} watching</div>
