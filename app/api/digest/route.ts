@@ -322,6 +322,22 @@ export async function GET(req: NextRequest) {
     });
     console.log(`[digest] best5 AI profits: ${best5.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
 
+    // Final live-check on best5 — removes any items that sold between the initial scan and now
+    if (!forceMock && process.env.EBAY_CLIENT_ID) {
+      try {
+        const liveFinal = await filterLiveItems(best5.filter(i => !i.itemId.startsWith('macbid_') && !i.itemId.startsWith('vista_')));
+        const liveIds = new Set(liveFinal.map(i => i.itemId));
+        const deadCount = best5.filter(i => !i.itemId.startsWith('macbid_') && !i.itemId.startsWith('vista_') && !liveIds.has(i.itemId)).length;
+        if (deadCount > 0) {
+          console.log(`[digest] final live check: ${deadCount} expired item(s) removed from best5`);
+          const auctionItems = best5.filter(i => i.itemId.startsWith('macbid_') || i.itemId.startsWith('vista_'));
+          const usedIds = new Set([...liveIds, ...auctionItems.map(i => i.itemId)]);
+          const fill = candidates.filter(i => !usedIds.has(i.itemId) && flipMap.get(i.itemId)?.verdict !== 'skip');
+          best5 = [...liveFinal, ...auctionItems, ...fill].slice(0, 5);
+        }
+      } catch (e) { console.warn('[digest] final live check failed:', e); }
+    }
+
     // Build recipient list with personalized deals per user
     type UserDigest = { userId: string; email: string; deals: typeof best5; aiPick?: string; aiPickItemId?: string | null; maxDaysToSell: number; minNetProfit: number; tasteWeights: Record<string, number> };
     let userDigests: UserDigest[] = [];
