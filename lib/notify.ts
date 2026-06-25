@@ -1,5 +1,6 @@
 import { EbayItem } from './ebay';
 import { sellabilityScore, sellabilityLabel, modelYear } from './deal-score';
+import { buildFeedbackUrl } from './deal-feedback';
 
 export interface FlipData {
   verdict: 'buy' | 'maybe' | 'skip';
@@ -128,7 +129,7 @@ function flipRow(flip: FlipData, annROI?: number | null): string {
   </div>`;
 }
 
-function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: FlipData): string {
+function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: FlipData, userId?: string): string {
   const title    = safe(deal.title);
   const location = safe(deal.location);
   const condition = safe(deal.condition);
@@ -220,6 +221,23 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
               </tr>
             </table>
 
+            ${userId ? (() => {
+              const meta = { title: deal.title, category: deal.category, price: deal.price, discountPct: deal.discountPct ?? null, netProfit: netProfit ?? null, condition: deal.condition };
+              const upUrl = buildFeedbackUrl(userId, deal.itemId, 'up', meta);
+              const downUrl = buildFeedbackUrl(userId, deal.itemId, 'down', meta);
+              return `<!-- Feedback row -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;">
+              <tr>
+                <td width="50%" style="padding-right:3px;">
+                  <a href="${upUrl}" style="display:block;text-align:center;background:#F0FDF4;color:#16A34A;font-size:11px;font-weight:600;text-decoration:none;padding:6px 4px;border-radius:7px;border:1px solid #BBF7D0;">&#128077; Good deal</a>
+                </td>
+                <td width="50%" style="padding-left:3px;">
+                  <a href="${downUrl}" style="display:block;text-align:center;background:#FEF2F2;color:#DC2626;font-size:11px;font-weight:600;text-decoration:none;padding:6px 4px;border-radius:7px;border:1px solid #FECACA;">&#128078; Not for me</a>
+                </td>
+              </tr>
+            </table>`;
+            })() : ''}
+
           </td>
         </tr>
 
@@ -229,13 +247,13 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
   </tr>`;
 }
 
-export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick?: string, flipMap?: Map<string, FlipData>): Promise<void> {
+export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick?: string, flipMap?: Map<string, FlipData>, userId?: string): Promise<void> {
   if (deals.length === 0 || !toEmail) return;
 
   const apiKey = (process.env.SENDGRID_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
   const top5 = deals.slice(0, 5);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const rows = top5.map((d, i) => dealRow(d, i + 1, top5, flipMap?.get(d.itemId))).join('');
+  const rows = top5.map((d, i) => dealRow(d, i + 1, top5, flipMap?.get(d.itemId), userId)).join('');
 
   const aiPickHtml = aiPick ? `
   <!-- AI Pick -->

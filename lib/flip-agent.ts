@@ -25,6 +25,7 @@ export interface CompsVerdict {
   stockxLastSale?: number | null;
   mercariAvgSold?: number | null;
   amazonPrice?: number | null;
+  fbMarketplaceAvg?: number | null;
   discountQuality?: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   discountQualityReason?: string | null;
   sourcesCount?: number | null;

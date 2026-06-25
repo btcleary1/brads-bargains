@@ -437,6 +437,55 @@ function BrowseTrackButton({ deal }: { deal: BrowseDeal }) {
   );
 }
 
+function FeedbackButtons({ itemId, title, category, price, discountPct, netProfit, condition }: {
+  itemId: string; title: string; category: string; price: number;
+  discountPct: number | null; netProfit: number | null; condition: string;
+}) {
+  const [voted, setVoted] = useState<'up' | 'down' | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const vote = async (verdict: 'up' | 'down') => {
+    if (saving) return;
+    setSaving(true);
+    const next = voted === verdict ? null : verdict;
+    setVoted(next);
+    if (next) {
+      fetch('/api/deal-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId, title, category, price, discountPct, netProfit, condition, verdict: next }),
+      }).catch(() => {});
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="flex gap-1 items-center">
+      <span className="text-xs mr-1" style={{ color: '#4B5563' }}>Rate:</span>
+      <button
+        onClick={() => vote('up')}
+        title="Good deal"
+        className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg transition-all"
+        style={voted === 'up'
+          ? { background: 'rgba(34,197,94,0.2)', border: '1px solid rgba(34,197,94,0.4)', color: '#4ADE80' }
+          : { border: '1px solid rgba(255,255,255,0.1)', color: '#6B7280' }}
+      >
+        <ThumbsUp className="w-3 h-3" />
+      </button>
+      <button
+        onClick={() => vote('down')}
+        title="Not for me"
+        className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg transition-all"
+        style={voted === 'down'
+          ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#FCA5A5' }
+          : { border: '1px solid rgba(255,255,255,0.1)', color: '#6B7280' }}
+      >
+        <ThumbsDown className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
 function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
   item: EbayItem;
   onTrack: (item: EbayItem) => void;
@@ -615,6 +664,15 @@ function ItemCard({ item, onTrack, preFlip, preFlipLoading }: {
                 : 'Check Flip'
               }
             </button>
+            <FeedbackButtons
+              itemId={item.itemId}
+              title={item.title}
+              category={item.category}
+              price={item.price}
+              discountPct={item.discountPct}
+              netProfit={activeComps?.netProfit ?? null}
+              condition={item.condition}
+            />
           </div>
 
           {/* Comps verdict */}
@@ -773,6 +831,15 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
               {compsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FlaskConical className="w-3 h-3" />}
               {compsLoading ? 'Checking…' : comps ? (comps.verdict === 'buy' ? 'BUY' : comps.verdict === 'skip' ? 'SKIP' : 'MAYBE') : 'Check Flip'}
             </button>
+            <FeedbackButtons
+              itemId={deal.itemId}
+              title={deal.title}
+              category={deal.category}
+              price={deal.price}
+              discountPct={deal.discountPct}
+              netProfit={comps?.netProfit ?? (deal.flipNetProfit > 0 ? deal.flipNetProfit : null)}
+              condition={deal.condition}
+            />
           </div>
         </div>
       </div>

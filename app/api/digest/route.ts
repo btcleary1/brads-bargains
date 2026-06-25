@@ -11,6 +11,7 @@ import { getAllUsers, getUserByEmail } from '@/lib/users';
 import { getUserPrefs, saveUserPrefs, getDeals } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals, inferCategoryScores, categoryKeyForTitle } from '@/lib/infer-categories';
 import { fetchEbayOrderTitles } from '@/lib/ebay-orders';
+import { computeTasteProfile, TasteProfile } from '@/lib/user-taste';
 import { searchSoldComps } from '@/lib/ebay-comps';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
 import { analyzeFlip } from '@/lib/flip-agent';
@@ -225,18 +226,19 @@ export async function GET(req: NextRequest) {
     console.log(`[digest] best5 AI profits: ${best5.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
 
     // Build recipient list with personalized deals per user
-    type UserDigest = { userId: string; email: string; deals: typeof best5; aiPick?: string; aiPickItemId?: string | null; maxDaysToSell: number };
+    type UserDigest = { userId: string; email: string; deals: typeof best5; aiPick?: string; aiPickItemId?: string | null; maxDaysToSell: number; minNetProfit: number; tasteWeights: Record<string, number> };
     let userDigests: UserDigest[] = [];
 
     if (toOverride) {
       const overrideUser = await getUserByEmail(toOverride);
-      userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 60 }];
+      userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 60, minNetProfit: 15, tasteWeights: {} }];
     } else {
       const users = await getAllUsers();
-      const [prefsResults, dealsResults, orderTitleResults] = await Promise.all([
+      const [prefsResults, dealsResults, orderTitleResults, tasteResults] = await Promise.all([
         Promise.allSettled(users.map(u => getUserPrefs(u.userId))),
         Promise.allSettled(users.map(u => getDeals(u.userId))),
         Promise.allSettled(users.map(u => fetchEbayOrderTitles(u.userId))),
+        Promise.allSettled(users.map(u => computeTasteProfile(u.userId))),
       ]);
 
       for (let i = 0; i < users.length; i++) {
@@ -262,6 +264,10 @@ export async function GET(req: NextRequest) {
 
         // Weighted category affinity — eBay purchase history (0.7) + tracker deals (0.3)
         const categoryAffinity = inferCategoryScores(activeCategories, [], ebayOrderTitles, userDeals);
+
+        // Taste profile from explicit thumbs up/down feedback
+        const tasteResult = tasteResults[i];
+        const taste: TasteProfile = tasteResult.status === 'fulfilled' ? tasteResult.value : { categoryWeights: {}, minNetProfit: 15 };
 
         // Filter allItems by preferred categories if we have any
         let pool = allItems;
@@ -305,7 +311,7 @@ export async function GET(req: NextRequest) {
           if (personalItems.length > 0) userPool = [...personalItems, ...userPool];
         }
 
-        // Dedupe, then sort by sellability boosted by eBay purchase history affinity
+        // Dedupe, then sort by sellability boosted by affinity and taste feedback
         const seenIds = new Set<string>();
         userPool = userPool.filter(i => { if (seenIds.has(i.itemId)) return false; seenIds.add(i.itemId); return true; });
         userPool = userPool.sort((a, b) => {
@@ -313,14 +319,19 @@ export async function GET(req: NextRequest) {
             const key = categoryKeyForTitle(item.title);
             return 1 + (key ? (categoryAffinity.get(key) ?? 0) * 0.5 : 0);
           };
-          return sellabilityScore(b, userPool) * affinityBoost(b) - sellabilityScore(a, userPool) * affinityBoost(a);
+          const tasteBoost = (item: typeof a) => {
+            const key = categoryKeyForTitle(item.title);
+            return key ? (taste.categoryWeights[key] ?? 1.0) : 1.0;
+          };
+          return sellabilityScore(b, userPool) * affinityBoost(b) * tasteBoost(b)
+               - sellabilityScore(a, userPool) * affinityBoost(a) * tasteBoost(a);
         }).slice(0, 30);
 
-        userDigests.push({ userId: users[i].userId, email: recipientEmail, deals: userPool, maxDaysToSell: prefs.maxDaysToSell ?? 60 });
+        userDigests.push({ userId: users[i].userId, email: recipientEmail, deals: userPool, maxDaysToSell: prefs.maxDaysToSell ?? 60, minNetProfit: taste.minNetProfit, tasteWeights: taste.categoryWeights });
       }
 
       if (userDigests.length === 0 && process.env.NOTIFICATION_EMAIL) {
-        userDigests = [{ userId: '', email: process.env.NOTIFICATION_EMAIL, deals: best5, maxDaysToSell: 60 }];
+        userDigests = [{ userId: '', email: process.env.NOTIFICATION_EMAIL, deals: best5, maxDaysToSell: 60, minNetProfit: 15, tasteWeights: {} }];
       }
     }
 
@@ -358,11 +369,12 @@ export async function GET(req: NextRequest) {
         // Apply user's maxDaysToSell — null estDaysToSell always passes through
         .filter(item => { const flip = flipMap.get(item.itemId); return !flip || flip.estDaysToSell == null || flip.estDaysToSell <= d.maxDaysToSell; })
         // Require meaningful net profit and exclude explicit SKIP verdicts
+        // minNetProfit is lowered automatically when user's taste profile shows they like lower-margin deals
         .filter(i => {
           const flip = flipMap.get(i.itemId);
           if (!flip) return false; // no comp data = exclude
           if (flip.verdict === 'skip') return false;
-          return flip.netProfit >= MIN_NET_PROFIT;
+          return flip.netProfit >= (d.minNetProfit ?? MIN_NET_PROFIT);
         })
         .sort((a, b) => {
           const order = { buy: 0, maybe: 1, skip: 2 };
@@ -467,8 +479,8 @@ export async function GET(req: NextRequest) {
 
     // Send emails sequentially with a small delay to stay under Resend's 5 req/s rate limit
     const sendResults: PromiseSettledResult<void>[] = [];
-    for (const { email, deals, aiPick } of userDigests) {
-      const result = await sendDailyDigest(deals, email, aiPick, flipMap).then(
+    for (const { userId, email, deals, aiPick } of userDigests) {
+      const result = await sendDailyDigest(deals, email, aiPick, flipMap, userId || undefined).then(
         () => ({ status: 'fulfilled' as const, value: undefined }),
         (reason) => ({ status: 'rejected' as const, reason })
       );
