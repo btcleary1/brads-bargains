@@ -184,6 +184,44 @@ async function tryNextData(): Promise<EbayItem[] | null> {
     .filter((x: EbayItem | null): x is EbayItem => x !== null);
 }
 
+export interface AuctionSoldResult {
+  avgSoldPrice: number;
+  soldCount: number;
+}
+
+export async function searchVistaAuctionSold(query: string): Promise<AuctionSoldResult | null> {
+  if (!query) return null;
+  try {
+    const q = encodeURIComponent(query);
+    const endpoints = [
+      `https://www.vistaauctions.com/api/items?query=${q}&status=sold&per_page=20`,
+      `https://www.vistaauctions.com/api/lots?query=${q}&status=ended&per_page=20`,
+      `https://www.vistaauctions.com/api/search?q=${q}&status=completed&limit=20`,
+    ];
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': BROWSER_UA },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const items: any[] = data.items ?? data.results ?? data.lots ?? data.data ?? (Array.isArray(data) ? data : []);
+        if (!items.length) continue;
+        const prices = items
+          .map(i => Number(i.final_price ?? i.finalPrice ?? i.winning_bid ?? i.winningBid ?? i.sold_price ?? i.soldPrice ?? i.current_price ?? i.currentPrice ?? 0))
+          .filter(p => p > 0);
+        if (prices.length < 2) continue;
+        const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+        return { avgSoldPrice: avg, soldCount: prices.length };
+      } catch { continue; }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchVistaAuctionDeals(): Promise<EbayItem[]> {
   try {
     const fromItems = await tryItemsApi().catch(() => null);

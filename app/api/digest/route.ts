@@ -236,7 +236,7 @@ export async function GET(req: NextRequest) {
       if (days != null && days > 60) verdict = 'skip';
       else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
       if (verdict !== 'skip' && netProfit > 0) profitableIds.add(item.itemId);
-      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, fbMarketplaceAvg: null });
+      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, fbMarketplaceAvg: null, macbidAvg: r.value.macbidAvg ?? null, vistaAvg: r.value.vistaAvg ?? null });
     });
 
     // Filter out damaged/broken items — run only on profitable candidates to save API calls
@@ -463,7 +463,7 @@ export async function GET(req: NextRequest) {
       const daysU = r.value.estDaysToSell;
       if (daysU != null && daysU > 60) verdict = 'skip';
       else if (daysU != null && daysU > 30 && verdict === 'buy') verdict = 'maybe';
-      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null });
+      flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, macbidAvg: r.value.macbidAvg ?? null, vistaAvg: r.value.vistaAvg ?? null });
     });
 
     // Minimum net profit to include a deal in the digest

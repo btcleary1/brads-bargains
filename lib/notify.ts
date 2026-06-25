@@ -14,6 +14,8 @@ export interface FlipData {
   mercariAvgSold?: number | null;
   amazonPrice?: number | null;
   fbMarketplaceAvg?: number | null;
+  macbidAvg?: number | null;
+  vistaAvg?: number | null;
 }
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
@@ -117,6 +119,8 @@ function flipRow(flip: FlipData, annROI?: number | null): string {
   if (flip.mercariAvgSold) sourceParts.push(`<span style="font-size:10px;color:#475569;">Mercari&nbsp;<strong>$${flip.mercariAvgSold.toFixed(0)}</strong></span>`);
   if (flip.amazonPrice) sourceParts.push(`<span style="font-size:10px;color:#475569;">Amazon&nbsp;<strong>$${flip.amazonPrice.toFixed(0)}</strong></span>`);
   if (flip.fbMarketplaceAvg) sourceParts.push(`<span style="font-size:10px;color:#475569;">FB&nbsp;Mkt&nbsp;<strong>$${flip.fbMarketplaceAvg.toFixed(0)}</strong></span>`);
+  if (flip.macbidAvg) sourceParts.push(`<span style="font-size:10px;color:#475569;">Mac.bid&nbsp;<strong>$${flip.macbidAvg.toFixed(0)}</strong></span>`);
+  if (flip.vistaAvg) sourceParts.push(`<span style="font-size:10px;color:#475569;">Vista&nbsp;<strong>$${flip.vistaAvg.toFixed(0)}</strong></span>`);
   return `<div style="margin-top:8px;padding:10px 12px;background:${verdictBg};border:1px solid ${verdictBorder};border-radius:6px;">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
       <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:${verdictColor};">${label}</span>

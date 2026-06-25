@@ -155,6 +155,44 @@ async function tryNextData(): Promise<EbayItem[] | null> {
     .filter((x: EbayItem | null): x is EbayItem => x !== null);
 }
 
+export interface AuctionSoldResult {
+  avgSoldPrice: number;
+  soldCount: number;
+}
+
+export async function searchMacBidSold(query: string): Promise<AuctionSoldResult | null> {
+  if (!query) return null;
+  try {
+    const q = encodeURIComponent(query);
+    const endpoints = [
+      `https://mac.bid/api/search?query=${q}&status=ended&per_page=20`,
+      `https://mac.bid/api/lots?query=${q}&status=completed&per_page=20`,
+      `https://mac.bid/api/search?query=${q}&active=false&per_page=20`,
+    ];
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': BROWSER_UA },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const items: any[] = data.items ?? data.results ?? data.lots ?? data.data ?? (Array.isArray(data) ? data : []);
+        if (!items.length) continue;
+        const prices = items
+          .map(i => Number(i.final_price ?? i.finalPrice ?? i.winning_bid ?? i.winningBid ?? i.sold_price ?? i.soldPrice ?? i.current_bid ?? i.currentBid ?? 0))
+          .filter(p => p > 0);
+        if (prices.length < 2) continue;
+        const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+        return { avgSoldPrice: avg, soldCount: prices.length };
+      } catch { continue; }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchMacBidDeals(): Promise<EbayItem[]> {
   try {
     const fromSearch = await trySearchApi().catch(() => null);
