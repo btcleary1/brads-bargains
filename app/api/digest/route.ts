@@ -705,15 +705,18 @@ export async function GET(req: NextRequest) {
       const hasDeals = userDigests.some(d => d.deals.length > 0);
       const failReason = !hasDeals ? 'No deals to send' : 'All emails failed';
       const failError = errors.length > 0 ? errors[0] : failReason;
-      // Persist failure reason so ?check=1 can surface it
-      await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey(), lastRunResult: 'failed', lastRunDeals: userDigests[0]?.deals.length ?? 0, lastRunError: failError })).catch(() => {});
-      // Return 200 so Vercel does not retry the cron — a 5xx triggers automatic retries
+      // Only persist state for real cron runs, not force/test runs
+      if (!force && !toOverride) {
+        await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey(), lastRunResult: 'failed', lastRunDeals: userDigests[0]?.deals.length ?? 0, lastRunError: failError })).catch(() => {});
+      }
       return NextResponse.json({ sent: false, reason: failReason, errors });
     }
 
-    // Record send date + success so ?check=1 shows last run result
+    // Record send date + success — only for real cron runs, not force/test sends
     const dealCount = userDigests[0]?.deals.length ?? 0;
-    await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey(), lastRunResult: 'sent', lastRunDeals: dealCount }));
+    if (!force && !toOverride) {
+      await r2Put(DIGEST_STATE_PATH, JSON.stringify({ lastSentDate: todayKey(), lastRunResult: 'sent', lastRunDeals: dealCount }));
+    }
 
     return NextResponse.json({
       sent: true,
