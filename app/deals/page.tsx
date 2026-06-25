@@ -142,11 +142,11 @@ function decodeBase64url(s: string): string {
 }
 
 function SellBadge({ score }: { score: number }) {
-  const label = score >= 70 ? 'High Confidence' : score >= 45 ? 'Med Confidence' : 'Lower Confidence';
+  const label = score >= 70 ? 'Sells Fast' : score >= 45 ? 'Good Market' : 'Slow Market';
   const color = score >= 70 ? '#4ADE80' : score >= 45 ? '#FCD34D' : '#F87171';
   const bg    = score >= 70 ? 'rgba(34,197,94,0.12)' : score >= 45 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)';
   const border= score >= 70 ? 'rgba(34,197,94,0.3)'  : score >= 45 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)';
-  const tooltip = `Sell Confidence Score: ${score}/100\n\n🟢 High (70+): Single item, fast-moving category, deep discount, unique price\n🟡 Medium (45–69): Some competition or moderate discount\n🔴 Lower (<45): Multi-quantity, slow category, or modest discount`;
+  const tooltip = `Sell Speed Score: ${score}/100\n\n🟢 Sells Fast (70+): Single item, fast-moving category, deep discount, unique price\n🟡 Good Market (45–69): Some competition or moderate discount\n🔴 Slow Market (<45): Multi-quantity, slow category, or modest discount`;
   return (
     <span
       className="text-xs font-semibold px-2 py-1 rounded-lg cursor-help"
@@ -2064,6 +2064,11 @@ function DealsPageContent() {
                             className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
                             style={{ border: '1px solid rgba(255,255,255,0.12)', color: '#9CA3AF' }}>
                             <ExternalLink className="w-3 h-3" /> View on eBay
+                          </a>
+                          <a href={soldCompsUrl(deal.title)} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-colors"
+                            style={{ border: '1px solid rgba(251,191,36,0.3)', color: '#FCD34D' }}>
+                            <TrendingDown className="w-3 h-3" /> Sold Comps
                           </a>
                           <BrowseTrackButton deal={deal} />
                         </div>
