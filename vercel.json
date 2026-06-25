@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/scrape-auctions?secret=scrape-2026",
+      "schedule": "0 8 * * *"
+    },
+    {
       "path": "/api/digest?secret=digest-2026",
       "schedule": "0 13 * * *"
     },

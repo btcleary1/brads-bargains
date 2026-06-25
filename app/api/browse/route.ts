@@ -143,6 +143,31 @@ export async function GET(req: NextRequest) {
 
   const forceRefresh = req.nextUrl.searchParams.get('refresh') === '1';
 
+  // Load auction deal cache in parallel with personalization signals
+  const auctionCacheResult = await r2Get<{ generatedAt: string; items: any[] }>('deal-wiz/auction-deals.json').catch(() => null);
+  const auctionItems: EbayItem[] = (auctionCacheResult?.items ?? []).map((item: any) => ({
+    itemId: item.itemId,
+    title: item.title,
+    price: item.price,
+    currency: item.currency ?? 'USD',
+    marketPrice: item.marketPrice ?? null,
+    discountPct: item.discountPct ?? null,
+    condition: item.condition,
+    imageUrl: item.imageUrl ?? '',
+    additionalImages: [],
+    itemUrl: item.itemUrl ?? '',
+    seller: item.seller ?? '',
+    sellerFeedbackScore: null,
+    sellerFeedbackPercent: null,
+    location: item.location ?? '',
+    category: item.category ?? 'Electronics',
+    shippingCost: item.shippingCost ?? null,
+    localPickupOnly: false,
+    listingType: 'AUCTION',
+    listingDate: item.listingDate ?? null,
+    quantity: 1,
+  }));
+
   // Load all personalization signals in parallel
   const [userDeals, userPrefs, ebayTitles, ebayActivity, tasteResult] = await Promise.allSettled([
     getDeals(session.userId),
@@ -182,6 +207,25 @@ export async function GET(req: NextRequest) {
   const serveCache = (stale = false) => {
     let items = personalizeResults(cached!.items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles);
     items = items.filter(i => i.estDaysToSell == null || i.estDaysToSell <= maxDays);
+
+    // Add auction deals not already in the cache (dedup by itemId)
+    const cachedIds = new Set(items.map(i => i.itemId));
+    const auctionDeals: BrowseDeal[] = auctionItems
+      .filter(i => !cachedIds.has(i.itemId) && !dislikedIds.has(i.itemId))
+      .slice(0, 3)
+      .map((i: any) => ({
+        ...i,
+        flipVerdict: i.flipVerdict ?? 'maybe',
+        avgSoldPrice: i.avgSoldPrice ?? 0,
+        soldCount: i.soldCount ?? 0,
+        flipNetProfit: i.flipNetProfit ?? 0,
+        flipMarginPct: i.flipMarginPct ?? 0,
+        estDaysToSell: i.estDaysToSell ?? null,
+        sourcesCount: i.sourcesCount ?? null,
+        pickReason: (i.auctionSource === 'macbid' ? 'Mac.bid Like New' : 'Vista Auction Like New'),
+      } as BrowseDeal));
+    items = [...items, ...auctionDeals];
+
     const matchedFromEbay = items.filter(i => {
       const key = categoryKeyForTitle(i.title);
       return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;

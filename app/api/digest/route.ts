@@ -10,10 +10,11 @@ import { r2Get, r2Put } from '@/lib/r2';
 import { getAllUsers, getUserByEmail } from '@/lib/users';
 import { getUserPrefs, saveUserPrefs, getDeals } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals, inferCategoryScores, categoryKeyForTitle } from '@/lib/infer-categories';
-import { fetchEbayOrderTitles } from '@/lib/ebay-orders';
+import { fetchEbayOrderTitles, fetchEbaySavedSearchQueries } from '@/lib/ebay-orders';
 import { computeTasteProfile, TasteProfile } from '@/lib/user-taste';
 import { searchSoldComps } from '@/lib/ebay-comps';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
+import { checkItemQuality, isFlippableItem } from '@/lib/item-quality';
 import { analyzeFlip } from '@/lib/flip-agent';
 import { sendPushToSubscriptions } from '@/lib/push-notify';
 
@@ -38,6 +39,28 @@ export async function GET(req: NextRequest) {
 
   if (secret !== DIGEST_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // ?check=1 returns diagnostic state without running the digest
+  if (req.nextUrl.searchParams.get('check') === '1') {
+    const state = await r2Get<{ lastSentDate: string }>(DIGEST_STATE_PATH);
+    const users = await getAllUsers();
+    const userPrefsResults = await Promise.allSettled(users.map(u => getUserPrefs(u.userId)));
+    const recipients = userPrefsResults
+      .map((r, i) => r.status === 'fulfilled' ? { userId: users[i].userId, email: r.value?.notificationEmail ?? null } : null)
+      .filter(Boolean);
+    return NextResponse.json({
+      lastSentDate: state?.lastSentDate ?? null,
+      todayKey: todayKey(),
+      wouldSkip: state?.lastSentDate === todayKey(),
+      userCount: users.length,
+      recipients,
+      digestSecret: DIGEST_SECRET === 'digest-2026' ? '(default)' : '(custom env var set)',
+      sendgridKeySet: !!process.env.SENDGRID_API_KEY,
+      sendgridFromEmail: process.env.SENDGRID_FROM_EMAIL ?? '(not set, using btcleary1@gmail.com)',
+      sessionSecretSet: !!process.env.SESSION_SECRET,
+      ebayClientIdSet: !!process.env.EBAY_CLIENT_ID,
+    });
   }
 
   // ?reset-state=1 clears the sent-today guard without sending (for testing)
@@ -80,6 +103,11 @@ export async function GET(req: NextRequest) {
 
   try {
     let allItems;
+    // Pre-load auction cache so it can be used for both allItems injection and flipMap seeding
+    let _auctionCache: { generatedAt: string; items: any[] } | null = null;
+    try {
+      _auctionCache = await r2Get<{ generatedAt: string; items: any[] }>('deal-wiz/auction-deals.json');
+    } catch { /* non-fatal */ }
 
     if (forceMock || process.env.EBAY_MOCK === 'true' || !process.env.EBAY_CLIENT_ID) {
       allItems = MOCK_DEALS;
@@ -88,8 +116,8 @@ export async function GET(req: NextRequest) {
       const allResults: EbayItem[] = [];
       const batchSize = 5;
       for (let i = 0; i < SEARCH_QUERIES.length; i += batchSize) {
-        const batch = SEARCH_QUERIES.slice(i, i + batchSize) as { query: string; categoryId: string }[];
-        const batchResults = await Promise.allSettled(batch.map(({ query, categoryId }) => searchDeals(query, 30, categoryId)));
+        const batch = SEARCH_QUERIES.slice(i, i + batchSize) as { query: string; categoryId: string; maxPrice?: number }[];
+        const batchResults = await Promise.allSettled(batch.map(({ query, categoryId, maxPrice }) => searchDeals(query, 30, categoryId, maxPrice)));
         batchResults.forEach(r => { if (r.status === 'fulfilled') allResults.push(...r.value); });
         if (i + batchSize < SEARCH_QUERIES.length) await new Promise(r => setTimeout(r, 500));
       }
@@ -102,8 +130,38 @@ export async function GET(req: NextRequest) {
       console.log(`[digest] eBay searches: ${SEARCH_QUERIES.length} total, ${allItems.length} raw items`);
     }
 
-    // Hard-remove refurbished items before scoring
-    const nonRefurb = allItems.filter(i => !/refurb/i.test(i.condition) && !/refurb/i.test(i.title));
+    // Inject Like New auction items from Mac.bid / Vista (scraped daily at 8 AM UTC)
+    if (_auctionCache?.items?.length) {
+      const auctionEbayItems: EbayItem[] = _auctionCache.items.map((item: any) => ({
+        itemId: item.itemId,
+        title: item.title,
+        price: item.price,
+        currency: 'USD',
+        marketPrice: item.avgSoldPrice ? Math.round(item.avgSoldPrice / 0.85) : null,
+        discountPct: null,
+        condition: item.condition ?? 'Like New',
+        imageUrl: item.imageUrl ?? '',
+        additionalImages: [],
+        itemUrl: item.itemUrl ?? '',
+        seller: item.seller ?? '',
+        sellerFeedbackScore: null,
+        sellerFeedbackPercent: null,
+        location: item.location ?? '',
+        category: item.category ?? 'Electronics',
+        shippingCost: item.shippingCost ?? null,
+        localPickupOnly: false,
+        listingType: 'AUCTION',
+        listingDate: item.listingDate ?? null,
+        quantity: 1,
+      }));
+      allItems = [...allItems, ...auctionEbayItems];
+      console.log(`[digest] injected ${auctionEbayItems.length} Like New auction items from Mac.bid/Vista`);
+    }
+
+    // Hard-remove refurbished items and non-flippable categories before scoring
+    const nonRefurb = allItems.filter(i =>
+      !/refurb/i.test(i.condition) && !/refurb/i.test(i.title) && isFlippableItem(i.title)
+    );
     const itemPool = nonRefurb.length >= 10 ? nonRefurb : allItems;
     console.log(`[digest] non-refurb items: ${nonRefurb.length} of ${allItems.length}`);
 
@@ -126,33 +184,69 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Sort by sellabilityScore, take top 50 for comp checking — larger pool = more qualifying deals after profit filter
+    // Sort by sellabilityScore, take top 40 for comp checking
     candidates = [...candidates]
       .sort((a, b) => sellabilityScore(b, candidates) - sellabilityScore(a, candidates))
-      .slice(0, 50);
+      .slice(0, 40);
 
-    // Run multi-source comps on all 50 candidates in parallel
+    // Run multi-source comps on all candidates in parallel
     const flipResults = await Promise.allSettled(
       candidates.map(item => getMultiSourceComps(item.title, 12, item.condition))
     );
     const flipMap = new Map<string, FlipData>();
+
+    // Seed flipMap with pre-computed auction deal data so they skip the comp pipeline
+    if (_auctionCache?.items?.length) {
+      _auctionCache.items.forEach((item: any) => {
+        if (item.flipNetProfit != null && item.avgSoldPrice != null) {
+          flipMap.set(item.itemId, {
+            verdict: item.flipVerdict ?? 'maybe',
+            netProfit: item.flipNetProfit,
+            avgSoldPrice: item.avgSoldPrice,
+            soldCount: item.soldCount ?? 0,
+            marginPct: item.flipMarginPct ?? 0,
+            estDaysToSell: item.estDaysToSell ?? null,
+            sourcesCount: item.sourcesCount ?? null,
+            stockxLastSale: item.stockxLastSale ?? null,
+            mercariAvgSold: item.mercariAvgSold ?? null,
+            amazonPrice: item.amazonPrice ?? null,
+            fbMarketplaceAvg: null,
+          });
+        }
+      });
+    }
+
+    const profitableIds = new Set<string>();
     candidates.forEach((item, i) => {
       const r = flipResults[i];
       if (r.status !== 'fulfilled' || !r.value) return;
       const { weightedAvgSoldPrice, ebayCount } = r.value;
       const refPrice = ebayCount >= 1 ? weightedAvgSoldPrice : (item.marketPrice ?? 0);
       if (refPrice <= 0) return;
+      // Sanity check: sold avg > 3× listing price means comp query matched wrong items
+      if (refPrice > item.price * 3) return;
       const netProfit = Math.round(refPrice * 0.85 - item.price - (item.shippingCost ?? 0));
       const marginPct = Math.round((netProfit / item.price) * 100);
       let verdict: 'buy' | 'maybe' | 'skip';
-      if (netProfit > 50 || (netProfit > 30 && marginPct > 20)) verdict = 'buy';
-      else if (netProfit < 10 || (netProfit < 20 && marginPct < 10)) verdict = 'skip';
+      if (netProfit > 30 || (netProfit > 20 && marginPct > 15)) verdict = 'buy';
+      else if (netProfit < 5) verdict = 'skip';
       else verdict = 'maybe';
-      if (netProfit >= 40 && verdict === 'skip') verdict = 'maybe';
+      if (netProfit >= 25 && verdict === 'skip') verdict = 'maybe';
       const days = r.value.estDaysToSell;
       if (days != null && days > 60) verdict = 'skip';
       else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
+      if (verdict !== 'skip' && netProfit > 0) profitableIds.add(item.itemId);
       flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, fbMarketplaceAvg: null });
+    });
+
+    // Filter out damaged/broken items — run only on profitable candidates to save API calls
+    const profitableCandidates = candidates.filter(i => profitableIds.has(i.itemId));
+    const qualityResults = await Promise.allSettled(
+      profitableCandidates.map(item => checkItemQuality(item.itemId, item.title))
+    );
+    profitableCandidates.forEach((item, i) => {
+      const r = qualityResults[i];
+      if (r.status === 'fulfilled' && r.value.broken) flipMap.delete(item.itemId);
     });
 
     // Speed-adjusted score: profit × (14 / daysToSell)^0.4
@@ -234,10 +328,11 @@ export async function GET(req: NextRequest) {
       userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 60, minNetProfit: 15, tasteWeights: {} }];
     } else {
       const users = await getAllUsers();
-      const [prefsResults, dealsResults, orderTitleResults, tasteResults] = await Promise.all([
+      const [prefsResults, dealsResults, orderTitleResults, savedSearchResults, tasteResults] = await Promise.all([
         Promise.allSettled(users.map(u => getUserPrefs(u.userId))),
         Promise.allSettled(users.map(u => getDeals(u.userId))),
         Promise.allSettled(users.map(u => fetchEbayOrderTitles(u.userId))),
+        Promise.allSettled(users.map(u => fetchEbaySavedSearchQueries(u.userId))),
         Promise.allSettled(users.map(u => computeTasteProfile(u.userId))),
       ]);
 
@@ -256,6 +351,8 @@ export async function GET(req: NextRequest) {
         const userDeals = dr.status === 'fulfilled' ? dr.value : [];
         const orderResult = orderTitleResults[i];
         const ebayOrderTitles = orderResult.status === 'fulfilled' ? orderResult.value : [];
+        const savedSearchResult = savedSearchResults[i];
+        const ebaySavedSearches = savedSearchResult.status === 'fulfilled' ? savedSearchResult.value : [];
 
         let activeCategories = prefs.digestCategories ?? [];
         if (activeCategories.length === 0) {
@@ -302,13 +399,22 @@ export async function GET(req: NextRequest) {
         if (userPool.length === 0) userPool = topDeals(pool, 40, 0, userFilterPrefs); // fallback: ignore dedup if nothing left
         if (userPool.length === 0) userPool = [...candidates];
 
-        if (prefs.watchlistQueries && prefs.watchlistQueries.length > 0) {
-          const personalResults = await Promise.allSettled(prefs.watchlistQueries.map(q => searchDeals(q, 20)));
+        // Merge manual watchlist queries + eBay saved searches (cap at 5 total to limit API calls)
+        const allPersonalQueries = [
+          ...(prefs.watchlistQueries ?? []),
+          ...ebaySavedSearches.filter(q => !(prefs.watchlistQueries ?? []).includes(q)),
+        ].slice(0, 5);
+
+        if (allPersonalQueries.length > 0) {
+          const personalResults = await Promise.allSettled(allPersonalQueries.map(q => searchDeals(q, 20)));
           const seen = new Set<string>();
           const personalItems = personalResults
             .flatMap(res => res.status === 'fulfilled' ? res.value : [])
             .filter(item => { if (seen.has(item.itemId)) return false; seen.add(item.itemId); return true; });
-          if (personalItems.length > 0) userPool = [...personalItems, ...userPool];
+          if (personalItems.length > 0) {
+            console.log(`[digest] user ${users[i].userId} personal queries: ${allPersonalQueries.length} (${ebaySavedSearches.length} from eBay saved searches), items: ${personalItems.length}`);
+            userPool = [...personalItems, ...userPool];
+          }
         }
 
         // Dedupe, then sort by sellability boosted by affinity and taste feedback
@@ -397,6 +503,9 @@ export async function GET(req: NextRequest) {
       return { ...d, deals: finalDeals };
     });
 
+    // Log pre-filter state for diagnostics — visible in Vercel function logs
+    console.log(`[digest] pre-send summary: ${userDigests.map(d => `${d.email}(${d.deals.length} deals, minProfit=$${d.minNetProfit})`).join(', ')}`);
+
     // Drop users with no qualifying deals — better to send nothing than junk
     userDigests = userDigests.filter(d => d.deals.length > 0);
 
@@ -484,6 +593,8 @@ export async function GET(req: NextRequest) {
         () => ({ status: 'fulfilled' as const, value: undefined }),
         (reason) => ({ status: 'rejected' as const, reason })
       );
+      if (result.status === 'rejected') console.error(`[digest] send FAILED to ${email}:`, result.reason);
+      else console.log(`[digest] send OK to ${email}`);
       sendResults.push(result);
       await new Promise(r => setTimeout(r, 250)); // 250ms between sends = ~4 req/s
     }

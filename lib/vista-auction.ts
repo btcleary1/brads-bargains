@@ -1,0 +1,213 @@
+import { EbayItem } from './ebay';
+
+const BROWSER_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+const LIKE_NEW_PATTERNS = /like[\s-]?new|grade\s*a\b|excellent|a\s*grade|likenew/i;
+
+function isLikeNew(condition: string | undefined | null): boolean {
+  if (!condition) return false;
+  return LIKE_NEW_PATTERNS.test(condition);
+}
+
+function mapItem(item: any, index: number): EbayItem | null {
+  const condition =
+    item.condition ??
+    item.grade ??
+    item.item_condition ??
+    item.conditionGrade ??
+    item.condition_name ??
+    '';
+
+  if (!isLikeNew(condition)) return null;
+
+  const price =
+    item.current_bid ??
+    item.currentBid ??
+    item.current_price ??
+    item.currentPrice ??
+    item.startingBid ??
+    item.starting_bid ??
+    item.price ??
+    item.starting_price ??
+    0;
+
+  if (!price || Number(price) === 0) return null;
+
+  const id =
+    item.id ??
+    item.lot_id ??
+    item.lotId ??
+    item.item_id ??
+    item.itemId ??
+    String(index);
+
+  const endTime =
+    item.end_time ??
+    item.endTime ??
+    item.ends_at ??
+    item.endsAt ??
+    item.auction_end ??
+    null;
+  if (endTime && new Date(endTime) < new Date()) return null;
+
+  const listingDate =
+    item.end_time ??
+    item.endTime ??
+    item.ends_at ??
+    item.endsAt ??
+    item.auction_end ??
+    item.created_at ??
+    item.createdAt ??
+    null;
+
+  const itemSlug = item.slug ?? item.id ?? item.item_id ?? '';
+  const itemUrl =
+    item.url ??
+    item.item_url ??
+    item.link ??
+    `https://www.vistaauctions.com/items/${String(itemSlug)}`;
+
+  return {
+    itemId: 'vista_' + String(id),
+    title: item.title ?? item.name ?? item.product_name ?? item.description ?? 'Unknown',
+    price: Number(price),
+    currency: 'USD',
+    marketPrice: null,
+    discountPct: null,
+    condition: 'Like New',
+    imageUrl:
+      item.image_url ??
+      item.imageUrl ??
+      item.thumbnail ??
+      item.images?.[0] ??
+      '',
+    additionalImages: [],
+    itemUrl,
+    seller: 'Vista Auction',
+    sellerFeedbackScore: null,
+    sellerFeedbackPercent: null,
+    location: item.location ?? item.warehouse ?? item.city ?? 'US',
+    category:
+      item.category ??
+      item.category_name ??
+      item.productType ??
+      item.product_type ??
+      'General',
+    shippingCost: null,
+    localPickupOnly: false,
+    listingType: 'AUCTION',
+    listingDate: listingDate ? String(listingDate) : null,
+    quantity: 1,
+  };
+}
+
+async function tryItemsApi(): Promise<EbayItem[] | null> {
+  const url =
+    'https://www.vistaauctions.com/api/items?condition=like_new&status=active';
+  const res = await fetch(url, {
+    headers: { 'User-Agent': BROWSER_UA },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const items: any[] =
+    data.items ??
+    data.results ??
+    data.lots ??
+    data.data ??
+    (Array.isArray(data) ? data : []);
+  if (!items.length) return null;
+  return items
+    .map((item, i) => mapItem(item, i))
+    .filter((x): x is EbayItem => x !== null);
+}
+
+async function tryLotsApi(): Promise<EbayItem[] | null> {
+  const url =
+    'https://www.vistaauctions.com/api/lots?active=true&per_page=50';
+  const res = await fetch(url, {
+    headers: { 'User-Agent': BROWSER_UA },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const items: any[] =
+    data.items ??
+    data.results ??
+    data.lots ??
+    data.data ??
+    (Array.isArray(data) ? data : []);
+  if (!items.length) return null;
+  return items
+    .map((item, i) => mapItem(item, i))
+    .filter((x): x is EbayItem => x !== null);
+}
+
+async function tryNextData(): Promise<EbayItem[] | null> {
+  const res = await fetch('https://www.vistaauctions.com/', {
+    headers: { 'User-Agent': BROWSER_UA },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return null;
+  const html = await res.text();
+  const match = html.match(
+    /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/
+  );
+  if (!match) return null;
+  const nextData = JSON.parse(match[1]);
+
+  // Walk the object tree to find arrays of lot/item objects
+  const candidates: any[][] = [];
+  function walk(obj: any, depth = 0) {
+    if (depth > 6 || !obj || typeof obj !== 'object') return;
+    if (Array.isArray(obj)) {
+      if (
+        obj.length > 0 &&
+        typeof obj[0] === 'object' &&
+        (obj[0].id || obj[0].lot_id || obj[0].item_id || obj[0].title)
+      ) {
+        candidates.push(obj);
+      }
+      obj.forEach((v: any) => walk(v, depth + 1));
+    } else {
+      Object.values(obj).forEach((v) => walk(v, depth + 1));
+    }
+  }
+  walk(nextData);
+
+  // Use the largest candidate array
+  const best = candidates.sort((a, b) => b.length - a.length)[0];
+  if (!best || !best.length) return null;
+  return best
+    .map((item: any, i: number) => mapItem(item, i))
+    .filter((x: EbayItem | null): x is EbayItem => x !== null);
+}
+
+export async function fetchVistaAuctionDeals(): Promise<EbayItem[]> {
+  try {
+    const fromItems = await tryItemsApi().catch(() => null);
+    if (fromItems && fromItems.length > 0) {
+      console.log(`[vista] fetched ${fromItems.length} items`);
+      return fromItems;
+    }
+
+    const fromLots = await tryLotsApi().catch(() => null);
+    if (fromLots && fromLots.length > 0) {
+      console.log(`[vista] fetched ${fromLots.length} items`);
+      return fromLots;
+    }
+
+    const fromNext = await tryNextData().catch(() => null);
+    if (fromNext && fromNext.length > 0) {
+      console.log(`[vista] fetched ${fromNext.length} items`);
+      return fromNext;
+    }
+
+    console.log('[vista] fetched 0 items');
+    return [];
+  } catch {
+    console.log('[vista] fetched 0 items');
+    return [];
+  }
+}
