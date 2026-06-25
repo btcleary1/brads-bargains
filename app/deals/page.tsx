@@ -2132,7 +2132,7 @@ function DealsPageContent() {
                 if (dismissedTrendingIds.has(item.itemId || item.title)) return false;
                 const flip = trendingFlips[item.itemId];
                 return !flip || flip.netProfit == null || flip.netProfit >= 20;
-              }).map((item, idx) => {
+              }).map((item) => {
                 // No marketPrice estimate — profit shown only after Check Flip runs
                 const tracked = trendingTracked.has(item.itemId || item.title);
                 const trackItem = async () => {
@@ -2153,7 +2153,7 @@ function DealsPageContent() {
                   } catch { /* silent */ }
                 };
                 return (
-                  <div key={idx} className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div key={item.itemId || item.title} className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
                     <div className="flex items-start gap-3">
                       {item.imageUrl && (
                         <div className="shrink-0 w-12 h-12 rounded-lg overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
