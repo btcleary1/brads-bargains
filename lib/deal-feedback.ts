@@ -1,7 +1,7 @@
 import { createHmac } from 'crypto';
 import { r2Get, r2Put } from './r2';
 
-export type DownReason = 'not_my_niche' | 'profit_too_low' | 'bad_listing' | 'too_dated';
+export type DownReason = 'not_my_niche' | 'profit_too_low' | 'bad_listing' | 'too_dated' | 'damaged_item';
 export type UpReason = 'my_kind_of_flip' | 'great_margin' | 'underpriced_gem';
 export type FeedbackReason = DownReason | UpReason;
 

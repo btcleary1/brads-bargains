@@ -456,6 +456,7 @@ const DOWN_REASONS = [
   { key: 'profit_too_low', label: 'Profit too low' },
   { key: 'bad_listing',   label: 'Bad listing' },
   { key: 'too_dated',     label: 'Too outdated' },
+  { key: 'damaged_item',  label: 'Damaged item' },
 ] as const;
 
 const UP_REASONS = [
