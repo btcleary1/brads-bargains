@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
 
 const VALID_REASONS = new Set<string>([
-  'not_my_niche', 'profit_too_low', 'bad_listing', 'too_dated', 'damaged_item',
+  'not_my_niche', 'profit_too_low', 'bad_listing', 'too_dated', 'damaged_item', 'too_long_to_sell',
   'my_kind_of_flip', 'great_margin', 'underpriced_gem',
 ]);
 
@@ -16,7 +16,8 @@ const DOWN_REASONS = [
   { key: 'not_my_niche',   label: 'Not my niche' },
   { key: 'bad_listing',    label: 'Bad listing' },
   { key: 'too_dated',      label: 'Too outdated' },
-  { key: 'damaged_item',   label: 'Damaged item' },
+  { key: 'damaged_item',      label: 'Damaged item' },
+  { key: 'too_long_to_sell',  label: 'Too long to sell' },
 ];
 
 const UP_REASONS = [

@@ -110,10 +110,10 @@ After searching, respond with ONLY a JSON object:
 multiSourceConfidence: "high" = eBay 5+ comps + 2 other sources within 30%; "medium" = eBay 3+ + 1 source or 30–40% diverge; "low" = eBay-only or <3 comps or >40% conflict.
 
 Verdict rules:
-- "buy" if net profit > $50 OR (net profit > $30 AND margin > 20%) AND daysToSell ≤ 30
-- "maybe" if profitable but daysToSell 31–60, OR marginal profit with fast sale
-- "skip" if net profit < $10 OR (net profit < $20 AND margin < 10%) OR daysToSell > 60
-- Never "skip" if net profit > $40 AND daysToSell ≤ 60
+- "buy" if net profit > $50 OR (net profit > $30 AND margin > 20%) AND daysToSell ≤ 14
+- "maybe" if profitable but daysToSell 15–20, OR marginal profit with fast sale
+- "skip" if net profit < $10 OR (net profit < $20 AND margin < 10%) OR daysToSell > 20
+- Never "skip" if net profit > $40 AND daysToSell ≤ 20
 - daysToSell: compute from soldDate spread (oldest to newest ÷ count-1). null if <2 dated comps.
 - If listing >40% below comps avg, verdict "buy" if profit supports it; note "⚠ verify listing authenticity" in reasoning.
 

@@ -342,7 +342,7 @@ export async function GET(req: NextRequest) {
 
     if (toOverride) {
       const overrideUser = await getUserByEmail(toOverride);
-      userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 60, minNetProfit: 15, tasteWeights: {} }];
+      userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 20, minNetProfit: 15, tasteWeights: {} }];
     } else {
       const users = await getAllUsers();
       const [prefsResults, dealsResults, orderTitleResults, savedSearchResults, tasteResults] = await Promise.all([
@@ -450,11 +450,11 @@ export async function GET(req: NextRequest) {
                - sellabilityScore(a, userPool) * affinityBoost(a) * tasteBoost(a);
         }).slice(0, 30);
 
-        userDigests.push({ userId: users[i].userId, email: recipientEmail, deals: userPool, maxDaysToSell: prefs.maxDaysToSell ?? 60, minNetProfit: taste.minNetProfit, tasteWeights: taste.categoryWeights });
+        userDigests.push({ userId: users[i].userId, email: recipientEmail, deals: userPool, maxDaysToSell: prefs.maxDaysToSell ?? 20, minNetProfit: taste.minNetProfit, tasteWeights: taste.categoryWeights });
       }
 
       if (userDigests.length === 0 && process.env.NOTIFICATION_EMAIL) {
-        userDigests = [{ userId: '', email: process.env.NOTIFICATION_EMAIL, deals: best5, maxDaysToSell: 60, minNetProfit: 15, tasteWeights: {} }];
+        userDigests = [{ userId: '', email: process.env.NOTIFICATION_EMAIL, deals: best5, maxDaysToSell: 20, minNetProfit: 15, tasteWeights: {} }];
       }
     }
 

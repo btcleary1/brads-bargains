@@ -323,7 +323,7 @@ export async function GET(req: NextRequest) {
     ? inferCategoriesFromDeals(allEbayTitles.map(t => ({ title: t, category: '' } as any)))
     : inferCategoriesFromDeals(deals);
 
-  const maxDays = prefs && (prefs as any).maxDaysToSell != null ? (prefs as any).maxDaysToSell as number : 60;
+  const maxDays = prefs && (prefs as any).maxDaysToSell != null ? (prefs as any).maxDaysToSell as number : 20;
 
   // Serve from cache if fresh — personalize order before returning
   const cached = await r2Get<BrowseCache>(BROWSE_CACHE_KEY());
