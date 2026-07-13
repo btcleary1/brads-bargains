@@ -17,6 +17,7 @@ import { getMultiSourceComps } from '@/lib/multi-source-comps';
 import { checkItemQuality, isFlippableItem } from '@/lib/item-quality';
 import { analyzeFlip } from '@/lib/flip-agent';
 import { sendPushToSubscriptions } from '@/lib/push-notify';
+import { checkSellersBatch } from '@/lib/seller-quality';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -334,6 +335,24 @@ export async function GET(req: NextRequest) {
           best5 = [...liveFinal, ...fill].slice(0, 5);
         }
       } catch (e) { console.warn('[digest] final live check failed:', e); }
+    }
+
+    // Seller quality check — filter out items from flagged sellers before emailing
+    if (!forceMock && process.env.EBAY_CLIENT_ID) {
+      try {
+        const sellerMap = await checkSellersBatch(
+          best5.map(i => ({ seller: i.seller, feedbackPercent: i.sellerFeedbackPercent, feedbackScore: i.sellerFeedbackScore }))
+        );
+        const beforeCount = best5.length;
+        best5 = best5.filter(i => sellerMap.get(i.seller)?.verdict !== 'flag');
+        const removed = beforeCount - best5.length;
+        if (removed > 0) {
+          console.log(`[digest] seller quality check: removed ${removed} item(s) from flagged sellers`);
+          const usedIds = new Set(best5.map(i => i.itemId));
+          const fill = candidates.filter(i => !usedIds.has(i.itemId) && flipMap.get(i.itemId)?.verdict !== 'skip' && sellerMap.get(i.seller)?.verdict !== 'flag');
+          best5 = [...best5, ...fill].slice(0, 5);
+        }
+      } catch (e) { console.warn('[digest] seller quality check failed:', e); }
     }
 
     // Build recipient list with personalized deals per user

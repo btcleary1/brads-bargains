@@ -16,6 +16,7 @@ import { recordWatcherSnapshots, getWatcherVelocities, WatcherVelocity } from '@
 import { assessDiscountQuality } from '@/lib/fake-discount';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
 import { checkItemQuality, isFlippableItem } from '@/lib/item-quality';
+import { checkSellersBatch } from '@/lib/seller-quality';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -246,6 +247,18 @@ export async function GET(req: NextRequest) {
         browsed.push({ ...item, flipVerdict: r.value.verdict, avgSoldPrice: r.value.avgSoldPrice, soldCount: r.value.soldCount, flipNetProfit: r.value.netProfit, flipMarginPct: r.value.marginPct, estDaysToSell: r.value.estDaysToSell, sourcesCount: r.value.sourcesCount ?? null, multiSourceConfidence: r.value.confidence });
       });
       browsed.sort((a, b) => { if (a.flipVerdict !== b.flipVerdict) return a.flipVerdict === 'buy' ? -1 : 1; return b.flipNetProfit - a.flipNetProfit; });
+
+      // Filter out items from flagged sellers before caching
+      try {
+        const sellerMap = await checkSellersBatch(
+          browsed.map(i => ({ seller: i.seller, feedbackPercent: i.sellerFeedbackPercent, feedbackScore: i.sellerFeedbackScore }))
+        );
+        const before = browsed.length;
+        const filtered = browsed.filter(i => sellerMap.get(i.seller)?.verdict !== 'flag');
+        if (filtered.length < before) console.log(`[browse] seller quality: removed ${before - filtered.length} item(s) from flagged sellers`);
+        browsed.splice(0, browsed.length, ...filtered);
+      } catch (e) { console.warn('[browse] seller quality check failed:', e); }
+
       if (browsed.length > 0) {
         const cache: BrowseCache = { items: browsed.slice(0, 15), generatedAt: new Date().toISOString() };
         await r2Put(BROWSE_CACHE_KEY(), JSON.stringify(cache));
