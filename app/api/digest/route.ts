@@ -478,8 +478,8 @@ export async function GET(req: NextRequest) {
       let verdict: 'buy' | 'maybe' | 'skip' = netProfit > 50 || (netProfit > 30 && marginPct > 20) ? 'buy' : netProfit < 10 || (netProfit < 20 && marginPct < 10) ? 'skip' : 'maybe';
       if (netProfit >= 40 && verdict === 'skip') verdict = 'maybe';
       const daysU = r.value.estDaysToSell;
-      if (daysU != null && daysU > 60) verdict = 'skip';
-      else if (daysU != null && daysU > 30 && verdict === 'buy') verdict = 'maybe';
+      if (daysU != null && daysU > 20) verdict = 'skip';
+      else if (daysU != null && daysU > 14 && verdict === 'buy') verdict = 'maybe';
       flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, macbidAvg: r.value.macbidAvg ?? null, vistaAvg: r.value.vistaAvg ?? null });
     });
 
@@ -516,15 +516,22 @@ export async function GET(req: NextRequest) {
         }, [])
         .slice(0, 5);
 
-      // Tier 2 fallback: when comps fail for everything, take top items by eBay discount
-      // This ensures the cron always sends deals even when external APIs are unavailable.
+      // Tier 2 fallback: pad to 5 when fewer than 5 comp-verified deals qualify.
+      // Uses best-discount items from the user's pool so the email always has 5 deals.
       let finalDeals = withComps;
-      if (finalDeals.length === 0) {
-        console.warn(`[digest] user ${d.userId} — 0 comp-verified deals; falling back to top-discount items`);
-        finalDeals = [...d.deals]
-          .filter(i => flipMap.get(i.itemId)?.verdict !== 'skip')
+      if (finalDeals.length < 5) {
+        const strictIds = new Set(finalDeals.map(i => i.itemId));
+        const padItems = [...d.deals]
+          .filter(i => !strictIds.has(i.itemId) && flipMap.get(i.itemId)?.verdict !== 'skip')
           .sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0))
-          .slice(0, 5);
+          .slice(0, 5 - finalDeals.length);
+        if (padItems.length > 0) {
+          console.log(`[digest] user ${d.userId} — padding ${finalDeals.length} strict deals with ${padItems.length} discount items`);
+          finalDeals = [...finalDeals, ...padItems];
+        } else if (finalDeals.length === 0) {
+          console.warn(`[digest] user ${d.userId} — 0 deals from all sources; using raw discount fallback`);
+          finalDeals = [...d.deals].sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0)).slice(0, 5);
+        }
       }
 
       console.log(`[digest] user ${d.userId} qualified deals: ${finalDeals.length}, profits: ${finalDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
