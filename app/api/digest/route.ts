@@ -8,6 +8,7 @@ import { sendDailyDigest, FlipData, buildSpotlightUrl } from '@/lib/notify';
 import { sendSMSDigest } from '@/lib/sms';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getAllUsers, getUserByEmail } from '@/lib/users';
+import { orchestrateDigestSelection } from '@/lib/deal-orchestrator';
 import { getUserPrefs, saveUserPrefs, getDeals } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals, inferCategoryScores, categoryKeyForTitle } from '@/lib/infer-categories';
 import { fetchEbayOrderTitles, fetchEbaySavedSearchQueries } from '@/lib/ebay-orders';
@@ -505,63 +506,32 @@ export async function GET(req: NextRequest) {
     // Minimum net profit to include a deal in the digest
     const MIN_NET_PROFIT = 15;
 
-    // Apply profit filter — prefer items with verified comps, but fall back to best-discount items
-    // so the cron always sends something even when comp APIs are down.
-    userDigests = userDigests.map(d => {
-      // Tier 1: items with comp data, positive profit, not skipped
-      const withComps = d.deals
-        .filter(item => { const flip = flipMap.get(item.itemId); return !flip || flip.estDaysToSell == null || flip.estDaysToSell <= d.maxDaysToSell; })
-        .filter(i => {
-          const flip = flipMap.get(i.itemId);
-          if (!flip) return false;
-          if (flip.verdict === 'skip') return false;
-          return flip.netProfit >= (d.minNetProfit ?? MIN_NET_PROFIT);
-        })
-        .sort((a, b) => {
-          const order = { buy: 0, maybe: 1, skip: 2 };
-          const af = flipMap.get(a.itemId), bf = flipMap.get(b.itemId);
-          const av = af?.verdict ?? 'maybe', bv = bf?.verdict ?? 'maybe';
-          if (av !== bv) return (order[av] ?? 1) - (order[bv] ?? 1);
-          return dealScore(bf ?? { verdict: bv as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 })
-               - dealScore(af ?? { verdict: av as any, netProfit: 0, avgSoldPrice: 0, soldCount: 0, marginPct: 0 });
-        })
-        // Cap sports/trading cards at 1 per digest so a single category can't dominate
-        .reduce<typeof best5>((acc, item) => {
-          const isCard = /\b(psa|bgs|sgc|graded|trading card|sports card|pokemon|baseball card|basketball card|football card)\b/i.test(item.title);
-          const cardCount = acc.filter(i => /\b(psa|bgs|sgc|graded|trading card|sports card|pokemon|baseball card|basketball card|football card)\b/i.test(i.title)).length;
-          if (isCard && cardCount >= 1) return acc;
-          acc.push(item);
-          return acc;
-        }, [])
-        .slice(0, 5);
+    // A2A orchestration: a Claude agent selects the best deals per user, calling the
+    // seller-quality sub-agent as a tool when it needs to investigate a borderline seller.
+    // Falls back to deterministic scoring inside orchestrateDigestSelection if the API is down.
+    const orchestratedDigests = await Promise.allSettled(
+      userDigests.map(d =>
+        orchestrateDigestSelection(d.deals, flipMap, d.maxDaysToSell, d.minNetProfit ?? MIN_NET_PROFIT)
+          .then(result => {
+            const itemById = new Map(d.deals.map(i => [i.itemId, i]));
+            const finalDeals = result.rankedItemIds
+              .map(id => itemById.get(id))
+              .filter((i): i is EbayItem => i != null);
 
-      // Tier 2 fallback: pad to 5 when fewer than 5 comp-verified deals qualify.
-      // Uses best-discount items from the user's pool so the email always has 5 deals.
-      let finalDeals = withComps;
-      if (finalDeals.length < 5) {
-        const strictIds = new Set(finalDeals.map(i => i.itemId));
-        const padItems = [...d.deals]
-          .filter(i => {
-            if (strictIds.has(i.itemId)) return false;
-            const flip = flipMap.get(i.itemId);
-            if (flip?.verdict === 'skip') return false;
-            if (flip?.estDaysToSell != null && flip.estDaysToSell > d.maxDaysToSell) return false;
-            return true;
+            // Safety net: if orchestrator returned nothing, fall back to best-discount items
+            const safeDeals = finalDeals.length > 0
+              ? finalDeals
+              : [...d.deals].sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0)).slice(0, 5);
+
+            console.log(`[digest] user ${d.userId} orchestrated deals: ${safeDeals.length}, profits: ${safeDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
+            console.log(`[digest] user ${d.userId} orchestrator reasoning: ${result.reasoning.slice(0, 120)}`);
+            return { ...d, deals: safeDeals };
           })
-          .sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0))
-          .slice(0, 5 - finalDeals.length);
-        if (padItems.length > 0) {
-          console.log(`[digest] user ${d.userId} — padding ${finalDeals.length} strict deals with ${padItems.length} discount items`);
-          finalDeals = [...finalDeals, ...padItems];
-        } else if (finalDeals.length === 0) {
-          console.warn(`[digest] user ${d.userId} — 0 deals from all sources; using raw discount fallback`);
-          finalDeals = [...d.deals].sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0)).slice(0, 5);
-        }
-      }
-
-      console.log(`[digest] user ${d.userId} qualified deals: ${finalDeals.length}, profits: ${finalDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
-      return { ...d, deals: finalDeals };
-    });
+      )
+    );
+    userDigests = orchestratedDigests.map((r, i) =>
+      r.status === 'fulfilled' ? r.value : userDigests[i]
+    );
 
     // Log pre-filter state for diagnostics — visible in Vercel function logs
     console.log(`[digest] pre-send summary: ${userDigests.map(d => `${d.email}(${d.deals.length} deals, minProfit=$${d.minNetProfit})`).join(', ')}`);
