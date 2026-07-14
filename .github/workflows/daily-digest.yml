@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '0 13 * * *'    # 9:00 AM EDT (Mar–Nov) / 8:00 AM EST (Nov–Mar)
   workflow_dispatch:         # allows manual trigger from GitHub Actions tab
+    inputs:
+      force:
+        description: 'Force send even if digest already ran today (true/false)'
+        required: false
+        default: 'false'
+      to:
+        description: 'Override recipient email address (leave blank for configured recipients)'
+        required: false
+        default: ''
 
 jobs:
   send-digest:
@@ -11,8 +20,14 @@ jobs:
     steps:
       - name: Trigger digest
         run: |
-          STATUS=$(curl -s -o /tmp/body.txt -w "%{http_code}" \
-            "https://brads-bargains.vercel.app/api/digest?secret=${{ secrets.DIGEST_SECRET }}")
+          URL="https://brads-bargains.vercel.app/api/digest?secret=${{ secrets.DIGEST_SECRET }}"
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            URL="${URL}&force=1"
+          fi
+          if [ -n "${{ github.event.inputs.to }}" ]; then
+            URL="${URL}&to=${{ github.event.inputs.to }}"
+          fi
+          STATUS=$(curl -s -o /tmp/body.txt -w "%{http_code}" "$URL")
           cat /tmp/body.txt
           if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
             echo "Digest endpoint returned HTTP $STATUS — failing job"
