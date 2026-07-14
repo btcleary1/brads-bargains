@@ -423,16 +423,16 @@ export async function GET(req: NextRequest) {
         };
 
         // Filter out items sent in the last 30 days to prevent digest repetition
-        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-        const recentlySentIds = new Set(
-          (prefs.sentItemIds ?? [])
-            .filter(s => new Date(s.sentAt).getTime() > cutoff)
-            .map(s => s.itemId)
-        );
+        const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const cutoff14 = Date.now() - 14 * 24 * 60 * 60 * 1000;
+        const sentEntries = prefs.sentItemIds ?? [];
+        const recentlySentIds30 = new Set(sentEntries.filter(s => new Date(s.sentAt).getTime() > cutoff30).map(s => s.itemId));
+        const recentlySentIds14 = new Set(sentEntries.filter(s => new Date(s.sentAt).getTime() > cutoff14).map(s => s.itemId));
 
-        let userPool = topDeals(pool, 40, 0, userFilterPrefs)
-          .filter(item => !recentlySentIds.has(item.itemId));
-        if (userPool.length === 0) userPool = topDeals(pool, 40, 0, userFilterPrefs); // fallback: ignore dedup if nothing left
+        const basePool = topDeals(pool, 40, 0, userFilterPrefs);
+        let userPool = basePool.filter(item => !recentlySentIds30.has(item.itemId));
+        if (userPool.length < 5) userPool = basePool.filter(item => !recentlySentIds14.has(item.itemId)); // expand to 14d window if thin
+        if (userPool.length === 0) userPool = basePool; // fallback: ignore dedup entirely
         if (userPool.length === 0) userPool = [...candidates];
 
         // Merge manual watchlist queries + eBay saved searches (cap at 5 total to limit API calls)
@@ -541,7 +541,13 @@ export async function GET(req: NextRequest) {
       if (finalDeals.length < 5) {
         const strictIds = new Set(finalDeals.map(i => i.itemId));
         const padItems = [...d.deals]
-          .filter(i => !strictIds.has(i.itemId) && flipMap.get(i.itemId)?.verdict !== 'skip')
+          .filter(i => {
+            if (strictIds.has(i.itemId)) return false;
+            const flip = flipMap.get(i.itemId);
+            if (flip?.verdict === 'skip') return false;
+            if (flip?.estDaysToSell != null && flip.estDaysToSell > d.maxDaysToSell) return false;
+            return true;
+          })
           .sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0))
           .slice(0, 5 - finalDeals.length);
         if (padItems.length > 0) {
