@@ -685,7 +685,7 @@ export async function GET(req: NextRequest) {
         const topFlip = flipMap.get(topDeal.itemId);
         const body = `${topDeal.title.slice(0, 60)} — $${topDeal.price} (${topDeal.discountPct ?? 0}% off)`;
         const url = buildSpotlightUrl(topDeal, topFlip);
-        await sendPushToSubscriptions(subs, "Brad's Bargains — Daily Deals", body, url).catch(() => {});
+        await sendPushToSubscriptions(subs, "AI FLIP — Daily Deals", body, url).catch(() => {});
       } catch { /* push failure never blocks email */ }
     }));
 

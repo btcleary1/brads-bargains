@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     // Secret-based bypass — sends to all users' subscriptions
     if (secret === DIGEST_SECRET) {
       const users = await getAllUsers();
-      const payload = JSON.stringify({ title: title || "Brad's Bargains", body: msgBody, url: url || '/deals' });
+      const payload = JSON.stringify({ title: title || "AI FLIP", body: msgBody, url: url || '/deals' });
       let sent = 0;
       await Promise.allSettled(users.map(async u => {
         const prefs = await getUserPrefs(u.userId);
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     if (subscriptions.length === 0) return NextResponse.json({ error: 'No push subscriptions found.' }, { status: 400 });
 
-    const payload = JSON.stringify({ title: title || "Brad's Bargains", body: msgBody, url: url || '/deals' });
+    const payload = JSON.stringify({ title: title || "AI FLIP", body: msgBody, url: url || '/deals' });
     const results = await Promise.allSettled(subscriptions.map(sub => webpush.sendNotification(sub, payload)));
     const sent = results.filter(r => r.status === 'fulfilled').length;
 

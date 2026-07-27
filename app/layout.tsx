@@ -11,11 +11,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: { default: "Brad's Bargains", template: "%s | Brad's Bargains" },
+  title: { default: "AI FLIP", template: "%s | AI FLIP" },
   description: "Find the best eBay deals and track your flips.",
-  applicationName: "Brad's Bargains",
+  applicationName: "AI FLIP",
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, title: "Brad's Bargains", statusBarStyle: 'black-translucent' },
+  appleWebApp: { capable: true, title: "AI FLIP", statusBarStyle: 'black-translucent' },
   other: { 'mobile-web-app-capable': 'yes' },
 };
 

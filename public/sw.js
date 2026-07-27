@@ -3,7 +3,7 @@ self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim(
 
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {};
-  const title = data.title || "Brad's Bargains";
+  const title = data.title || "AI FLIP";
   const options = {
     body: data.body || 'New deal alert!',
     icon: '/icon-192.png',

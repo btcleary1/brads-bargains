@@ -53,7 +53,7 @@ async function sendWatchlistAlert(
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: "Brad's Bargains <onboarding@resend.dev>",
+      from: "AI FLIP <onboarding@resend.dev>",
       to: toEmail,
       subject: `Watchlist Alert — ${totalDeals} new deal${totalDeals > 1 ? 's' : ''} found`,
       html: `<!DOCTYPE html><html>
@@ -62,8 +62,9 @@ async function sendWatchlistAlert(
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:28px 16px;">
 <tr><td align="center"><table width="100%" style="max-width:560px;">
   <tr><td style="padding-bottom:20px;text-align:center;">
-    <div style="display:inline-block;background:linear-gradient(135deg,#3B82F6,#6366F1);border-radius:12px;padding:10px 20px;margin-bottom:14px;">
-      <span style="font-size:18px;font-weight:800;color:#FFFFFF;">Brad's Bargains</span>
+    <div style="display:inline-block;background:#0D1B2A;border-radius:12px;padding:10px 22px;margin-bottom:14px;text-align:left;">
+      <span style="font-family:'Courier New',Courier,monospace;font-size:9px;letter-spacing:0.28em;color:rgba(255,255,255,0.42);text-transform:uppercase;display:block;line-height:1;margin-bottom:3px;">AI</span>
+      <span style="font-family:Impact,'Arial Narrow',sans-serif;font-size:22px;color:#FFFFFF;letter-spacing:-0.01em;line-height:0.9;display:block;">FLIP</span>
     </div>
     <h1 style="margin:0 0 6px;font-size:22px;font-weight:800;color:#0F172A;">Watchlist Alert</h1>
     <p style="margin:0;font-size:13px;color:#64748B;">New qualifying deals found for your saved searches</p>
@@ -154,7 +155,7 @@ export async function GET(req: NextRequest) {
         const body = topDeal
           ? `${topDeal.title.slice(0, 60)} — $${topDeal.price} (${topDeal.discountPct ?? 0}% off)`
           : 'New watchlist deals found.';
-        await sendPushToSubscriptions(subs, "Brad's Bargains — Watchlist Alert", body, '/deals').catch(() => {});
+        await sendPushToSubscriptions(subs, "AI FLIP — Watchlist Alert", body, '/deals').catch(() => {});
       }
       summary.push({ userId: user.userId, alerts: alerts.reduce((n, a) => n + a.deals.length, 0) });
     }

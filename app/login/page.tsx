@@ -188,10 +188,18 @@ function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }}>
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl mb-3" style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}>
-            <Zap className="w-7 h-7 text-white" />
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl mb-3" style={{ background: '#0D1B2A', boxShadow: '0 4px 20px rgba(13,27,42,0.7)' }}>
+            <svg width="28" height="28" viewBox="0 0 18 18" aria-hidden="true">
+              <defs>
+                <linearGradient id="aif-login" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="50%" stopColor="#10B981"/>
+                  <stop offset="50%" stopColor="#1D4ED8"/>
+                </linearGradient>
+              </defs>
+              <polygon points="9,2 4.5,7.4 6.85,7.4 6.85,15.5 11.15,15.5 11.15,7.4 13.5,7.4" fill="url(#aif-login)"/>
+            </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">Brad&apos;s Bargains</h1>
+          <h1 className="text-2xl font-bold text-white">AI FLIP</h1>
           <p className="text-sm mt-1" style={{ color: '#6B7280' }}>Find the best eBay deals</p>
         </div>
 

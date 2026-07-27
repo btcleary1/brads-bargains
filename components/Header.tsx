@@ -47,11 +47,19 @@ export default function Header() {
             <Link href="/deals" className="flex items-center gap-2.5">
               <div
                 className="flex items-center justify-center w-8 h-8 rounded-xl shrink-0"
-                style={{ background: 'linear-gradient(135deg,#3B82F6 0%,#6366F1 100%)', boxShadow: '0 2px 10px rgba(99,102,241,0.4)' }}
+                style={{ background: '#0D1B2A', boxShadow: '0 2px 10px rgba(13,27,42,0.6)' }}
               >
-                <Zap className="w-4 h-4 text-white" />
+                <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="aif-h" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="50%" stopColor="#10B981"/>
+                      <stop offset="50%" stopColor="#1D4ED8"/>
+                    </linearGradient>
+                  </defs>
+                  <polygon points="9,2 4.5,7.4 6.85,7.4 6.85,15.5 11.15,15.5 11.15,7.4 13.5,7.4" fill="url(#aif-h)"/>
+                </svg>
               </div>
-              <span className="font-bold text-white text-[15px] tracking-tight">Brad&apos;s Bargains</span>
+              <span className="font-bold text-white text-[15px] tracking-tight">AI FLIP</span>
             </Link>
 
             {/* Desktop nav */}

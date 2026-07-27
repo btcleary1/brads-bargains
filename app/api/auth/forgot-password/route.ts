@@ -25,13 +25,13 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: "Brad's Bargains <onboarding@resend.dev>",
+        from: "AI FLIP <onboarding@resend.dev>",
         to: email,
-        subject: "Your Brad's Bargains password reset code",
+        subject: "Your AI FLIP password reset code",
         html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#050814;">
           <div style="background:#0B1120;border-radius:16px;border:1px solid rgba(255,255,255,0.1);padding:32px;">
             <h2 style="color:#F9FAFB;margin-bottom:8px;">Password Reset</h2>
-            <p style="color:#9CA3AF;margin-bottom:24px;">Use the code below to reset your Brad's Bargains password. It expires in 15 minutes.</p>
+            <p style="color:#9CA3AF;margin-bottom:24px;">Use the code below to reset your AI FLIP password. It expires in 15 minutes.</p>
             <div style="background:#f3f4f6;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
               <span style="font-size:36px;font-weight:bold;letter-spacing:8px;color:#111827;">${code}</span>
             </div>

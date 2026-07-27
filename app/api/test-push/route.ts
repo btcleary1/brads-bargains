@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
   const result = await sendPushToSubscriptions(
     subs,
-    "Brad's Bargains — Test Notification",
+    "AI FLIP — Test Notification",
     'Nintendo Switch OLED — $189 · 46% off · ~$82 net profit. Tap to view.',
     spotlightUrl,
   );

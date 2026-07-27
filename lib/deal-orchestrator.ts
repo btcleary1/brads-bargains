@@ -117,7 +117,7 @@ export async function orchestrateDigestSelection(
   ).join('\n');
 
   const system = [
-    `You are the deal-selection orchestrator for Brad's Bargains, a daily eBay flip advisory email.`,
+    `You are the deal-selection orchestrator for AI FLIP, a daily eBay flip advisory email.`,
     `Your task: choose the best ${maxItems} deals from the candidate list for today's digest.`,
     ``,
     `Rules:`,
