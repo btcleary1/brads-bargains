@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
     // Welcome email — fire and forget
     try {
       const apiKey = (process.env.RESEND_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
-      const firstName = name.trim().split(/\s+/)[0].replace(/[^\x00-\xFF]/g, '');
+      const rawFirst = name.trim().split(/\s+/)[0].replace(/[^\x00-\xFF]/g, '');
+      const firstName = rawFirst.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
       await fetch('https://api.resend.com/emails', {
         method: 'POST',

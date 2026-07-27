@@ -1,10 +1,15 @@
 import { createHmac } from 'crypto';
 
 const SECRET = process.env.WEBAUTHN_SECRET;
-if (!SECRET && process.env.NODE_ENV === 'production') {
-  console.error('[webauthn-hmac] WEBAUTHN_SECRET env var is not set — credential backups are insecure!');
+if (!SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    // Hard-fail in production — credential backups require a real secret
+    throw new Error('[webauthn-hmac] WEBAUTHN_SECRET env var is not set. Set it in your deployment environment.');
+  } else {
+    console.warn('[webauthn-hmac] WEBAUTHN_SECRET not set — using dev fallback. Set this in production.');
+  }
 }
-const EFFECTIVE_SECRET = SECRET ?? 'hwiz-bc26-secret-v1';
+const EFFECTIVE_SECRET = SECRET ?? 'hwiz-dev-only-not-for-production';
 
 export function signCredential(credJson: string): string {
   const encoded = Buffer.from(credJson).toString('base64');

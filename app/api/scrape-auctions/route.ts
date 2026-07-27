@@ -36,7 +36,7 @@ function sleep(ms: number): Promise<void> {
 
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
-  if (secret !== (process.env.SCRAPE_SECRET ?? 'scrape-2026')) {
+  if (!(process.env.SCRAPE_SECRET ?? '') || secret !== (process.env.SCRAPE_SECRET ?? '')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

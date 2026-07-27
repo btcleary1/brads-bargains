@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
         publicKey: new Uint8Array(Buffer.from(stored.publicKey, 'base64')),
         counter: stored.counter,
       },
-      requireUserVerification: false,
+      requireUserVerification: true,
     });
 
     if (!verification.verified) {

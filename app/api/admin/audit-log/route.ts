@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllUsers } from '@/lib/users';
 import { r2List, r2Get } from '@/lib/r2';
+import { getSessionFromRequest } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
-const SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
-
 export async function GET(req: NextRequest) {
-  if (req.nextUrl.searchParams.get('secret') !== SECRET)
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await getSessionFromRequest(req);
+  if (!session || session.role !== 'admin')
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const users = await getAllUsers();
   const userMap = Object.fromEntries(users.map(u => [u.userId, u.name]));

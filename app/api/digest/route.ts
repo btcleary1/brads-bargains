@@ -26,7 +26,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const DIGEST_STATE_PATH = 'deal-wiz/digest-state.json';
-const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
+const DIGEST_SECRET = process.env.DIGEST_SECRET ?? '';
 
 // Categories to search when live eBay API is available
 const SEARCH_QUERIES = DIGEST_CATEGORIES.map(c => ({ query: c.query, categoryId: c.categoryId }));
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
   const force  = req.nextUrl.searchParams.get('force') === '1';
 
-  if (secret !== DIGEST_SECRET) {
+  if (!DIGEST_SECRET || secret !== DIGEST_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -48,9 +48,9 @@ export async function GET(req: NextRequest) {
     const state = await r2Get<{ lastSentDate: string; lastRunResult?: string; lastRunDeals?: number; lastRunError?: string }>(DIGEST_STATE_PATH);
     const users = await getAllUsers();
     const userPrefsResults = await Promise.allSettled(users.map(u => getUserPrefs(u.userId)));
-    const recipients = userPrefsResults
-      .map((r, i) => r.status === 'fulfilled' ? { userId: users[i].userId, email: r.value?.notificationEmail ?? null } : null)
-      .filter(Boolean);
+    const recipientCount = userPrefsResults
+      .filter(r => r.status === 'fulfilled' && r.value?.notificationEmail)
+      .length;
     return NextResponse.json({
       lastSentDate: state?.lastSentDate ?? null,
       lastRunResult: state?.lastRunResult ?? null,
@@ -59,10 +59,9 @@ export async function GET(req: NextRequest) {
       todayKey: todayKey(),
       wouldSkip: state?.lastSentDate === todayKey(),
       userCount: users.length,
-      recipients,
-      digestSecret: DIGEST_SECRET === 'digest-2026' ? '(default)' : '(custom env var set)',
+      recipientCount,
+      digestSecretSet: !!process.env.DIGEST_SECRET,
       sendgridKeySet: !!process.env.SENDGRID_API_KEY,
-      sendgridFromEmail: process.env.SENDGRID_FROM_EMAIL ?? '(not set, using btcleary1@gmail.com)',
       sessionSecretSet: !!process.env.SESSION_SECRET,
       ebayClientIdSet: !!process.env.EBAY_CLIENT_ID,
     });

@@ -5,11 +5,11 @@ import { r2Put } from '@/lib/r2';
 
 export const runtime = 'nodejs';
 
-const SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
+const SECRET = process.env.DIGEST_SECRET ?? '';
 
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
-  if (secret !== SECRET) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!SECRET || secret !== SECRET) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const to = req.nextUrl.searchParams.get('to') ?? process.env.NOTIFICATION_EMAIL ?? '';
   if (!to) return NextResponse.json({ error: 'No recipient' }, { status: 400 });

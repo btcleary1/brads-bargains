@@ -9,7 +9,11 @@ import { getSessionFromRequest as _unused } from '@/lib/session'; // eslint-disa
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
+const SECRET = process.env.DIGEST_SECRET ?? '';
+
+function escHtml(s: string): string {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
 
 async function sendWatchlistAlert(
@@ -28,7 +32,7 @@ async function sendWatchlistAlert(
           <tr>
             <td style="padding:14px;">
               <div style="font-size:10px;font-weight:700;letter-spacing:0.06em;color:#6366F1;text-transform:uppercase;margin-bottom:6px;">
-                Watchlist: ${query}
+                Watchlist: ${escHtml(query)}
               </div>
               <a href="${d.itemUrl}" style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;display:block;margin-bottom:6px;">${d.title.replace(/[^\x00-\xFF]/g, '').slice(0, 80)}</a>
               <div style="font-size:12px;color:#64748B;margin-bottom:8px;">
@@ -91,7 +95,7 @@ async function sendWatchlistAlert(
 
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
-  if (secret !== SECRET) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!SECRET || secret !== SECRET) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!process.env.EBAY_CLIENT_ID) {
     return NextResponse.json({ skipped: true, reason: 'eBay not configured' });
