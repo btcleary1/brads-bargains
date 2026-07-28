@@ -26,7 +26,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const DIGEST_STATE_PATH = 'deal-wiz/digest-state.json';
-const DIGEST_SECRET = process.env.DIGEST_SECRET ?? '';
+const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
 
 // Categories to search when live eBay API is available
 const SEARCH_QUERIES = DIGEST_CATEGORIES.map(c => ({ query: c.query, categoryId: c.categoryId }));
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
   const force  = req.nextUrl.searchParams.get('force') === '1';
 
-  if (!DIGEST_SECRET || secret !== DIGEST_SECRET) {
+  if (secret !== DIGEST_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
