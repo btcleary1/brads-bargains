@@ -8,7 +8,11 @@ import { sendSMSPriceDrop } from '@/lib/sms';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const PRICE_CHECK_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
+const PRICE_CHECK_SECRET = process.env.DIGEST_SECRET ?? '';
+
+function escHtml(s: string): string {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
 
 async function sendPriceDropEmail(toEmail: string, drops: { title: string; oldPrice: number; newPrice: number; saving: number; url: string }[]): Promise<void> {
@@ -18,7 +22,7 @@ async function sendPriceDropEmail(toEmail: string, drops: { title: string; oldPr
       <table width="100%" style="background:#FFFFFF;border-radius:10px;border:1px solid #E2E8F0;">
         <tr>
           <td style="padding:14px;">
-            <a href="${d.url}" style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;display:block;margin-bottom:8px;">${d.title.slice(0, 80)}</a>
+            <a href="${d.url}" style="font-size:14px;font-weight:600;color:#0F172A;text-decoration:none;display:block;margin-bottom:8px;">${escHtml(d.title.slice(0, 80))}</a>
             <div style="display:flex;gap:12px;align-items:center;">
               <span style="font-size:20px;font-weight:800;color:#0F172A;">$${d.newPrice.toFixed(0)}</span>
               <span style="font-size:13px;color:#94A3B8;text-decoration:line-through;">$${d.oldPrice.toFixed(0)}</span>
@@ -34,15 +38,16 @@ async function sendPriceDropEmail(toEmail: string, drops: { title: string; oldPr
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: "Brad's Bargains <onboarding@resend.dev>",
+      from: "AI FLIP <onboarding@resend.dev>",
       to: toEmail,
       subject: `Price Drop Alert — ${drops.length} deal${drops.length > 1 ? 's' : ''} got cheaper!`,
       html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:28px 16px;">
 <tr><td align="center"><table width="100%" style="max-width:560px;">
   <tr><td style="padding-bottom:20px;text-align:center;">
-    <div style="display:inline-block;background:linear-gradient(135deg,#3B82F6,#6366F1);border-radius:12px;padding:10px 20px;margin-bottom:14px;">
-      <span style="font-size:18px;font-weight:800;color:#FFFFFF;">Brad's Bargains</span>
+    <div style="display:inline-block;background:#0D1B2A;border-radius:12px;padding:10px 22px;margin-bottom:14px;text-align:left;">
+      <span style="font-family:'Courier New',Courier,monospace;font-size:9px;letter-spacing:0.28em;color:rgba(255,255,255,0.42);text-transform:uppercase;display:block;line-height:1;margin-bottom:3px;">AI</span>
+      <span style="font-family:Impact,'Arial Narrow',sans-serif;font-size:22px;color:#FFFFFF;letter-spacing:-0.01em;line-height:0.9;display:block;">FLIP</span>
     </div>
     <h1 style="margin:0 0 6px;font-size:22px;font-weight:800;color:#0F172A;">Price Drop Alert</h1>
     <p style="margin:0;font-size:13px;color:#64748B;">Deals you're watching just got cheaper</p>
@@ -59,7 +64,7 @@ async function sendPriceDropEmail(toEmail: string, drops: { title: string; oldPr
 
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
-  if (secret !== PRICE_CHECK_SECRET) {
+  if (!PRICE_CHECK_SECRET || secret !== PRICE_CHECK_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

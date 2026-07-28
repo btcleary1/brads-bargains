@@ -323,7 +323,7 @@ function SettingsContent() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: "Brad's Bargains", body: "🔥 Test notification — deal alerts are working!", url: '/deals' }),
+        body: JSON.stringify({ title: "AI FLIP", body: "🔥 Test notification — deal alerts are working!", url: '/deals' }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok) setPushMessage({ type: 'success', text: 'Test notification sent!' });
@@ -1087,7 +1087,7 @@ function SettingsContent() {
             <ShoppingBag className="w-5 h-5" style={{ color: '#60A5FA' }} />
             <h2 className="font-semibold text-white text-[15px]">eBay Account</h2>
           </div>
-          <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Connect your eBay account so Brad&apos;s Bargains can recommend deals based on your purchase history.</p>
+          <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Connect your eBay account so AI FLIP can recommend deals based on your purchase history.</p>
 
           {ebayMessage && (
             <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: ebayMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${ebayMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: ebayMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>

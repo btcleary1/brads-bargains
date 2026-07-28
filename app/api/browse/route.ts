@@ -208,7 +208,7 @@ function personalizeResults(
 }
 
 export async function GET(req: NextRequest) {
-  const BROWSE_SECRET = process.env.BROWSE_SECRET ?? 'browse-2026';
+  const BROWSE_SECRET = process.env.BROWSE_SECRET ?? '';
   const warmMode = req.nextUrl.searchParams.get('warm') === BROWSE_SECRET;
 
   // Cache-warm mode: called from cron, no user session needed. Runs searches + comps and saves cache.

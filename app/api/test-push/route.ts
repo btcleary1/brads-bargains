@@ -5,12 +5,12 @@ import { sendPushToSubscriptions } from '@/lib/push-notify';
 
 export const runtime = 'nodejs';
 
-const SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
+const SECRET = process.env.DIGEST_SECRET ?? '';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
 
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret');
-  if (secret !== SECRET) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!SECRET || secret !== SECRET) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const email = req.nextUrl.searchParams.get('to') ?? process.env.NOTIFICATION_EMAIL ?? '';
   if (!email) return NextResponse.json({ error: 'No recipient' }, { status: 400 });
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
   const result = await sendPushToSubscriptions(
     subs,
-    "Brad's Bargains — Test Notification",
+    "AI FLIP — Test Notification",
     'Nintendo Switch OLED — $189 · 46% off · ~$82 net profit. Tap to view.',
     spotlightUrl,
   );

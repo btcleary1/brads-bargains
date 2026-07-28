@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
+import { getSessionFromRequest, clearSessionCookie } from '@/lib/session';
 import { getUserById, verifyPassword, updatePassword } from '@/lib/users';
 import { validatePassword } from '@/lib/password-rules';
 
@@ -25,7 +25,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Password requirements not met: ${errors.join(', ')}.` }, { status: 400 });
 
     await updatePassword(session.userId, newPassword);
-    return NextResponse.json({ success: true });
+
+    // Invalidate the current session — user must log in again with the new password
+    const res = NextResponse.json({ success: true });
+    clearSessionCookie(res);
+    return res;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });

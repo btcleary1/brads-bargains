@@ -222,7 +222,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
                 </td>
                 <td width="34%" style="padding:0 2px;">
                   <a href="${buildSpotlightUrl(deal, flip, netProfit)}"
-                    style="display:block;text-align:center;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">Brad's Bargains</a>
+                    style="display:block;text-align:center;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">AI FLIP</a>
                 </td>
                 <td width="33%" style="padding-left:3px;">
                   <a href="${buildTrackUrl(deal)}"
@@ -294,8 +294,9 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
 
   <!-- Header -->
   <tr><td style="padding-bottom:22px;text-align:center;">
-    <a href="${APP_URL}/deals?view=digest" style="display:inline-block;background:linear-gradient(135deg,#3B82F6,#6366F1);border-radius:12px;padding:10px 20px;margin-bottom:14px;text-decoration:none;">
-      <span style="font-size:18px;font-weight:800;color:#FFFFFF;letter-spacing:-0.3px;">Brad's Bargains</span>
+    <a href="${APP_URL}/deals?view=digest" style="display:inline-block;background:#0D1B2A;border-radius:12px;padding:10px 22px;margin-bottom:14px;text-decoration:none;">
+      <span style="font-family:'Courier New',Courier,monospace;font-size:9px;letter-spacing:0.28em;color:rgba(255,255,255,0.42);text-transform:uppercase;display:block;line-height:1;margin-bottom:3px;">AI</span>
+      <span style="font-family:Impact,'Arial Narrow',Haettenschweiler,sans-serif;font-size:22px;color:#FFFFFF;letter-spacing:-0.01em;line-height:0.9;display:block;">FLIP</span>
     </a>
     <h1 style="margin:0 0 5px;font-size:24px;font-weight:800;color:#0F172A;letter-spacing:-0.5px;">Today's Top 5 Deals</h1>
     <p style="margin:0;font-size:13px;color:#64748B;">${today} &middot; Electronics &amp; Collectibles &middot; Best deals today</p>
@@ -344,7 +345,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + resendKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: `Brad's Bargains <${fromEmail}>`,
+        from: `AI FLIP <${fromEmail}>`,
         to: [toEmail],
         subject: "Today's Top 5 Deals - " + today,
         html: htmlBody,
@@ -356,7 +357,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
       headers: { 'Authorization': 'Bearer ' + sgKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         personalizations: [{ to: [{ email: toEmail }] }],
-        from: { email: fromEmail, name: "Brad's Bargains" },
+        from: { email: fromEmail, name: "AI FLIP" },
         subject: "Today's Top 5 Deals - " + today,
         content: [{ type: 'text/html', value: htmlBody }],
       }),

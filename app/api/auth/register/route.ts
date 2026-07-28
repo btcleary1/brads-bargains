@@ -31,20 +31,21 @@ export async function POST(req: NextRequest) {
     // Welcome email — fire and forget
     try {
       const apiKey = (process.env.RESEND_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
-      const firstName = name.trim().split(/\s+/)[0].replace(/[^\x00-\xFF]/g, '');
+      const rawFirst = name.trim().split(/\s+/)[0].replace(/[^\x00-\xFF]/g, '');
+      const firstName = rawFirst.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: "Brad's Bargains <onboarding@resend.dev>",
+          from: "AI FLIP <onboarding@resend.dev>",
           to: email,
-          subject: "Welcome to Brad's Bargains - Start finding flips",
+          subject: "Welcome to AI FLIP - Start finding flips",
           html: `<div style="font-family:-apple-system,sans-serif;max-width:520px;margin:0 auto;padding:32px 16px;background:#050814;">
   <div style="background:#0B1120;border-radius:20px;border:1px solid rgba(255,255,255,0.1);padding:36px;">
     <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#F9FAFB;">Welcome, ${firstName}!</h2>
     <p style="margin:0 0 20px;font-size:15px;color:#9CA3AF;line-height:1.6;">
-      Your Brad's Bargains account is ready. Find the best eBay deals, track your flips, and get daily alerts on the best opportunities.
+      Your AI FLIP account is ready. Find the best eBay deals, track your flips, and get daily alerts on the best opportunities.
     </p>
     <a href="${appUrl}/deals"
       style="display:inline-block;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:12px;">

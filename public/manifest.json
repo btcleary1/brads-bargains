@@ -1,11 +1,11 @@
 {
-  "name": "Brad's Bargains",
-  "short_name": "Brad's Bargains",
+  "name": "AI FLIP",
+  "short_name": "AI FLIP",
   "description": "Find the best eBay flip deals",
   "start_url": "/deals",
   "display": "standalone",
-  "background_color": "#0B1120",
-  "theme_color": "#3B82F6",
+  "background_color": "#0D1B2A",
+  "theme_color": "#1D4ED8",
   "icons": [
     {
       "src": "/icon-192.png",

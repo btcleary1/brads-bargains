@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const RP_ID = getRpId(req);
   const options = await generateRegistrationOptions({
-    rpName: "Brad's Bargains",
+    rpName: "AI FLIP",
     rpID: RP_ID,
     userID: new TextEncoder().encode(session.userId),
     userName: safeEmail,

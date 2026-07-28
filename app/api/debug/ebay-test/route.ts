@@ -4,10 +4,10 @@ import { isJunk } from '@/lib/deal-score';
 
 export const runtime = 'nodejs';
 
-const SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
+const SECRET = process.env.DIGEST_SECRET ?? '';
 
 export async function GET(req: NextRequest) {
-  if (req.nextUrl.searchParams.get('secret') !== SECRET)
+  if (!SECRET || req.nextUrl.searchParams.get('secret') !== SECRET)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const q = req.nextUrl.searchParams.get('q') ?? 'iphone';

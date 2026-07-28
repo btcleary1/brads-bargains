@@ -1,0 +1,28 @@
+name: Send Rebrand Email (one-time)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — list recipients without sending (true/false)'
+        required: false
+        default: 'true'
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send rebrand announcement
+        run: |
+          DRY="${{ github.event.inputs.dry_run }}"
+          DRY_PARAM=""
+          if [ "$DRY" = "true" ]; then
+            DRY_PARAM="&dry=1"
+          fi
+          URL="https://brads-bargains.vercel.app/api/admin/send-rebrand-email?secret=${{ secrets.DIGEST_SECRET }}${DRY_PARAM}"
+          STATUS=$(curl -s -o /tmp/body.txt -w "%{http_code}" -X POST "$URL")
+          cat /tmp/body.txt
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "Endpoint returned HTTP $STATUS"
+            exit 1
+          fi

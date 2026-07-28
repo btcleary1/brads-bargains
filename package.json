@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.89.0",
+    "@anthropic-ai/sdk": "^0.115.0",
     "@aws-sdk/client-s3": "^3.1029.0",
     "@google/generative-ai": "^0.24.1",
     "@simplewebauthn/browser": "^13.3.0",
@@ -17,10 +17,10 @@
     "@vercel/blob": "^2.3.2",
     "google-auth-library": "^10.6.2",
     "lucide-react": "^0.294.0",
-    "next": "^14.2.35",
+    "next": "^15.5.22",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "resend": "^6.10.0",
+    "resend": "^6.18.0",
     "web-push": "^3.6.7"
   },
   "engines": {
@@ -32,8 +32,12 @@
     "@types/react-dom": "^18.3.7",
     "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
+    "postcss": "^8.5.23",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "postcss": "^8.5.23",
+    "sharp": "^0.35.0"
   }
 }
