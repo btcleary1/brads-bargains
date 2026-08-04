@@ -400,7 +400,7 @@ export async function GET(req: NextRequest) {
 
         // Taste profile from explicit thumbs up/down feedback
         const tasteResult = tasteResults[i];
-        const taste: TasteProfile = tasteResult.status === 'fulfilled' ? tasteResult.value : { categoryWeights: {}, minNetProfit: 15 };
+        const taste: TasteProfile = tasteResult.status === 'fulfilled' ? tasteResult.value : { categoryWeights: {}, excludedCategories: [], dislikedItemIds: new Set(), minNetProfit: 15 };
 
         // Filter allItems by preferred categories if we have any
         let pool = allItems;
