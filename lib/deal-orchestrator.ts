@@ -94,6 +94,8 @@ export async function orchestrateDigestSelection(
   maxDaysToSell: number,
   minNetProfit: number,
   maxItems = 5,
+  tasteWeights: Record<string, number> = {},
+  excludedCategories: string[] = [],
 ): Promise<OrchestratorResult> {
   if (!process.env.ANTHROPIC_API_KEY || items.length === 0) {
     return simpleFallback(items, flipMap, maxDaysToSell, minNetProfit, maxItems);
@@ -116,6 +118,11 @@ export async function orchestrateDigestSelection(
     `seller:${i.seller} (${i.sellerFeedbackPercent ?? '?'}% / score ${i.sellerFeedbackScore ?? '?'})`
   ).join('\n');
 
+  // Build disliked-category hint for the prompt (categories with weight < 0.7)
+  const dislikedCategoryHints = Object.entries(tasteWeights)
+    .filter(([, w]) => w < 0.7)
+    .map(([k]) => k);
+
   const system = [
     `You are the deal-selection orchestrator for AI FLIP, a daily eBay flip advisory email.`,
     `Your task: choose the best ${maxItems} deals from the candidate list for today's digest.`,
@@ -125,6 +132,12 @@ export async function orchestrateDigestSelection(
     `• Min net profit: $${minNetProfit}. Exclude items below this threshold.`,
     `• Prefer "buy" verdicts over "maybe". Never include "skip".`,
     `• Diversify — avoid picking 5 items from the same category.`,
+    ...(excludedCategories.length > 0 ? [
+      `• HARD EXCLUDE these user-rejected categories: ${excludedCategories.join(', ')}. Do not pick any item from these categories regardless of profit.`,
+    ] : []),
+    ...(dislikedCategoryHints.length > 0 ? [
+      `• DEPRIORITIZE (avoid unless no better option): ${dislikedCategoryHints.join(', ')}.`,
+    ] : []),
     `• For any seller you're considering whose feedbackPercent < 99 OR score < 50,`,
     `  call check_seller_quality before including their item.`,
     `  Flag result → exclude. Warning result → include only if no better option.`,
