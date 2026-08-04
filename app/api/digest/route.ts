@@ -356,12 +356,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Build recipient list with personalized deals per user
-    type UserDigest = { userId: string; email: string; deals: typeof best5; aiPick?: string; aiPickItemId?: string | null; maxDaysToSell: number; minNetProfit: number; tasteWeights: Record<string, number> };
+    type UserDigest = { userId: string; email: string; deals: typeof best5; aiPick?: string; aiPickItemId?: string | null; maxDaysToSell: number; minNetProfit: number; tasteWeights: Record<string, number>; excludedCategories: string[] };
     let userDigests: UserDigest[] = [];
 
     if (toOverride) {
       const overrideUser = await getUserByEmail(toOverride);
-      userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 20, minNetProfit: 15, tasteWeights: {} }];
+      userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 20, minNetProfit: 15, tasteWeights: {}, excludedCategories: [] }];
     } else {
       const users = await getAllUsers();
       const [prefsResults, dealsResults, orderTitleResults, savedSearchResults, tasteResults] = await Promise.all([
@@ -453,6 +453,16 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        // Hard-remove individually disliked items and hard-excluded categories
+        userPool = userPool.filter(i => {
+          if (taste.dislikedItemIds.has(i.itemId)) return false;
+          if (taste.excludedCategories.length > 0) {
+            const key = categoryKeyForTitle(i.title);
+            if (key && taste.excludedCategories.includes(key)) return false;
+          }
+          return true;
+        });
+
         // Dedupe, then sort by sellability boosted by affinity and taste feedback
         const seenIds = new Set<string>();
         userPool = userPool.filter(i => { if (seenIds.has(i.itemId)) return false; seenIds.add(i.itemId); return true; });
@@ -469,11 +479,11 @@ export async function GET(req: NextRequest) {
                - sellabilityScore(a, userPool) * affinityBoost(a) * tasteBoost(a);
         }).slice(0, 30);
 
-        userDigests.push({ userId: users[i].userId, email: recipientEmail, deals: userPool, maxDaysToSell: prefs.maxDaysToSell ?? 20, minNetProfit: taste.minNetProfit, tasteWeights: taste.categoryWeights });
+        userDigests.push({ userId: users[i].userId, email: recipientEmail, deals: userPool, maxDaysToSell: prefs.maxDaysToSell ?? 20, minNetProfit: taste.minNetProfit, tasteWeights: taste.categoryWeights, excludedCategories: taste.excludedCategories });
       }
 
       if (userDigests.length === 0 && process.env.NOTIFICATION_EMAIL) {
-        userDigests = [{ userId: '', email: process.env.NOTIFICATION_EMAIL, deals: best5, maxDaysToSell: 20, minNetProfit: 15, tasteWeights: {} }];
+        userDigests = [{ userId: '', email: process.env.NOTIFICATION_EMAIL, deals: best5, maxDaysToSell: 20, minNetProfit: 15, tasteWeights: {}, excludedCategories: [] }];
       }
     }
 
@@ -510,7 +520,7 @@ export async function GET(req: NextRequest) {
     // Falls back to deterministic scoring inside orchestrateDigestSelection if the API is down.
     const orchestratedDigests = await Promise.allSettled(
       userDigests.map(d =>
-        orchestrateDigestSelection(d.deals, flipMap, d.maxDaysToSell, d.minNetProfit ?? MIN_NET_PROFIT)
+        orchestrateDigestSelection(d.deals, flipMap, d.maxDaysToSell, d.minNetProfit ?? MIN_NET_PROFIT, 5, d.tasteWeights, d.excludedCategories)
           .then(result => {
             const itemById = new Map(d.deals.map(i => [i.itemId, i]));
             const finalDeals = result.rankedItemIds
