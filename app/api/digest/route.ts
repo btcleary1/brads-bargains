@@ -453,13 +453,15 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // Hard-remove individually disliked items and hard-excluded categories
+        // Hard-remove individually disliked items, hard-excluded categories, and user-blocked keywords
+        const blockedKwPatterns = (prefs.blockedKeywords ?? []).map(kw => new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
         userPool = userPool.filter(i => {
           if (taste.dislikedItemIds.has(i.itemId)) return false;
           if (taste.excludedCategories.length > 0) {
             const key = categoryKeyForTitle(i.title);
             if (key && taste.excludedCategories.includes(key)) return false;
           }
+          if (blockedKwPatterns.some(re => re.test(i.title))) return false;
           return true;
         });
 

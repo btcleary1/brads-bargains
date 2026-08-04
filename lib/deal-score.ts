@@ -28,9 +28,6 @@ export interface FilterPrefs {
 // Title keywords that indicate junk listings
 const JUNK_TITLE_PATTERNS = /for parts|not working|broken|cracked screen|read description|as.is|untested|powers on|no returns|damaged|water damage|print ad|framed poster|framed print|game poster|movie poster|art print|lithograph/i;
 
-// Categories explicitly excluded from digest results
-const EXCLUDED_CATEGORY_PATTERNS = /\blego\b/i;
-
 // Accessories and low-value add-ons not worth flipping
 const ACCESSORY_PATTERNS = /\bstrap\b|watch band|\bcase\b|\bcover\b|screen protector|tempered glass|charger cable|\bcord\b|\badapter\b|car mount|phone mount|stand holder|game holder|card holder|lamp attachment|searchlight|burst light|\blight\b.*drone|drone.*\blight\b|\bskin\b.*phone|phone.*\bskin\b|keycap|wrist rest|\bposter\b/i;
 
@@ -376,7 +373,6 @@ export function isJunk(item: EbayItem, prefs?: FilterPrefs): boolean {
 
   if (!item.imageUrl) return true;
   if (JUNK_TITLE_PATTERNS.test(item.title)) return true;
-  if (EXCLUDED_CATEGORY_PATTERNS.test(item.title)) return true;
   if (ACCESSORY_PATTERNS.test(item.title)) return true;
   if (FASHION_PATTERNS.test(item.title)) return true;
   if (BULKY_PATTERNS.test(item.title)) return true;
