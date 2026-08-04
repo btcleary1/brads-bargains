@@ -12,7 +12,7 @@ export const DIGEST_CATEGORIES: DigestCategory[] = [
   { key: 'consumer_elec',     label: 'Consumer Electronics',             query: 'electronics used',                       categoryId: '293' },
   { key: 'cameras',           label: 'Cameras & Photo',                  query: 'camera lens used',                       categoryId: '625' },
   { key: 'video_games',       label: 'Video Games & Consoles',           query: 'PS5 Xbox Switch game console',           categoryId: '1249' },
-  { key: 'toys_hobbies',      label: 'Toys & Hobbies',                   query: 'LEGO sealed set',                        categoryId: '220' },
+  { key: 'toys_hobbies',      label: 'Toys & Hobbies',                   query: 'toy game sealed collectible',            categoryId: '220' },
   { key: 'collectibles',      label: 'Collectibles',                     query: 'collectible rare vintage',               categoryId: '1' },
   { key: 'sports_cards',      label: 'Sports Mem, Cards & Fan Shop',     query: 'sports card PSA graded',                 categoryId: '64482' },
   { key: 'coins',             label: 'Coins & Paper Money',              query: 'gold silver coin bullion',               categoryId: '11116' },
