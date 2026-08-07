@@ -69,7 +69,8 @@ export function extractModelQuery(title: string): string {
   // Collapse whitespace
   q = q.replace(/\s{2,}/g, ' ').trim();
 
-  // Take first 8 meaningful tokens (length > 1, not just a number or single char)
+  // Take first 12 meaningful tokens — 8 was too short for collectibles where
+  // differentiating words (e.g. "Gilded", "Storyboard") appear late in the title
   const tokens = q.split(/\s+/).filter(t => t.length > 1);
-  return tokens.slice(0, 8).join(' ');
+  return tokens.slice(0, 12).join(' ');
 }
