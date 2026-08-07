@@ -7,17 +7,18 @@ export const runtime = 'nodejs';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
 
 const VALID_REASONS = new Set<string>([
-  'not_my_niche', 'profit_too_low', 'bad_listing', 'too_dated', 'damaged_item', 'too_long_to_sell',
+  'not_my_niche', 'profit_too_low', 'inflated_profit', 'bad_listing', 'too_dated', 'damaged_item', 'too_long_to_sell',
   'my_kind_of_flip', 'great_margin', 'underpriced_gem',
 ]);
 
 const DOWN_REASONS = [
-  { key: 'profit_too_low', label: 'Profit too low' },
-  { key: 'not_my_niche',   label: 'Not my niche' },
-  { key: 'bad_listing',    label: 'Bad listing' },
-  { key: 'too_dated',      label: 'Too outdated' },
-  { key: 'damaged_item',      label: 'Damaged item' },
-  { key: 'too_long_to_sell',  label: 'Too long to sell' },
+  { key: 'profit_too_low',  label: 'Profit too low' },
+  { key: 'inflated_profit', label: 'Profit looks inflated' },
+  { key: 'not_my_niche',    label: 'Not my niche' },
+  { key: 'bad_listing',     label: 'Bad listing' },
+  { key: 'too_dated',       label: 'Too outdated' },
+  { key: 'damaged_item',    label: 'Damaged item' },
+  { key: 'too_long_to_sell', label: 'Too long to sell' },
 ];
 
 const UP_REASONS = [
@@ -102,6 +103,20 @@ export async function GET(req: NextRequest) {
     feedbackAt: new Date().toISOString(),
   });
 
+  // Trigger async comps assessment when user flags inflated profit
+  if (reason === 'inflated_profit' && data.price && data.netProfit != null) {
+    fetch(`${APP_URL}/api/admin/assess-comps-issue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itemId: data.itemId,
+        title: data.title,
+        price: data.price,
+        reportedNetProfit: data.netProfit,
+      }),
+    }).catch(() => {});
+  }
+
   const allReasons = [...DOWN_REASONS, ...UP_REASONS];
   const reasonLabel = allReasons.find(r => r.key === reason)?.label ?? 'Your recommendations will improve over time.';
   return thanksPage(data.verdict, reasonLabel);
@@ -121,11 +136,14 @@ export async function POST(req: NextRequest) {
     netProfit?: number | null;
     condition?: string;
     verdict: 'up' | 'down';
+    reason?: string;
   };
 
   if (!body.itemId || !body.title || !['up', 'down'].includes(body.verdict)) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
+
+  const reason = body.reason && VALID_REASONS.has(body.reason) ? body.reason as FeedbackReason : undefined;
 
   const fb: DealFeedback = {
     itemId: body.itemId,
@@ -136,10 +154,27 @@ export async function POST(req: NextRequest) {
     netProfit: body.netProfit ?? null,
     condition: body.condition ?? '',
     verdict: body.verdict,
+    reason,
     source: 'app',
     feedbackAt: new Date().toISOString(),
   };
 
   await addFeedback(session.userId, fb);
+
+  // Trigger async comps assessment when user flags inflated profit
+  if (reason === 'inflated_profit' && body.price && body.netProfit != null) {
+    const assessUrl = `${APP_URL}/api/admin/assess-comps-issue`;
+    fetch(assessUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itemId: body.itemId,
+        title: body.title,
+        price: body.price,
+        reportedNetProfit: body.netProfit,
+      }),
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ ok: true });
 }

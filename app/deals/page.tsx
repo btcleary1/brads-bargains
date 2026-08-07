@@ -452,11 +452,12 @@ function BrowseTrackButton({ deal }: { deal: BrowseDeal }) {
 }
 
 const DOWN_REASONS = [
-  { key: 'not_my_niche',  label: 'Not my niche' },
-  { key: 'profit_too_low', label: 'Profit too low' },
-  { key: 'bad_listing',   label: 'Bad listing' },
-  { key: 'too_dated',     label: 'Too outdated' },
-  { key: 'damaged_item',     label: 'Damaged item' },
+  { key: 'not_my_niche',    label: 'Not my niche' },
+  { key: 'profit_too_low',  label: 'Profit too low' },
+  { key: 'inflated_profit', label: 'Profit looks inflated' },
+  { key: 'bad_listing',     label: 'Bad listing' },
+  { key: 'too_dated',       label: 'Too outdated' },
+  { key: 'damaged_item',    label: 'Damaged item' },
   { key: 'too_long_to_sell', label: 'Too long to sell' },
 ] as const;
 
