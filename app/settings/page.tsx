@@ -44,6 +44,7 @@ function SettingsContent() {
 
   const [digestCount, setDigestCount] = useState<number>(5);
   const [digestCategories, setDigestCategories] = useState<string[]>([]);
+  const [digestEmailEnabled, setDigestEmailEnabled] = useState(true);
   const [emailPrefsLoading, setEmailPrefsLoading] = useState(false);
   const [emailPrefsMessage, setEmailPrefsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [ebayConnected, setEbayConnected] = useState<boolean | null>(null);
@@ -118,6 +119,7 @@ function SettingsContent() {
         if (p.watchlistQueries) setWatchlist(p.watchlistQueries);
         if (p.digestCount) setDigestCount(p.digestCount);
         if (p.digestCategories) setDigestCategories(p.digestCategories);
+        setDigestEmailEnabled(p.digestEmailEnabled !== false);
         if (p.defaultPriceMin != null) setPriceMin(p.defaultPriceMin);
         if (p.defaultPriceMax != null) setPriceMax(p.defaultPriceMax);
         if (p.defaultMinProfit != null) setDefaultMinProfit(p.defaultMinProfit);
@@ -365,6 +367,21 @@ function SettingsContent() {
       } else {
         setEmailPrefsMessage({ type: 'error', text: 'Failed to save.' });
       }
+    } catch { setEmailPrefsMessage({ type: 'error', text: 'Network error.' }); }
+    setEmailPrefsLoading(false);
+  };
+
+  const handleToggleDigestEmail = async (enabled: boolean) => {
+    setDigestEmailEnabled(enabled);
+    setEmailPrefsLoading(true);
+    try {
+      await fetch('/api/prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ digestEmailEnabled: enabled }),
+      });
+      setEmailPrefsMessage({ type: 'success', text: enabled ? 'Daily email resumed.' : 'Daily email paused.' });
+      setTimeout(() => setEmailPrefsMessage(null), 3000);
     } catch { setEmailPrefsMessage({ type: 'error', text: 'Network error.' }); }
     setEmailPrefsLoading(false);
   };
@@ -749,6 +766,25 @@ function SettingsContent() {
             <h2 className="font-semibold text-white text-[15px]">Email Preferences</h2>
           </div>
           <p className="text-xs mb-4" style={{ color: '#6B7280' }}>Customize how many deals you receive and which categories to include.</p>
+
+          {/* On/off toggle */}
+          <div className="flex items-center justify-between mb-4 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div>
+              <p className="text-sm font-medium text-white">Daily digest email</p>
+              <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>{digestEmailEnabled ? 'Sending daily deal emails' : 'Paused — no emails being sent'}</p>
+            </div>
+            <button
+              onClick={() => handleToggleDigestEmail(!digestEmailEnabled)}
+              disabled={emailPrefsLoading}
+              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50"
+              style={{ background: digestEmailEnabled ? '#3B82F6' : 'rgba(255,255,255,0.12)' }}
+            >
+              <span
+                className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+                style={{ transform: digestEmailEnabled ? 'translateX(22px)' : 'translateX(4px)' }}
+              />
+            </button>
+          </div>
 
           {emailPrefsMessage && (
             <div className="rounded-xl px-3 py-2 text-xs mb-3" style={{ background: emailPrefsMessage.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${emailPrefsMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: emailPrefsMessage.type === 'success' ? '#4ADE80' : '#F87171' }}>

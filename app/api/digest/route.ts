@@ -376,9 +376,9 @@ export async function GET(req: NextRequest) {
         const r = prefsResults[i];
         if (r.status !== 'fulfilled') continue;
         const prefs = r.value;
-        // Only send to users who explicitly opted in via Settings — never use registration email as fallback
+        // Only send to users who opted in via Settings and haven't paused digest emails
         const recipientEmail = prefs.notificationEmail;
-        if (!recipientEmail) continue;
+        if (!recipientEmail || prefs.digestEmailEnabled === false) continue;
 
         const count = prefs.digestCount ?? 5;
 
