@@ -422,16 +422,16 @@ export async function GET(req: NextRequest) {
           showLocalPickup: prefs.showLocalPickup ?? false,
         };
 
-        // Filter out items sent in the last 30 days to prevent digest repetition
-        const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        // Filter out recently-sent items — primary window 14 days, fallback to 7 days if pool runs thin
         const cutoff14 = Date.now() - 14 * 24 * 60 * 60 * 1000;
+        const cutoff7  = Date.now() -  7 * 24 * 60 * 60 * 1000;
         const sentEntries = prefs.sentItemIds ?? [];
-        const recentlySentIds30 = new Set(sentEntries.filter(s => new Date(s.sentAt).getTime() > cutoff30).map(s => s.itemId));
         const recentlySentIds14 = new Set(sentEntries.filter(s => new Date(s.sentAt).getTime() > cutoff14).map(s => s.itemId));
+        const recentlySentIds7  = new Set(sentEntries.filter(s => new Date(s.sentAt).getTime() > cutoff7).map(s => s.itemId));
 
-        const basePool = topDeals(pool, 40, 0, userFilterPrefs);
-        let userPool = basePool.filter(item => !recentlySentIds30.has(item.itemId));
-        if (userPool.length < 5) userPool = basePool.filter(item => !recentlySentIds14.has(item.itemId)); // expand to 14d window if thin
+        const basePool = topDeals(pool, 80, 0, userFilterPrefs);
+        let userPool = basePool.filter(item => !recentlySentIds14.has(item.itemId));
+        if (userPool.length < 5) userPool = basePool.filter(item => !recentlySentIds7.has(item.itemId)); // expand to 7d window if thin
         if (userPool.length === 0) userPool = basePool; // fallback: ignore dedup entirely
         if (userPool.length === 0) userPool = [...candidates];
 
@@ -673,9 +673,9 @@ export async function GET(req: NextRequest) {
       const cache = { generatedAt: new Date().toISOString(), aiPick: userAiPick ?? null, aiPickItemId: userPickItemId ?? null, items: toDigestItems(deals) };
       await r2Put(`deal-wiz/digest-user-${userId}.json`, JSON.stringify(cache));
 
-      // Record sent item IDs so they won't repeat in future digests (30-day window)
+      // Record sent item IDs so they won't repeat in future digests (14-day window)
       const prefs = await getUserPrefs(userId);
-      const cutoffTs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const cutoffTs = Date.now() - 14 * 24 * 60 * 60 * 1000;
       const existing = (prefs.sentItemIds ?? []).filter(s => new Date(s.sentAt).getTime() > cutoffTs);
       const nowIso = new Date().toISOString();
       const newEntries = deals.map(d => ({ itemId: d.itemId, sentAt: nowIso }));
