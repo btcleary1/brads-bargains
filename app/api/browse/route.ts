@@ -317,8 +317,12 @@ export async function GET(req: NextRequest) {
   const buying = ebayActivity.status === 'fulfilled' ? ebayActivity.value : { watchedTitles: [], wonTitles: [] };
   const userSavedSearches = savedSearches.status === 'fulfilled' ? savedSearches.value : [];
   const tasteWeights = tasteResult.status === 'fulfilled' ? tasteResult.value.categoryWeights : {};
+  const excludedCategories: string[] = tasteResult.status === 'fulfilled' ? tasteResult.value.excludedCategories : [];
   const feedbackList = feedbackResult.status === 'fulfilled' ? feedbackResult.value : [];
   const dislikedIds = new Set(feedbackList.filter(f => f.verdict === 'down').map(f => f.itemId));
+  const blockedKwPatterns = ((prefs as any).blockedKeywords ?? [] as string[]).map((kw: string) =>
+    new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+  );
 
   // Merge won titles from both sources (buy order API + trading API)
   const wonSet = new Set(orderTitles);
@@ -345,7 +349,16 @@ export async function GET(req: NextRequest) {
   const serveCache = (stale = false) => {
     // Re-apply sanity filter even on cached items — guards against stale bad data surviving a refresh
     const hasHistory = allWonTitles.length > 0 || buying.watchedTitles.length > 0;
-    let items = cached!.items.filter(i => i.flipNetProfit <= i.price && !dislikedIds.has(i.itemId));
+    let items = cached!.items.filter(i => {
+      if (i.flipNetProfit > i.price) return false;
+      if (dislikedIds.has(i.itemId)) return false;
+      if (blockedKwPatterns.some((re: RegExp) => re.test(i.title))) return false;
+      if (excludedCategories.length > 0) {
+        const key = categoryKeyForTitle(i.title);
+        if (key && excludedCategories.includes(key)) return false;
+      }
+      return true;
+    });
     items = personalizeResults(items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles, hasHistory);
     items = items.filter(i => i.estDaysToSell == null || i.estDaysToSell <= maxDays);
 
@@ -521,7 +534,15 @@ export async function GET(req: NextRequest) {
     }
     const hasHistory = allWonTitles.length > 0 || buying.watchedTitles.length > 0;
     const personalizedItems = personalizeResults(result.items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles, hasHistory)
-      .filter(i => !dislikedIds.has(i.itemId));
+      .filter(i => {
+        if (dislikedIds.has(i.itemId)) return false;
+        if (blockedKwPatterns.some((re: RegExp) => re.test(i.title))) return false;
+        if (excludedCategories.length > 0) {
+          const key = categoryKeyForTitle(i.title);
+          if (key && excludedCategories.includes(key)) return false;
+        }
+        return true;
+      });
     const matchedFromEbay = personalizedItems.filter(i => {
       const key = categoryKeyForTitle(i.title);
       return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;
