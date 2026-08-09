@@ -6,7 +6,6 @@ import { isJunk, sellabilityScore } from '@/lib/deal-score';
 import { sendDailyDigest } from '@/lib/notify';
 import { getUserPrefs } from '@/lib/tracker-data';
 import { checkRequestLimit } from '@/lib/rate-limit';
-import { getClientIp } from '@/lib/audit';
 import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });

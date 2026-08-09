@@ -499,10 +499,8 @@ export function topDeals(items: EbayItem[], n = 5, minDiscount = 60, prefs?: Fil
     return true;
   });
 
-  const finalPool = pool;
-
   // Score and sort
-  const scored = finalPool
+  const scored = pool
     .map(i => ({ item: i, score: scoreDeal(i) + liquidityScore(i) }))
     .sort((a, b) => b.score - a.score);
 

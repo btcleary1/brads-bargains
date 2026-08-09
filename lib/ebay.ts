@@ -64,7 +64,7 @@ export interface EbayItem {
   quantity: number | null;    // how many the seller has available
 }
 
-function parsePrice(priceObj: any): number {
+export function parsePrice(priceObj: any): number {
   return parseFloat(priceObj?.value ?? '0');
 }
 

@@ -1,4 +1,4 @@
-import { getEbayToken } from './ebay';
+import { getEbayToken, parsePrice } from './ebay';
 
 const EBAY_API_BASE = 'https://api.ebay.com';
 
@@ -29,10 +29,6 @@ function computeDaysToSell(comps: SoldComp[]): number | null {
   const rangeDays = (dates[dates.length - 1] - dates[0]) / 86_400_000;
   const avg = rangeDays / (dates.length - 1);
   return Math.min(60, Math.max(1, Math.round(avg)));
-}
-
-function parsePrice(priceObj: any): number {
-  return parseFloat(priceObj?.value ?? '0');
 }
 
 export async function searchSoldComps(query: string, maxResults = 20): Promise<CompsResult> {
