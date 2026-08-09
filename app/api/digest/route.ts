@@ -13,7 +13,6 @@ import { getUserPrefs, saveUserPrefs, getDeals } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals, inferCategoryScores, categoryKeyForTitle } from '@/lib/infer-categories';
 import { fetchEbayOrderTitles, fetchEbaySavedSearchQueries } from '@/lib/ebay-orders';
 import { computeTasteProfile, TasteProfile } from '@/lib/user-taste';
-import { searchSoldComps } from '@/lib/ebay-comps';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
 import { checkItemQuality, isFlippableItem } from '@/lib/item-quality';
 import { analyzeFlip } from '@/lib/flip-agent';
@@ -358,12 +357,16 @@ export async function GET(req: NextRequest) {
     // Build recipient list with personalized deals per user
     type UserDigest = { userId: string; email: string; deals: typeof best5; aiPick?: string; aiPickItemId?: string | null; maxDaysToSell: number; minNetProfit: number; tasteWeights: Record<string, number>; excludedCategories: string[] };
     let userDigests: UserDigest[] = [];
+    // Hoisted so push/SMS/sentItemIds loops can reuse without re-fetching
+    let allUsers: Awaited<ReturnType<typeof getAllUsers>> = [];
+    const prefsMap = new Map<string, Awaited<ReturnType<typeof getUserPrefs>>>();
 
     if (toOverride) {
       const overrideUser = await getUserByEmail(toOverride);
       userDigests = [{ userId: overrideUser?.userId ?? '', email: toOverride, deals: best5, maxDaysToSell: 20, minNetProfit: 15, tasteWeights: {}, excludedCategories: [] }];
     } else {
       const users = await getAllUsers();
+      allUsers = users;
       const [prefsResults, dealsResults, orderTitleResults, savedSearchResults, tasteResults] = await Promise.all([
         Promise.allSettled(users.map(u => getUserPrefs(u.userId))),
         Promise.allSettled(users.map(u => getDeals(u.userId))),
@@ -371,6 +374,11 @@ export async function GET(req: NextRequest) {
         Promise.allSettled(users.map(u => fetchEbaySavedSearchQueries(u.userId))),
         Promise.allSettled(users.map(u => computeTasteProfile(u.userId))),
       ]);
+
+      // Build prefs map for reuse in downstream loops — eliminates 3N redundant R2 reads
+      users.forEach((u, i) => {
+        if (prefsResults[i].status === 'fulfilled') prefsMap.set(u.userId, (prefsResults[i] as PromiseFulfilledResult<Awaited<ReturnType<typeof getUserPrefs>>>).value);
+      });
 
       for (let i = 0; i < users.length; i++) {
         const r = prefsResults[i];
@@ -674,7 +682,7 @@ export async function GET(req: NextRequest) {
       await r2Put(`deal-wiz/digest-user-${userId}.json`, JSON.stringify(cache));
 
       // Record sent item IDs so they won't repeat in future digests (14-day window)
-      const prefs = await getUserPrefs(userId);
+      const prefs = prefsMap.get(userId) ?? await getUserPrefs(userId);
       const cutoffTs = Date.now() - 14 * 24 * 60 * 60 * 1000;
       const existing = (prefs.sentItemIds ?? []).filter(s => new Date(s.sentAt).getTime() > cutoffTs);
       const nowIso = new Date().toISOString();
@@ -684,10 +692,10 @@ export async function GET(req: NextRequest) {
     }));
 
     // Send push notifications — URL is a spotlight link so tapping opens the specific deal
-    const allUsersForPush = await getAllUsers();
-    await Promise.allSettled(allUsersForPush.map(async u => {
+    await Promise.allSettled(allUsers.map(async u => {
       try {
-        const prefs = await getUserPrefs(u.userId);
+        const prefs = prefsMap.get(u.userId);
+        if (!prefs) return;
         const subs = (prefs.pushSubscriptions as object[] | undefined) ?? [];
         if (!subs.length) return;
         const userDigest = userMap.get(u.userId);
@@ -701,11 +709,10 @@ export async function GET(req: NextRequest) {
     }));
 
     // Send SMS to all users with a phone number configured
-    const smsUsers = await getAllUsers();
-    await Promise.allSettled(smsUsers.map(async u => {
+    await Promise.allSettled(allUsers.map(async u => {
       try {
-        const prefs = await getUserPrefs(u.userId);
-        if (prefs.notificationPhone) await sendSMSDigest(best5, prefs.notificationPhone, flipMap);
+        const prefs = prefsMap.get(u.userId);
+        if (prefs?.notificationPhone) await sendSMSDigest(best5, prefs.notificationPhone, flipMap);
       } catch { /* silent — SMS failure never blocks email */ }
     }));
     const errors = sendResults

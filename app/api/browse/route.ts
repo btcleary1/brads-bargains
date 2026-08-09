@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { searchDeals, EbayItem } from '@/lib/ebay';
-import { searchSoldComps } from '@/lib/ebay-comps';
 import { isJunk } from '@/lib/deal-score';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getDeals, getUserPrefs } from '@/lib/tracker-data';
@@ -519,13 +518,6 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
     };
 
-    const _savedDebug = {
-      hadToken: !!ebayToken,
-      savedSearchQueries: userSavedSearches,
-      savedSearchItemsFound: savedSearchItems.length,
-      savedSearchPicks: savedSearchPicks.map(i => i.title.slice(0, 50)),
-    };
-
     // Never poison the cache with empty results — fall back to stale cache
     if (result.items.length === 0 && cacheHasItems) return serveCache(true);
 
@@ -547,7 +539,7 @@ export async function GET(req: NextRequest) {
       const key = categoryKeyForTitle(i.title);
       return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;
     }).length;
-    return NextResponse.json({ ...result, items: personalizedItems, fromCache: false, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay }, _savedDebug });
+    return NextResponse.json({ ...result, items: personalizedItems, fromCache: false, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay } });
 
   } catch (err: any) {
     // eBay rate limited — serve stale cache if available rather than returning an error

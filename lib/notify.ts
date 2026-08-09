@@ -371,7 +371,3 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
   }
 }
 
-// Legacy alias
-export async function sendDealAlert(deals: EbayItem[], _query: string, toOverride?: string): Promise<void> {
-  await sendDailyDigest(deals, toOverride || process.env.NOTIFICATION_EMAIL || '');
-}

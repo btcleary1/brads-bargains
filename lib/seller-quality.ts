@@ -161,8 +161,6 @@ export async function checkSellerQuality(
     const { flag, reason } = await analyzeComments(sellerUsername, comments);
     if (flag) {
       result = { verdict: 'flag', reason, recentNegativeCount: negCount };
-    } else if (negCount >= 4) {
-      result = { verdict: 'warning', reason: `${negCount} recent negative comments`, recentNegativeCount: negCount };
     } else if (negCount >= 2) {
       result = { verdict: 'warning', reason: `${negCount} recent negative comments`, recentNegativeCount: negCount };
     }
