@@ -65,7 +65,10 @@ async function searchTrending(query: string, maxResults = 20): Promise<TrendingI
     const price = parseFloat(raw.price?.value ?? '0');
     if (price <= 0) return null;
 
-    const watchCount: number = raw.watchCount ?? raw.watchCountString ? parseInt(raw.watchCountString ?? '0') : 0;
+    // `??` binds tighter than `?:`, so the previous form always evaluated the
+    // true branch against an absent watchCountString and yielded 0, silently
+    // disabling the 50-point watcher component of demandScore.
+    const watchCount: number = Number(raw.watchCount ?? raw.watchCountString ?? 0) || 0;
     const listingDate: string | null = raw.itemCreationDate ?? null;
 
     const ageHours = listingDate ? (now - new Date(listingDate).getTime()) / 3_600_000 : null;

@@ -35,7 +35,7 @@ const ACCESSORY_PATTERNS = /\bstrap\b|watch band|\bcase\b|\bcover\b|screen prote
 const FASHION_PATTERNS = /\bshoes?\b|\bheels?\b|\bsneakers?\b|\bboots?\b|\bsandals?\b|\bloafers?\b|\bflats?\b|\bpumps?\b|\bdress\b|\bblouse\b|\bjacket\b|\bcoat\b|\bsuit\b|\bjeans?\b|\bpants?\b|\bskirt\b|\bversace\b|\bgucci\b|\bprada\b|\blouisvuitton\b|\bchanel\b|\bhermes\b|\bburberry\b|\bbag\b.*leather|\bhandbag\b|\bpurse\b|\btote\b/i;
 
 // Heavy/bulky items not worth storing or shipping
-const BULKY_PATTERNS = /\bconsole\b|desktop|monitor|printer|treadmill|bicycle|bike\b|guitar|amplifier|furniture|mattress|refrigerator|washer|dryer|dishwasher|television|\bsofa\b|\bcouch\b|elliptical|weight bench|kayak|surfboard|scooter|electric bike|e-bike|hoverboard/i;
+const BULKY_PATTERNS = /console table|desktop|monitor|printer|treadmill|bicycle|bike\b|guitar|amplifier|furniture|mattress|refrigerator|washer|dryer|dishwasher|television|\bsofa\b|\bcouch\b|elliptical|weight bench|kayak|surfboard|scooter|electric bike|e-bike|hoverboard/i;
 
 // Conditions to skip entirely
 const BAD_CONDITIONS = /acceptable|for parts|parts only|refurbished|poor/i;

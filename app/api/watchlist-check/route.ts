@@ -149,10 +149,29 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    await saveSavedSearches(user.userId, updatedSearches);
-
+    // Send BEFORE committing lastNotifiedIds. Persisting first meant a failed or
+    // timed-out send still marked those items notified, so the user was never
+    // alerted about them again — a silent, permanent miss. lastRunAt is safe to
+    // record either way; only the dedup list is contingent on delivery.
+    let emailDelivered = true;
     if (alerts.length > 0) {
-      await sendWatchlistAlert(email, alerts).catch(() => {});
+      emailDelivered = await sendWatchlistAlert(email, alerts).then(() => true, (err) => {
+        console.error(`[watchlist] alert send failed for ${email}:`, err);
+        return false;
+      });
+    }
+
+    if (!emailDelivered) {
+      // Keep the previous dedup list so the next run retries these items.
+      await saveSavedSearches(
+        user.userId,
+        updatedSearches.map((s, i) => ({ ...s, lastNotifiedIds: searches[i]?.lastNotifiedIds ?? s.lastNotifiedIds })),
+      );
+    } else {
+      await saveSavedSearches(user.userId, updatedSearches);
+    }
+
+    if (alerts.length > 0 && emailDelivered) {
       const subs = (prefs.pushSubscriptions as object[] | undefined) ?? [];
       if (subs.length) {
         const topDeal = alerts[0]?.deals[0];
