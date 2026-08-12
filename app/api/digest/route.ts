@@ -366,7 +366,17 @@ export async function GET(req: NextRequest) {
         if (removed > 0) {
           console.log(`[digest] seller quality check: removed ${removed} item(s) from flagged sellers`);
           const usedIds = new Set(best5.map(i => i.itemId));
-          const fill = candidates.filter(i => !usedIds.has(i.itemId) && flipMap.get(i.itemId)?.verdict !== 'skip' && sellerMap.get(i.seller)?.verdict !== 'flag');
+          const eligible = candidates.filter(i =>
+            !usedIds.has(i.itemId) && flipMap.get(i.itemId)?.verdict !== 'skip');
+
+          // sellerMap was built from best5's sellers only, so testing backfill
+          // candidates against it with `?.verdict !== 'flag'` was vacuously true —
+          // the items brought in to replace a flagged seller were the one set that
+          // never got screened. Screen them for real before using them.
+          const fillSellerMap = await checkSellersBatch(
+            eligible.map(i => ({ seller: i.seller, feedbackPercent: i.sellerFeedbackPercent, feedbackScore: i.sellerFeedbackScore }))
+          );
+          const fill = eligible.filter(i => fillSellerMap.get(i.seller)?.verdict !== 'flag');
           best5 = [...best5, ...fill].slice(0, 5);
         }
       } catch (e) { console.warn('[digest] seller quality check failed:', e); }
@@ -746,7 +756,12 @@ export async function GET(req: NextRequest) {
     await Promise.allSettled(allUsers.map(async u => {
       try {
         const prefs = prefsMap.get(u.userId);
-        if (prefs?.notificationPhone) await sendSMSDigest(best5, prefs.notificationPhone, flipMap);
+        // Must mirror the email: send this user's orchestrated deals, not the
+        // global list, or the text advertises items their own digest excluded.
+        if (prefs?.notificationPhone) {
+          const personalDeals = userMap.get(u.userId)?.deals ?? best5;
+          await sendSMSDigest(personalDeals, prefs.notificationPhone, flipMap);
+        }
       } catch { /* silent — SMS failure never blocks email */ }
     }));
     const errors = sendResults
