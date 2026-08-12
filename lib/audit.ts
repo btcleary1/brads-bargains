@@ -29,9 +29,15 @@ export function logAudit(entry: AuditEntry): void {
 
 export function getClientIp(req: Request): string {
   const headers = req instanceof Request ? req.headers : (req as any).headers;
-  return (
-    headers.get?.('x-forwarded-for')?.split(',')[0]?.trim() ??
-    headers.get?.('x-real-ip') ??
-    'unknown'
-  );
+
+  // Take the RIGHTMOST X-Forwarded-For entry, not the leftmost. Vercel appends
+  // the real peer address to whatever the client sent, so the left end of the
+  // list is attacker-controlled — reading [0] let anyone mint a fresh rate-limit
+  // bucket per request by rotating the header, which defeated the login lockout.
+  const xff = headers.get?.('x-forwarded-for');
+  if (xff) {
+    const parts = xff.split(',').map((p: string) => p.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
+  return headers.get?.('x-real-ip') ?? 'unknown';
 }

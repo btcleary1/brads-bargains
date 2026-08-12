@@ -27,6 +27,24 @@ const UP_REASONS = [
   { key: 'underpriced_gem',  label: 'Hidden gem' },
 ];
 
+
+// Fire-and-forget kick to the comps diagnostic. That route spends Anthropic and
+// eBay quota, so it is not reachable by an unauthenticated caller — this passes
+// a server-only key the browser never sees. Inputs are bounded here as well as
+// there, since this is the path any logged-in user can reach.
+const SAFE_ID = /^[A-Za-z0-9_|.-]{1,80}$/;
+
+function triggerCompsAssessment(itemId: string, title: string, price: number, netProfit: number | null | undefined): void {
+  const key = process.env.INTERNAL_TASK_SECRET;
+  if (!key) return; // fail closed
+  if (!SAFE_ID.test(itemId) || !title || !(price > 0) || netProfit == null) return;
+  fetch(`${APP_URL}/api/admin/assess-comps-issue`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-internal-task-key': key },
+    body: JSON.stringify({ itemId, title: title.slice(0, 300), price, reportedNetProfit: netProfit }),
+  }).catch(() => {});
+}
+
 function htmlEsc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -105,16 +123,7 @@ export async function GET(req: NextRequest) {
 
   // Trigger async comps assessment when user flags inflated profit
   if (reason === 'inflated_profit' && data.price && data.netProfit != null) {
-    fetch(`${APP_URL}/api/admin/assess-comps-issue`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        itemId: data.itemId,
-        title: data.title,
-        price: data.price,
-        reportedNetProfit: data.netProfit,
-      }),
-    }).catch(() => {});
+    triggerCompsAssessment(data.itemId, data.title, data.price, data.netProfit);
   }
 
   const allReasons = [...DOWN_REASONS, ...UP_REASONS];
@@ -163,17 +172,7 @@ export async function POST(req: NextRequest) {
 
   // Trigger async comps assessment when user flags inflated profit
   if (reason === 'inflated_profit' && body.price && body.netProfit != null) {
-    const assessUrl = `${APP_URL}/api/admin/assess-comps-issue`;
-    fetch(assessUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        itemId: body.itemId,
-        title: body.title,
-        price: body.price,
-        reportedNetProfit: body.netProfit,
-      }),
-    }).catch(() => {});
+    triggerCompsAssessment(body.itemId, body.title, body.price ?? 0, body.netProfit);
   }
 
   return NextResponse.json({ ok: true });

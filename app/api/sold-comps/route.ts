@@ -3,7 +3,6 @@ import { getSessionFromRequest } from '@/lib/session';
 import { checkRequestLimit } from '@/lib/rate-limit';
 import { analyzeFlip } from '@/lib/flip-agent';
 
-export { type CompsVerdict } from '@/lib/flip-agent';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
