@@ -8,6 +8,7 @@ import { assessDiscountQuality } from './fake-discount';
 import { extractModelQuery } from './extract-model';
 import { getMultiSourceComps } from './multi-source-comps';
 import { r2Get, r2Put } from './r2';
+import { computeVerdict, MIN_SOLD_COMPS, MAX_DAYS_TO_SELL, SLOW_SALE_DAYS } from './flip-verdict';
 import { createHash } from 'crypto';
 
 export interface CompsVerdict {
@@ -200,31 +201,29 @@ Platform: "facebook" if bulky or price < $30; "ebay" if electronics/collectibles
       return null;
     }
 
-    // Require meaningful comp count — 3 comps is not enough confidence
-    if (verdict.soldCount < 5) {
-      verdict.verdict = 'skip';
-      verdict.multiSourceConfidence = 'low';
-      verdict.reasoning = `Only ${verdict.soldCount} sold comps — not enough data to verify. ${verdict.reasoning}`.slice(0, 180);
-    }
-
-    // Override if math contradicts verdict
+    // Trust the arithmetic over the model's stated profit figures.
     const computedProfit = Math.round(verdict.avgSoldPrice * 0.85 - price - shipping);
     const computedMargin = Math.round((computedProfit / price) * 100);
-    if (verdict.verdict === 'skip' && computedProfit >= 40) {
-      verdict.verdict = computedProfit > 50 || (computedProfit > 30 && computedMargin > 20) ? 'buy' : 'maybe';
-      verdict.netProfit = computedProfit;
-      verdict.marginPct = computedMargin;
-      if (verdict.avgSoldPrice > price * 1.4) {
-        verdict.reasoning = `⚠ Verify listing authenticity — price is far below comps, but profit math is strong if real.`;
-      }
-    }
+    verdict.netProfit = computedProfit;
+    verdict.marginPct = computedMargin;
 
     const dts = verdict.daysToSell ?? null;
-    if (dts != null && dts > 60) {
-      verdict.verdict = 'skip';
-      verdict.reasoning = `${verdict.reasoning} — avg ${dts}d to sell exceeds 60-day hold limit.`.slice(0, 180);
-    } else if (dts != null && dts > 30 && verdict.verdict === 'buy') {
-      verdict.verdict = 'maybe';
+    verdict.verdict = computeVerdict({
+      netProfit: computedProfit,
+      marginPct: computedMargin,
+      soldCount: verdict.soldCount,
+      daysToSell: dts,
+    });
+
+    // Explain the demotion so the reasoning text matches the badge the user sees.
+    if (verdict.verdict === 'skip') {
+      if (verdict.soldCount < MIN_SOLD_COMPS) {
+        verdict.multiSourceConfidence = 'low';
+        verdict.reasoning = `Only ${verdict.soldCount} sold comps — not enough data to verify. ${verdict.reasoning}`.slice(0, 180);
+      } else if (dts != null && dts > MAX_DAYS_TO_SELL) {
+        verdict.reasoning = `${verdict.reasoning} — avg ${dts}d to sell exceeds ${MAX_DAYS_TO_SELL}-day hold limit.`.slice(0, 180);
+      }
+    } else if (verdict.verdict === 'maybe' && dts != null && dts > SLOW_SALE_DAYS) {
       verdict.reasoning = `${verdict.reasoning} — avg ${dts}d to sell is slow; downgraded to MAYBE.`.slice(0, 180);
     }
 
@@ -261,13 +260,7 @@ Platform: "facebook" if bulky or price < $30; "ebay" if electronics/collectibles
       const annROI = days != null && days >= 1 && netProfit > 0
         ? Math.round((netProfit / price / days) * 365 * 100) : null;
 
-      let verdict: 'buy' | 'maybe' | 'skip';
-      if (netProfit > 50 || (netProfit > 30 && marginPct > 20)) verdict = 'buy';
-      else if (netProfit < 10 || (netProfit < 20 && marginPct < 10)) verdict = 'skip';
-      else verdict = 'maybe';
-      if (netProfit >= 40 && verdict === 'skip') verdict = 'maybe';
-      if (days != null && days > 60) verdict = 'skip';
-      else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
+      const verdict = computeVerdict({ netProfit, marginPct, soldCount: comps.ebayCount, daysToSell: days });
 
       const reasoningParts = [
         `Avg sold $${Math.round(comps.weightedAvgSoldPrice)} across ${comps.ebayCount} eBay comps`,

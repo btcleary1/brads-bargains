@@ -15,6 +15,7 @@ import { fetchEbayOrderTitles, fetchEbaySavedSearchQueries } from '@/lib/ebay-or
 import { computeTasteProfile, TasteProfile } from '@/lib/user-taste';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
 import { checkItemQuality, isFlippableItem } from '@/lib/item-quality';
+import { computeVerdict, isDigestEligible } from '@/lib/flip-verdict';
 import { analyzeFlip } from '@/lib/flip-agent';
 import { sendPushToSubscriptions } from '@/lib/push-notify';
 import { checkSellersBatch } from '@/lib/seller-quality';
@@ -28,7 +29,9 @@ const DIGEST_STATE_PATH = 'deal-wiz/digest-state.json';
 const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
 
 // Categories to search when live eBay API is available
-const SEARCH_QUERIES = DIGEST_CATEGORIES.map(c => ({ query: c.query, categoryId: c.categoryId }));
+// maxPrice must be carried through — it is the only thing biasing eBay results
+// toward listings below resale. Dropping it here silently disabled every ceiling.
+const SEARCH_QUERIES = DIGEST_CATEGORIES.map(c => ({ query: c.query, categoryId: c.categoryId, maxPrice: c.maxPrice }));
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -230,14 +233,8 @@ export async function GET(req: NextRequest) {
       if (refPrice > item.price * 3) return;
       const netProfit = Math.round(refPrice * 0.85 - item.price - (item.shippingCost ?? 0));
       const marginPct = Math.round((netProfit / item.price) * 100);
-      let verdict: 'buy' | 'maybe' | 'skip';
-      if (netProfit > 30 || (netProfit > 20 && marginPct > 15)) verdict = 'buy';
-      else if (netProfit < 5) verdict = 'skip';
-      else verdict = 'maybe';
-      if (netProfit >= 25 && verdict === 'skip') verdict = 'maybe';
       const days = r.value.estDaysToSell;
-      if (days != null && days > 60) verdict = 'skip';
-      else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
+      const verdict = computeVerdict({ netProfit, marginPct, soldCount: ebayCount, daysToSell: days });
       if (verdict !== 'skip' && netProfit > 0) profitableIds.add(item.itemId);
       flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, fbMarketplaceAvg: null, macbidAvg: r.value.macbidAvg ?? null, vistaAvg: r.value.vistaAvg ?? null });
     });
@@ -285,19 +282,10 @@ export async function GET(req: NextRequest) {
         });
       best5 = [...best5, ...remaining].slice(0, 5);
     }
-    // If still < 5, fill from the full item pool sorted by discount (no comps required)
-    if (best5.length < 5) {
-      const picked = new Set(best5.map(i => i.itemId));
-      const byDiscount = itemPool
-        .filter(i => !picked.has(i.itemId) && (i.discountPct ?? 0) >= 30)
-        .sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0));
-      best5 = [...best5, ...byDiscount].slice(0, 5);
-    }
-    // Last resort — if still empty, take any item sorted by price descending
-    if (best5.length === 0) {
-      console.warn('[digest] All filters yielded 0 items — using raw itemPool last resort');
-      best5 = [...itemPool].sort((a, b) => b.price - a.price).slice(0, 5);
-    }
+    // Deliberately no discount-only fill here. Items with no comps data can never clear
+    // the eligibility check below, so padding with them only burns an analyzeFlip call
+    // per item and, before the post-AI recheck existed, shipped them to users as SKIPs.
+
     // Re-analyze top 5 with AI agent for accurate, consistent stats
     const aiResults = await Promise.allSettled(
       best5.map(item => analyzeFlip(item.title, item.price, item.shippingCost ?? 0, null, null, item.condition))
@@ -321,6 +309,29 @@ export async function GET(req: NextRequest) {
       });
     });
     console.log(`[digest] best5 AI profits: ${best5.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
+
+    // The AI pass above rewrites verdicts with more accurate comps, which regularly
+    // demotes an item that was selected as buy/maybe down to skip. Selection used to be
+    // final before this point, so those demoted items shipped anyway. Re-check them and
+    // backfill from candidates that are still eligible.
+    {
+      const stillGood = (item: EbayItem): boolean => {
+        const f = flipMap.get(item.itemId);
+        if (!f) return false;
+        return isDigestEligible(
+          { netProfit: f.netProfit, marginPct: f.marginPct, soldCount: f.soldCount, daysToSell: f.estDaysToSell ?? null },
+          MIN_NET_PROFIT,
+        );
+      };
+      const survivors = best5.filter(stillGood);
+      if (survivors.length < best5.length) {
+        const dropped = best5.length - survivors.length;
+        const usedIds = new Set(survivors.map(i => i.itemId));
+        const backfill = candidates.filter(i => !usedIds.has(i.itemId) && stillGood(i));
+        best5 = [...survivors, ...backfill].slice(0, 5);
+        console.log(`[digest] post-AI recheck: dropped ${dropped} demoted item(s), backfilled ${Math.min(backfill.length, 5 - survivors.length)} — best5 now ${best5.length}`);
+      }
+    }
 
     // Final live-check on best5 — removes any items that sold between the initial scan and now
     if (!forceMock && process.env.EBAY_CLIENT_ID) {
@@ -485,8 +496,16 @@ export async function GET(req: NextRequest) {
             const key = categoryKeyForTitle(item.title);
             return key ? (taste.categoryWeights[key] ?? 1.0) : 1.0;
           };
-          return sellabilityScore(b, userPool) * affinityBoost(b) * tasteBoost(b)
-               - sellabilityScore(a, userPool) * affinityBoost(a) * tasteBoost(a);
+          // Items we have already priced and found profitable get pulled up, so they
+          // survive the cut to 30 below. Ranking on taste alone was letting verified
+          // buys fall outside the window the orchestrator ever sees.
+          const profitBoost = (item: typeof a) => {
+            const f = flipMap.get(item.itemId);
+            if (!f || f.verdict === 'skip' || f.netProfit <= 0) return 1.0;
+            return f.verdict === 'buy' ? 1.6 : 1.25;
+          };
+          return sellabilityScore(b, userPool) * affinityBoost(b) * tasteBoost(b) * profitBoost(b)
+               - sellabilityScore(a, userPool) * affinityBoost(a) * tasteBoost(a) * profitBoost(a);
         }).slice(0, 30);
 
         userDigests.push({ userId: users[i].userId, email: recipientEmail, deals: userPool, maxDaysToSell: prefs.maxDaysToSell ?? 20, minNetProfit: taste.minNetProfit, tasteWeights: taste.categoryWeights, excludedCategories: taste.excludedCategories });
@@ -514,11 +533,8 @@ export async function GET(req: NextRequest) {
       if (refPrice <= 0) return;
       const netProfit = Math.round(refPrice * 0.85 - item.price - (item.shippingCost ?? 0));
       const marginPct = Math.round((netProfit / item.price) * 100);
-      let verdict: 'buy' | 'maybe' | 'skip' = netProfit > 50 || (netProfit > 30 && marginPct > 20) ? 'buy' : netProfit < 10 || (netProfit < 20 && marginPct < 10) ? 'skip' : 'maybe';
-      if (netProfit >= 40 && verdict === 'skip') verdict = 'maybe';
       const daysU = r.value.estDaysToSell;
-      if (daysU != null && daysU > 20) verdict = 'skip';
-      else if (daysU != null && daysU > 14 && verdict === 'buy') verdict = 'maybe';
+      const verdict = computeVerdict({ netProfit, marginPct, soldCount: ebayCount, daysToSell: daysU });
       flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, macbidAvg: r.value.macbidAvg ?? null, vistaAvg: r.value.vistaAvg ?? null });
     });
 
@@ -537,10 +553,23 @@ export async function GET(req: NextRequest) {
               .map(id => itemById.get(id))
               .filter((i): i is EbayItem => i != null);
 
-            // Safety net: if orchestrator returned nothing, fall back to best-discount items
+            // Safety net: if the orchestrator returned nothing, fall back to items that
+            // still clear the quality bar — never to raw discount. Shipping the top 5 by
+            // discount here was silently overriding every profit and verdict filter and
+            // was the reason digests arrived full of negative-profit SKIPs.
             const safeDeals = finalDeals.length > 0
               ? finalDeals
-              : [...d.deals].sort((a, b) => (b.discountPct ?? 0) - (a.discountPct ?? 0)).slice(0, 5);
+              : [...d.deals]
+                  .filter(i => {
+                    const f = flipMap.get(i.itemId);
+                    if (!f) return false;
+                    return isDigestEligible(
+                      { netProfit: f.netProfit, marginPct: f.marginPct, soldCount: f.soldCount, daysToSell: f.estDaysToSell ?? null },
+                      d.minNetProfit ?? MIN_NET_PROFIT,
+                    );
+                  })
+                  .sort((a, b) => (flipMap.get(b.itemId)?.netProfit ?? 0) - (flipMap.get(a.itemId)?.netProfit ?? 0))
+                  .slice(0, 5);
 
             console.log(`[digest] user ${d.userId} orchestrated deals: ${safeDeals.length}, profits: ${safeDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
             console.log(`[digest] user ${d.userId} orchestrator reasoning: ${result.reasoning.slice(0, 120)}`);
