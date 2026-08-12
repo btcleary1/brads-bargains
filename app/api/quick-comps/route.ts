@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
+import { computeVerdict } from '@/lib/flip-verdict';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -24,15 +25,8 @@ export async function POST(req: NextRequest) {
     const netProfit = Math.round(comps.weightedAvgSoldPrice * 0.85 - price - shipping);
     const marginPct = Math.round((netProfit / price) * 100);
 
-    let verdict: 'buy' | 'maybe' | 'skip';
-    if (netProfit > 50 || (netProfit > 30 && marginPct > 20)) verdict = 'buy';
-    else if (netProfit < 10 || (netProfit < 20 && marginPct < 10)) verdict = 'skip';
-    else verdict = 'maybe';
-    if (netProfit >= 40 && verdict === 'skip') verdict = 'maybe';
-
     const days = comps.estDaysToSell;
-    if (days != null && days > 60) verdict = 'skip';
-    else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
+    const verdict = computeVerdict({ netProfit, marginPct, soldCount: comps.ebayCount, daysToSell: days });
 
     const annROI = days != null && days >= 1 && netProfit > 0
       ? Math.round((netProfit / price / days) * 365 * 100)

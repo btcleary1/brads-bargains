@@ -4,6 +4,7 @@ import { fetchVistaAuctionDeals } from '@/lib/vista-auction';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
 import { r2Get, r2Put } from '@/lib/r2';
 import { EbayItem } from '@/lib/ebay';
+import { computeVerdict, MIN_SOLD_COMPS } from '@/lib/flip-verdict';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -110,7 +111,9 @@ export async function GET(req: NextRequest) {
         }
 
         const compResult = result.value;
-        if (compResult.ebayCount < 2) {
+        // These verdicts are seeded straight into the digest without re-running comps,
+        // so they must clear the same comp-count bar as everything else.
+        if (compResult.ebayCount < MIN_SOLD_COMPS) {
           console.log(`[scrape-auctions] Insufficient comps (${compResult.ebayCount}) for: ${item.title.slice(0, 60)}`);
           return;
         }
@@ -133,13 +136,12 @@ export async function GET(req: NextRequest) {
           return;
         }
 
-        // Determine verdict
-        let flipVerdict: 'buy' | 'maybe';
-        if (netProfit > 30 || (netProfit > 20 && marginPct > 15)) {
-          flipVerdict = 'buy';
-        } else {
-          flipVerdict = 'maybe';
+        const verdict = computeVerdict({ netProfit, marginPct, soldCount: compResult.ebayCount, daysToSell: days });
+        if (verdict === 'skip') {
+          console.log(`[scrape-auctions] Verdict skip, dropping: ${item.title.slice(0, 60)}`);
+          return;
         }
+        const flipVerdict: 'buy' | 'maybe' = verdict;
 
         console.log(`[scrape-auctions] Qualified: ${item.title.slice(0, 60)} — $${netProfit} profit, ${flipVerdict}`);
 

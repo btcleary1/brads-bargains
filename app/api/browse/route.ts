@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { searchDeals, EbayItem } from '@/lib/ebay';
 import { isJunk } from '@/lib/deal-score';
+import { computeVerdict } from '@/lib/flip-verdict';
 import { r2Get, r2Put } from '@/lib/r2';
 import { getDeals, getUserPrefs } from '@/lib/tracker-data';
 import { inferCategoriesFromDeals, inferCategoryScores, categoryKeyForTitle } from '@/lib/infer-categories';
@@ -119,18 +120,8 @@ async function quickFlipVerdict(item: EbayItem): Promise<{
     const netProfit = Math.round(comps.weightedAvgSoldPrice * 0.85 - item.price - (item.shippingCost ?? 0));
     const marginPct = Math.round((netProfit / item.price) * 100);
 
-    let verdict: 'buy' | 'maybe' | 'skip';
-    if (netProfit > 30 || (netProfit > 20 && marginPct > 15)) verdict = 'buy';
-    else if (netProfit < 5) verdict = 'skip';
-    else verdict = 'maybe';
-
-    // Never skip strong absolute profit
-    if (netProfit >= 25 && verdict === 'skip') verdict = 'maybe';
-
-    // Days-to-sell overrides: >60d = skip (capital tied up too long), >30d = downgrade buy→maybe
     const days = comps.estDaysToSell;
-    if (days != null && days > 60) verdict = 'skip';
-    else if (days != null && days > 30 && verdict === 'buy') verdict = 'maybe';
+    const verdict = computeVerdict({ netProfit, marginPct, soldCount: comps.ebayCount, daysToSell: days });
 
     return { verdict, netProfit, avgSoldPrice: comps.weightedAvgSoldPrice, soldCount: comps.ebayCount, marginPct, estDaysToSell: comps.estDaysToSell, sourcesCount: comps.sourcesUsed.length, confidence: comps.confidence };
   } catch {
