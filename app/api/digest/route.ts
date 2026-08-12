@@ -26,6 +26,13 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const DIGEST_STATE_PATH = 'deal-wiz/digest-state.json';
+
+// Module scope, not function scope. This is captured by the post-AI eligibility
+// closure roughly 200 lines before its old declaration site executed, which threw
+// `ReferenceError: Cannot access 'MIN_NET_PROFIT' before initialization` on every
+// run. tsc does not flag use-before-init through a closure, and the outer catch
+// turned it into a 200 response, so the digest failed silently and daily.
+const MIN_NET_PROFIT = 15;
 const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
 
 // Categories to search when live eBay API is available
@@ -538,8 +545,6 @@ export async function GET(req: NextRequest) {
       flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, macbidAvg: r.value.macbidAvg ?? null, vistaAvg: r.value.vistaAvg ?? null });
     });
 
-    // Minimum net profit to include a deal in the digest
-    const MIN_NET_PROFIT = 15;
 
     // A2A orchestration: a Claude agent selects the best deals per user, calling the
     // seller-quality sub-agent as a tool when it needs to investigate a borderline seller.
