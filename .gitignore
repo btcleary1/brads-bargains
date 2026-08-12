@@ -1,6 +1,14 @@
 node_modules/
 .next/
 .vercel
-.env*.local
-.env.brads
 .claude/
+
+# Environment / secrets — never commit. Broad by design: a new .env variant
+# must not silently become trackable. .env.brads was committed on 2026-05-20
+# and sat in a public repo for ~3 months before being untracked.
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+tsconfig.tsbuildinfo
