@@ -135,15 +135,21 @@ export function diversifySelection<T extends DiversityItem>(items: T[], opts: Di
     }
   }
 
-  // Relax rather than under-deliver.
+  // Top up ONLY from categories still under the cap. An earlier version relaxed
+  // the cap here to avoid a short digest, which defeated the whole feature: with
+  // three eligible items that were all guitar bodies, the rounds took two and this
+  // block added the third. A repetitive digest is worse than a short one, so the
+  // cap is absolute — running short is the correct outcome and gets logged.
   if (picked.length < limit) {
     const chosen = new Set(picked.map(i => i.itemId));
     for (const item of ranked) {
       if (picked.length >= limit) break;
-      if (!chosen.has(item.itemId)) {
-        picked.push(item);
-        chosen.add(item.itemId);
-      }
+      if (chosen.has(item.itemId)) continue;
+      const key = categoryOf(item);
+      if ((takenFrom.get(key) ?? 0) >= maxPerCategory) continue;
+      picked.push(item);
+      chosen.add(item.itemId);
+      takenFrom.set(key, (takenFrom.get(key) ?? 0) + 1);
     }
   }
 

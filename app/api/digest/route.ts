@@ -180,7 +180,15 @@ export async function GET(req: NextRequest) {
     const nonRefurb = allItems.filter(i =>
       !/refurb/i.test(i.condition) && !/refurb/i.test(i.title) && isFlippableItem(i.title)
     );
-    const itemPool = nonRefurb.length >= 10 ? nonRefurb : allItems;
+    // No `nonRefurb.length >= 10 ? nonRefurb : allItems` fallback. That silently
+    // discarded the whole quality whitelist whenever the filtered pool was thin,
+    // dumping raw eBay results back in — which is exactly how bare guitar bodies,
+    // correctly rejected by isFlippableItem, ended up in a digest. A thin pool is
+    // information worth logging, never a reason to lower the bar.
+    const itemPool = nonRefurb;
+    if (nonRefurb.length < 10) {
+      console.warn(`[digest] thin pool: only ${nonRefurb.length} of ${allItems.length} items passed quality filters`);
+    }
     console.log(`[digest] non-refurb items: ${nonRefurb.length} of ${allItems.length}`);
 
     // Pull a large candidate pool — eBay Browse API rarely includes seller-claimed original prices,
