@@ -16,6 +16,7 @@ import { computeTasteProfile, TasteProfile } from '@/lib/user-taste';
 import { getMultiSourceComps } from '@/lib/multi-source-comps';
 import { checkItemQuality, isFlippableItem } from '@/lib/item-quality';
 import { computeVerdict, isDigestEligible } from '@/lib/flip-verdict';
+import { diversifySelection, describeVariety } from '@/lib/digest-diversity';
 import { analyzeFlip } from '@/lib/flip-agent';
 import { sendPushToSubscriptions } from '@/lib/push-notify';
 import { checkSellersBatch } from '@/lib/seller-quality';
@@ -33,6 +34,10 @@ const DIGEST_STATE_PATH = 'deal-wiz/digest-state.json';
 // run. tsc does not flag use-before-init through a closure, and the outer catch
 // turned it into a 200 response, so the digest failed silently and daily.
 const MIN_NET_PROFIT = 15;
+
+// Max slots one product type may take in a 5-item digest. Three of five went out
+// as wristwatches before this existed.
+const MAX_PER_DIGEST_CATEGORY = 2;
 const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
 
 // Categories to search when live eBay API is available
@@ -263,15 +268,35 @@ export async function GET(req: NextRequest) {
       return flip.netProfit * Math.pow(14 / Math.max(1, days), 0.4);
     };
 
-    // Pick best N items — BUY/MAYBE with positive profit only, sorted by speed-adjusted score
+    // Ranking signal shared by selection and by the variety pass, so both agree
+    // on what "better" means.
+    const itemScore = (item: EbayItem): number => {
+      const flip = flipMap.get(item.itemId);
+      if (flip) return dealScore(flip);
+      const est = (item.marketPrice ?? 0) > 0
+        ? Math.round((item.marketPrice ?? 0) * 0.85 - item.price) : 0;
+      return est - 1000; // rank unknowns below anything with real comps
+    };
+
+    // Pick best N items — BUY/MAYBE with positive profit only, sorted by speed-adjusted score.
+    // Verdict tier still dominates: buys are diversified among themselves before
+    // any maybe is considered, so variety never promotes a weaker verdict.
     const pickBest = (pool: typeof candidates, n: number): typeof candidates => {
       const scored = pool.map(item => ({ item, flip: flipMap.get(item.itemId) }));
-      const buys = scored.filter(x => x.flip?.verdict === 'buy' && (x.flip?.netProfit ?? 0) > 0)
-        .sort((a, b) => dealScore(b.flip!) - dealScore(a.flip!));
-      const maybes = scored.filter(x => x.flip?.verdict === 'maybe' && (x.flip?.netProfit ?? 0) > 0)
-        .sort((a, b) => dealScore(b.flip!) - dealScore(a.flip!));
-      const unknowns = scored.filter(x => !x.flip && (x.item.marketPrice ?? 0) > 0 && Math.round((x.item.marketPrice ?? 0) * 0.85 - x.item.price) > 0);
-      return [...buys, ...maybes, ...unknowns].map(x => x.item).slice(0, n);
+      const buys = scored.filter(x => x.flip?.verdict === 'buy' && (x.flip?.netProfit ?? 0) > 0).map(x => x.item);
+      const maybes = scored.filter(x => x.flip?.verdict === 'maybe' && (x.flip?.netProfit ?? 0) > 0).map(x => x.item);
+      const unknowns = scored.filter(x => !x.flip && (x.item.marketPrice ?? 0) > 0 && Math.round((x.item.marketPrice ?? 0) * 0.85 - x.item.price) > 0).map(x => x.item);
+
+      const out: EbayItem[] = [];
+      for (const tier of [buys, maybes, unknowns]) {
+        if (out.length >= n) break;
+        out.push(...diversifySelection(tier, {
+          limit: n - out.length,
+          scoreOf: itemScore,
+          maxPerCategory: MAX_PER_DIGEST_CATEGORY,
+        }));
+      }
+      return out.slice(0, n);
     };
 
     let best5 = pickBest(candidates, 5);
@@ -561,7 +586,7 @@ export async function GET(req: NextRequest) {
     // Falls back to deterministic scoring inside orchestrateDigestSelection if the API is down.
     const orchestratedDigests = await Promise.allSettled(
       userDigests.map(d =>
-        orchestrateDigestSelection(d.deals, flipMap, d.maxDaysToSell, d.minNetProfit ?? MIN_NET_PROFIT, 5, d.tasteWeights, d.excludedCategories)
+        orchestrateDigestSelection(d.deals, flipMap, d.maxDaysToSell, d.minNetProfit ?? MIN_NET_PROFIT, 5, d.tasteWeights, d.excludedCategories, MAX_PER_DIGEST_CATEGORY)
           .then(result => {
             const itemById = new Map(d.deals.map(i => [i.itemId, i]));
             const finalDeals = result.rankedItemIds
@@ -586,9 +611,21 @@ export async function GET(req: NextRequest) {
                   .sort((a, b) => (flipMap.get(b.itemId)?.netProfit ?? 0) - (flipMap.get(a.itemId)?.netProfit ?? 0))
                   .slice(0, 5);
 
-            console.log(`[digest] user ${d.userId} orchestrated deals: ${safeDeals.length}, profits: ${safeDeals.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}`);
+            // Final variety pass. The orchestrator is asked for spread but is an
+            // LLM and does not reliably honour it, and the deterministic fallback
+            // above sorts on profit alone — either can return five of one product
+            // type. Enforcing it here covers every path into the email. Candidates
+            // are already eligibility-filtered, so this only reorders and swaps
+            // between items that were all fit to send.
+            const varied = diversifySelection(safeDeals, {
+              limit: 5,
+              scoreOf: i => flipMap.get(i.itemId)?.netProfit ?? 0,
+              maxPerCategory: MAX_PER_DIGEST_CATEGORY,
+            });
+
+            console.log(`[digest] user ${d.userId} deals: ${varied.length}, profits: ${varied.map(i => flipMap.get(i.itemId)?.netProfit ?? 'n/a').join(', ')}, variety: ${describeVariety(varied)}`);
             console.log(`[digest] user ${d.userId} orchestrator reasoning: ${result.reasoning.slice(0, 120)}`);
-            return { ...d, deals: safeDeals };
+            return { ...d, deals: varied };
           })
       )
     );

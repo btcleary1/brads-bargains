@@ -51,20 +51,25 @@ const BROWSE_COVERED_KEYS = new Set([
   'cell_phones', 'computers', 'video_games', 'consumer_elec', 'clothing', 'sports_cards',
 ]);
 
-// Maps broad category key → best DIGEST_CATEGORIES entry to search when not in standard pool
+// Maps a broad interest key to the DIGEST_CATEGORIES entry to search for it.
+// Previously six of these pointed somewhere unrelated — coins and books_comics both
+// searched graded sports cards, music and dvds_movies searched LEGO, and musical_inst
+// searched graphics cards — so a coin collector got sports cards in their personalized
+// slots. Each of those keys now has a correctly-queried entry of its own, so they map
+// to themselves; the rest redirect to the nearest real category.
 const INTEREST_CATEGORY_MAP: Record<string, string> = {
-  tools_industrial: 'dewalt_tool',
+  tools_industrial: 'tools_industrial',
   toys_hobbies:     'lego_sealed',
-  cameras:          'sony_camera',
-  jewelry_watches:  'rolex_watch',
-  sporting_goods:   'jordan_shoes',
-  collectibles:     'sports_card_psa',
-  coins:            'sports_card_psa',
-  musical_inst:     'rtx_gpu',
-  home_garden:      'dewalt_tool',
-  books_comics:     'sports_card_psa',
-  music:            'lego_sealed',
-  dvds_movies:      'lego_sealed',
+  cameras:          'cameras',
+  jewelry_watches:  'jewelry_watches',
+  sporting_goods:   'sporting_goods',
+  collectibles:     'collectibles',
+  coins:            'coins',
+  musical_inst:     'musical_inst',
+  home_garden:      'home_garden',
+  books_comics:     'books_comics',
+  music:            'music',
+  dvds_movies:      'dvds_movies',
 };
 
 // Returns DIGEST_CATEGORIES searches for user interest keys not already in BROWSE_CATEGORIES

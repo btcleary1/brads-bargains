@@ -6,6 +6,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { EbayItem } from './ebay';
 import type { FlipData } from './notify';
 import { checkSellerQuality } from './seller-quality';
+import { diversifySelection } from './digest-diversity';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -64,26 +65,31 @@ function simpleFallback(
   maxDaysToSell: number,
   minNetProfit: number,
   maxItems: number,
+  maxPerCategory: number,
 ): OrchestratorResult {
-  const ranked = items
-    .filter(i => {
+  const eligible = items.filter(i => {
       const f = flipMap.get(i.itemId);
       if (!f || f.verdict === 'skip') return false;
       if (f.estDaysToSell != null && f.estDaysToSell > maxDaysToSell) return false;
       if (f.netProfit < minNetProfit) return false;
       return true;
-    })
-    .sort((a, b) => {
-      const af = flipMap.get(a.itemId)!;
-      const bf = flipMap.get(b.itemId)!;
-      const order = { buy: 0, maybe: 1, skip: 2 };
-      if (af.verdict !== bf.verdict) return order[af.verdict] - order[bf.verdict];
-      return bf.netProfit - af.netProfit;
-    })
-    .slice(0, maxItems)
-    .map(i => i.itemId);
+    }
+    );
 
-  return { rankedItemIds: ranked, reasoning: 'Deterministic fallback: filtered by profit and days-to-sell, sorted by verdict then profit.' };
+  // Diversify inside each verdict tier so variety never promotes a maybe over a buy.
+  const byTier = (v: 'buy' | 'maybe') => eligible.filter(i => flipMap.get(i.itemId)?.verdict === v);
+  const picked: typeof items = [];
+  for (const tier of [byTier('buy'), byTier('maybe')]) {
+    if (picked.length >= maxItems) break;
+    picked.push(...diversifySelection(tier, {
+      limit: maxItems - picked.length,
+      scoreOf: i => flipMap.get(i.itemId)?.netProfit ?? 0,
+      maxPerCategory,
+    }));
+  }
+  const ranked = picked.slice(0, maxItems).map(i => i.itemId);
+
+  return { rankedItemIds: ranked, reasoning: `Deterministic fallback: filtered by profit and days-to-sell, diversified to max ${maxPerCategory} per product type.` };
 }
 
 // ── Main orchestrator ─────────────────────────────────────────────────────────
@@ -96,9 +102,10 @@ export async function orchestrateDigestSelection(
   maxItems = 5,
   tasteWeights: Record<string, number> = {},
   excludedCategories: string[] = [],
+  maxPerCategory = 2,
 ): Promise<OrchestratorResult> {
   if (!process.env.ANTHROPIC_API_KEY || items.length === 0) {
-    return simpleFallback(items, flipMap, maxDaysToSell, minNetProfit, maxItems);
+    return simpleFallback(items, flipMap, maxDaysToSell, minNetProfit, maxItems, maxPerCategory);
   }
 
   // Build a compact candidate summary for the orchestrator's context window.
@@ -109,7 +116,7 @@ export async function orchestrateDigestSelection(
     .slice(0, 20); // cap at 20 to keep the prompt tight
 
   if (candidates.length === 0) {
-    return simpleFallback(items, flipMap, maxDaysToSell, minNetProfit, maxItems);
+    return simpleFallback(items, flipMap, maxDaysToSell, minNetProfit, maxItems, maxPerCategory);
   }
 
   const candidateLines = candidates.map(({ item: i, flip: f }) =>
@@ -131,7 +138,9 @@ export async function orchestrateDigestSelection(
     `• Max days-to-sell: ${maxDaysToSell}. Exclude items where days > ${maxDaysToSell}.`,
     `• Min net profit: $${minNetProfit}. Exclude items below this threshold.`,
     `• Prefer "buy" verdicts over "maybe". Never include "skip".`,
-    `• Diversify — avoid picking 5 items from the same category.`,
+    `• VARIETY IS REQUIRED: at most ${maxPerCategory} of the ${maxItems} may be the same product type`,
+    `  (watches, phones, laptops, sneakers, cards, tools, ...). Prefer ${maxItems} distinct types.`,
+    `  A slightly lower-profit item of a new type beats a third of a type already picked.`,
     ...(excludedCategories.length > 0 ? [
       `• HARD EXCLUDE these user-rejected categories: ${excludedCategories.join(', ')}. Do not pick any item from these categories regardless of profit.`,
     ] : []),
@@ -217,5 +226,5 @@ export async function orchestrateDigestSelection(
   }
 
   console.warn('[orchestrator] did not call finalize_selection — using deterministic fallback');
-  return simpleFallback(items, flipMap, maxDaysToSell, minNetProfit, maxItems);
+  return simpleFallback(items, flipMap, maxDaysToSell, minNetProfit, maxItems, maxPerCategory);
 }

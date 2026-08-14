@@ -51,7 +51,6 @@ export const DIGEST_CATEGORIES: DigestCategory[] = [
   { key: 'tools_industrial',  label: 'Business & Industrial',            query: 'DeWalt 20V cordless drill kit',          categoryId: '12576', maxPrice: 130 },
   { key: 'dewalt_tool',       label: 'Power Tools',                      query: 'DeWalt 20V MAX tool combo kit',          categoryId: '12576', maxPrice: 200 },
   { key: 'jewelry_watches',   label: 'Watches',                          query: 'Seiko automatic dive watch used',        categoryId: '281',   maxPrice: 200 },
-  { key: 'rolex_watch',       label: 'Luxury Watches',                   query: 'Citizen Eco-Drive watch used',           categoryId: '281',   maxPrice: 200 },
 
   // ── Long tail: kept for coverage, ceilings keep them honest ──────────────
   { key: 'musical_inst',      label: 'Musical Instruments & Gear',       query: 'Fender Squier Stratocaster used',        categoryId: '619',   maxPrice: 200 },
