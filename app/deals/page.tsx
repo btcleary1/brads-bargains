@@ -1174,8 +1174,11 @@ function DealsPageContent() {
     }
   }, [router]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Always load the morning digest, not just when arriving from an email link.
+  // This was gated on `viewDigest` (?view=digest), so opening the app from the
+  // home screen never fetched it — the picks sat in R2 and the section silently
+  // never rendered, which read as "the app disagrees with my email".
   useEffect(() => {
-    if (!viewDigest) return;
     setDigestLoading(true);
     fetch('/api/digest-deals')
       .then(r => r.json())
@@ -1187,7 +1190,7 @@ function DealsPageContent() {
       })
       .catch(() => {})
       .finally(() => setDigestLoading(false));
-  }, [viewDigest]);
+  }, []);
 
   // Scroll to specific item AFTER React commits digestItems to DOM
   useEffect(() => {
