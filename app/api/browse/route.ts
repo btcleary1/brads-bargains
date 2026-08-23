@@ -451,12 +451,14 @@ export async function GET(req: NextRequest) {
     candidates.forEach((item, i) => {
       const r = flipResults[i];
       if (r.status !== 'fulfilled' || !r.value) return;
-      const isPersonalized = personalizedCandidateIds.has(item.itemId);
-      // Standard items must pass the flip verdict; personalized items pass through even if 'skip'
-      if (r.value.verdict === 'skip' && !isPersonalized) return;
+      // Skips are dropped for everyone. Personalized items used to bypass this and
+      // were then relabelled 'skip' -> 'maybe', which is how a LEGO set at -$27 net
+      // sat in a feed captioned "BUY verdict confirmed with real sold data".
+      // Relevance is not a reason to show someone a loss.
+      if (r.value.verdict === 'skip') return;
       browsed.push({
         ...item,
-        flipVerdict: r.value.verdict === 'skip' ? 'maybe' : r.value.verdict,
+        flipVerdict: r.value.verdict,
         avgSoldPrice: r.value.avgSoldPrice,
         soldCount: r.value.soldCount,
         flipNetProfit: r.value.netProfit,
