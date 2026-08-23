@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { Search, Zap, Loader2, Plus, ExternalLink, Tag, TrendingDown, TrendingUp, Package, AlertCircle, Mail, CheckCircle, Clock, FlaskConical, ThumbsUp, ThumbsDown, Minus, Flame, Sparkles, ShoppingBag, Smartphone, X, MessageSquarePlus } from 'lucide-react';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
+import Link from 'next/link';
 
 interface EbayItem {
   itemId: string;
@@ -930,6 +931,7 @@ function DigestDealCard({ deal }: { deal: BrowseDeal }) {
 function DealsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [browseHidden, setBrowseHidden] = useState<{ total: number; byKeyword: number; byDisliked: number; byCategory: number; keywords: string[] } | null>(null);
   const [digestItems, setDigestItems] = useState<BrowseDeal[]>([]);
   const [digestAiPick, setDigestAiPick] = useState<string | null>(null);
   const [digestAiPickItemId, setDigestAiPickItemId] = useState<string | null>(null);
@@ -1163,7 +1165,7 @@ function DealsPageContent() {
     setBrowseLoading(true);
     fetch('/api/browse')
       .then(r => r.json())
-      .then(d => { setBrowseItems(d.items ?? []); setBrowseGeneratedAt(d.generatedAt ?? null); })
+      .then(d => { setBrowseItems(d.items ?? []); setBrowseGeneratedAt(d.generatedAt ?? null); setBrowseHidden(d.hidden ?? null); })
       .catch(() => {})
       .finally(() => setBrowseLoading(false));
 
@@ -1383,7 +1385,7 @@ function DealsPageContent() {
     setOnboardingSaving(false);
     if (onboardingCats.length > 0) {
       setBrowseLoading(true);
-      fetch('/api/browse').then(r => r.json()).then(d => { setBrowseItems(d.items ?? []); setBrowseGeneratedAt(d.generatedAt ?? null); }).catch(() => {}).finally(() => setBrowseLoading(false));
+      fetch('/api/browse').then(r => r.json()).then(d => { setBrowseItems(d.items ?? []); setBrowseGeneratedAt(d.generatedAt ?? null); setBrowseHidden(d.hidden ?? null); }).catch(() => {}).finally(() => setBrowseLoading(false));
     }
   };
 
@@ -1869,9 +1871,9 @@ function DealsPageContent() {
                 <Mail className="w-4 h-4 text-white" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-white leading-tight">Today&apos;s Email Picks</h2>
+                <h2 className="text-base font-bold text-white leading-tight">Today&apos;s Picks</h2>
                 <p className="text-xs" style={{ color: '#6B7280' }}>
-                  From this morning&apos;s digest
+                  The same {digestItems.length} we emailed you
                   {digestGeneratedAt && <> · {new Date(digestGeneratedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>}
                 </p>
               </div>
@@ -1980,8 +1982,7 @@ function DealsPageContent() {
               </div>
             )}
             <div className="text-center py-3" style={{ color: '#4B5563' }}>
-              <div className="font-medium text-sm" style={{ color: '#6B7280' }}>Search eBay for deals</div>
-              <div className="text-xs mt-1" style={{ color: '#4B5563' }}>We&apos;ll find listings with varying discounts off market price</div>
+              <div className="text-xs" style={{ color: '#4B5563' }}>Search any item to check its flip value</div>
             </div>
           </div>
         )}
@@ -1995,9 +1996,10 @@ function DealsPageContent() {
                   <Zap className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-white leading-tight">Today&apos;s Picks</h2>
+                  {/* "More Finds" only reads correctly when Today's Picks sits above it. */}
+                  <h2 className="text-base font-bold text-white leading-tight">{digestItems.length > 0 ? 'More Finds' : 'Live Finds'}</h2>
                   <p className="text-xs" style={{ color: '#6B7280' }}>
-                    Pre-verified flips — BUY verdict confirmed with real sold data
+                    Checked against real sold prices
                     {browseGeneratedAt && (
                       <> · updated {Math.round((Date.now() - new Date(browseGeneratedAt).getTime()) / 60000)}m ago</>
                     )}
@@ -2006,7 +2008,7 @@ function DealsPageContent() {
                     <div className="flex items-center gap-1 mt-1">
                       <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
                         style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#A5B4FC' }}>
-                        ✦ Personalized with your eBay purchase history &amp; saved searches
+                        ✦ Tuned to your eBay history
                       </span>
                     </div>
                   )}
@@ -2015,7 +2017,7 @@ function DealsPageContent() {
               <button
                 onClick={() => {
                   setBrowseLoading(true);
-                  fetch('/api/browse?refresh=1').then(r => r.json()).then(d => { setBrowseItems(d.items ?? []); setBrowseGeneratedAt(d.generatedAt ?? null); }).catch(() => {}).finally(() => setBrowseLoading(false));
+                  fetch('/api/browse?refresh=1').then(r => r.json()).then(d => { setBrowseItems(d.items ?? []); setBrowseGeneratedAt(d.generatedAt ?? null); setBrowseHidden(d.hidden ?? null); }).catch(() => {}).finally(() => setBrowseLoading(false));
                 }}
                 disabled={browseLoading}
                 className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all disabled:opacity-50"
@@ -2107,8 +2109,32 @@ function DealsPageContent() {
             )}
 
             {!browseLoading && browseItems.length === 0 && (
-              <div className="text-center py-10" style={{ color: '#4B5563' }}>
-                <div className="text-sm">No pre-verified flips found right now — check back in a few hours or search manually.</div>
+              <div className="rounded-2xl px-4 py-8 text-center" style={{ background: 'rgba(148,163,184,0.05)', border: '1px solid rgba(148,163,184,0.12)' }}>
+                {browseHidden && browseHidden.total > 0 ? (
+                  <>
+                    <div className="text-sm font-medium text-white mb-1">
+                      {browseHidden.total} {browseHidden.total === 1 ? 'find was' : 'finds were'} hidden by your filters
+                    </div>
+                    <div className="text-xs mb-4" style={{ color: '#6B7280' }}>
+                      {[
+                        browseHidden.byKeyword > 0 && `${browseHidden.byKeyword} blocked by keyword${browseHidden.keywords.length ? ` (${browseHidden.keywords.join(', ')})` : ''}`,
+                        browseHidden.byDisliked > 0 && `${browseHidden.byDisliked} you thumbed down`,
+                        browseHidden.byCategory > 0 && `${browseHidden.byCategory} in categories you muted`,
+                      ].filter(Boolean).join(' · ')}
+                    </div>
+                    <Link href="/settings" className="inline-block text-xs font-semibold px-4 py-2 rounded-lg"
+                      style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#A5B4FC' }}>
+                      Adjust filters
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-sm font-medium text-white mb-1">Nothing cleared the bar today</div>
+                    <div className="text-xs" style={{ color: '#6B7280' }}>
+                      We check every category each morning. Some days nothing beats the fees — that&apos;s the filter working.
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

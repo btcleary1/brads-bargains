@@ -102,6 +102,51 @@ const BROWSE_CATEGORIES: { query: string; maxPrice?: number }[] = [
   { query: 'iPad Air used',                    maxPrice: 300 },
 ];
 
+
+/**
+ * Why an item disappeared from someone's feed. The UI needs this: an empty feed
+ * that says "nothing found" when the real answer is "your own lego filter hid the
+ * one result" is unactionable, and reads as the app being broken.
+ */
+export interface HiddenSummary {
+  total: number;
+  byKeyword: number;
+  byDisliked: number;
+  byCategory: number;
+  keywords: string[];
+}
+
+function applyUserFilters<T extends { itemId: string; title: string }>(
+  items: T[],
+  ctx: {
+    dislikedIds: Set<string>;
+    blockedKwPatterns: RegExp[];
+    blockedKeywords: string[];
+    excludedCategories: string[];
+  },
+): { kept: T[]; hidden: HiddenSummary } {
+  const hidden: HiddenSummary = { total: 0, byKeyword: 0, byDisliked: 0, byCategory: 0, keywords: [] };
+  const matchedKw = new Set<string>();
+
+  const kept = items.filter(i => {
+    if (ctx.dislikedIds.has(i.itemId)) { hidden.total++; hidden.byDisliked++; return false; }
+    const kwIdx = ctx.blockedKwPatterns.findIndex(re => re.test(i.title));
+    if (kwIdx >= 0) {
+      hidden.total++; hidden.byKeyword++;
+      if (ctx.blockedKeywords[kwIdx]) matchedKw.add(ctx.blockedKeywords[kwIdx]);
+      return false;
+    }
+    if (ctx.excludedCategories.length > 0) {
+      const key = categoryKeyForTitle(i.title);
+      if (key && ctx.excludedCategories.includes(key)) { hidden.total++; hidden.byCategory++; return false; }
+    }
+    return true;
+  });
+
+  hidden.keywords = [...matchedKw];
+  return { kept, hidden };
+}
+
 async function quickFlipVerdict(item: EbayItem): Promise<{
   verdict: 'buy' | 'maybe' | 'skip';
   netProfit: number;
@@ -319,7 +364,8 @@ export async function GET(req: NextRequest) {
   const excludedCategories: string[] = tasteResult.status === 'fulfilled' ? tasteResult.value.excludedCategories : [];
   const feedbackList = feedbackResult.status === 'fulfilled' ? feedbackResult.value : [];
   const dislikedIds = new Set(feedbackList.filter(f => f.verdict === 'down').map(f => f.itemId));
-  const blockedKwPatterns = ((prefs as any).blockedKeywords ?? [] as string[]).map((kw: string) =>
+  const blockedKeywords: string[] = (prefs as any).blockedKeywords ?? [];
+  const blockedKwPatterns = blockedKeywords.map((kw: string) =>
     new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
   );
 
@@ -345,19 +391,14 @@ export async function GET(req: NextRequest) {
   const cached = await r2Get<BrowseCache>(BROWSE_CACHE_KEY());
   const cacheHasItems = cached && cached.generatedAt && cached.items.length > 0;
 
+  let cacheHidden: HiddenSummary = { total: 0, byKeyword: 0, byDisliked: 0, byCategory: 0, keywords: [] };
   const serveCache = (stale = false) => {
     // Re-apply sanity filter even on cached items — guards against stale bad data surviving a refresh
     const hasHistory = allWonTitles.length > 0 || buying.watchedTitles.length > 0;
-    let items = cached!.items.filter(i => {
-      if (i.flipNetProfit > i.price) return false;
-      if (dislikedIds.has(i.itemId)) return false;
-      if (blockedKwPatterns.some((re: RegExp) => re.test(i.title))) return false;
-      if (excludedCategories.length > 0) {
-        const key = categoryKeyForTitle(i.title);
-        if (key && excludedCategories.includes(key)) return false;
-      }
-      return true;
-    });
+    const sane = cached!.items.filter(i => i.flipNetProfit <= i.price);
+    const filteredCache = applyUserFilters(sane, { dislikedIds, blockedKwPatterns, blockedKeywords, excludedCategories });
+    cacheHidden = filteredCache.hidden;
+    let items = filteredCache.kept;
     items = personalizeResults(items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles, hasHistory);
     items = items.filter(i => i.estDaysToSell == null || i.estDaysToSell <= maxDays);
 
@@ -383,7 +424,7 @@ export async function GET(req: NextRequest) {
       const key = categoryKeyForTitle(i.title);
       return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;
     }).length;
-    return NextResponse.json({ ...cached, items, fromCache: true, stale, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay } });
+    return NextResponse.json({ ...cached, items, fromCache: true, stale, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay }, hidden: cacheHidden });
   };
 
   if (!forceRefresh && cacheHasItems) {
@@ -527,21 +568,16 @@ export async function GET(req: NextRequest) {
       await r2Put(BROWSE_CACHE_KEY(), JSON.stringify(result));
     }
     const hasHistory = allWonTitles.length > 0 || buying.watchedTitles.length > 0;
-    const personalizedItems = personalizeResults(result.items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles, hasHistory)
-      .filter(i => {
-        if (dislikedIds.has(i.itemId)) return false;
-        if (blockedKwPatterns.some((re: RegExp) => re.test(i.title))) return false;
-        if (excludedCategories.length > 0) {
-          const key = categoryKeyForTitle(i.title);
-          if (key && excludedCategories.includes(key)) return false;
-        }
-        return true;
-      });
+    const freshFiltered = applyUserFilters(
+      personalizeResults(result.items, categoryScores, tasteWeights, explicitCategories, allWonTitles, buying.watchedTitles, hasHistory),
+      { dislikedIds, blockedKwPatterns, blockedKeywords, excludedCategories },
+    );
+    const personalizedItems = freshFiltered.kept;
     const matchedFromEbay = personalizedItems.filter(i => {
       const key = categoryKeyForTitle(i.title);
       return key && (buying.watchedTitles.length > 0 || allWonTitles.length > 0) && categoryScores.get(key) !== undefined;
     }).length;
-    return NextResponse.json({ ...result, items: personalizedItems, fromCache: false, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay } });
+    return NextResponse.json({ ...result, items: personalizedItems, fromCache: false, inferredCategories: inferredCategories.length > 0 ? inferredCategories : undefined, personalizationDebug: { watchedCount: buying.watchedTitles.length, wonCount: allWonTitles.length, picksInfluenced: matchedFromEbay }, hidden: freshFiltered.hidden });
 
   } catch (err: any) {
     // eBay rate limited — serve stale cache if available rather than returning an error
