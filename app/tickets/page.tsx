@@ -74,7 +74,7 @@ export default function TicketsPage() {
   return (
     <div className="min-h-screen" style={{ background: '#0B1120' }}>
       <Header />
-      <main className="max-w-2xl mx-auto px-4 pt-6 pb-24 sm:pb-10">
+      <main className="max-w-2xl mx-auto px-4 pt-6 pb-[calc(6rem_+_env(safe-area-inset-bottom))] sm:pb-10">
         <div className="flex items-center gap-2 mb-1">
           <Ticket className="w-5 h-5 text-blue-400" />
           <h1 className="text-white text-xl font-bold">Ticket Finder</h1>
