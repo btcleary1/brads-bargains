@@ -1,7 +1,14 @@
 import { EbayItem } from './ebay';
 
 // eBay final value fee + payment processing (~15% total)
-const EBAY_FEE_RATE = 0.15;
+export const EBAY_FEE_RATE = 0.15;
+/** Share of sale price left after eBay fees. Import this instead of writing 0.85 inline. */
+export const NET_MULTIPLIER = 1 - EBAY_FEE_RATE;
+
+/** Net profit on a resale, after fees, purchase price and inbound shipping. */
+export function netProfitFrom(salePrice: number, buyPrice: number, shipping = 0): number {
+  return Math.round(salePrice * NET_MULTIPLIER - buyPrice - shipping);
+}
 
 // Maximum shipping cost to exclude heavy/bulky items
 const MAX_SHIPPING = 30;
@@ -364,6 +371,34 @@ function profitScore(item: EbayItem): number {
 
 // Hard filter — returns true if item should be excluded
 // Accepts optional FilterPrefs to apply user-configured criteria
+
+// Accessory listings advertise compatibility with many devices at once:
+//   "For iPhone 17e 16 15 14 Plus 13 12 11 Pro Max Wallet Case"
+// A real device is exactly one model. ACCESSORY_PATTERNS only caught that example
+// because it happened to contain "Case" — the identical shape without that word
+// ("For iPhone 15 14 13 Pro Max Magnetic Clear Shockproof") passed, and was only
+// ever stopped by the $50 price floor, which the trending feed does not apply.
+const COMPAT_PREFIX_RE = /^\s*(?:for|fits|compatible\s+with)\s+(?:the\s+)?(?:apple|samsung|google|sony|lg\b|motorola|iphone|ipad|galaxy|pixel|macbook|airpods|playstation|ps[45]\b|xbox|nintendo|switch|dewalt|milwaukee)/i;
+const MULTI_MODEL_RE = /\b(?:iphone|galaxy\s*s|galaxy\s*note|pixel|ipad|airpods)\b[^.;|]{0,70}?(?:\b\d{1,2}(?:e|s|se|pro|plus|max|ultra|mini)?\b[\s,/+-]+){3,}/i;
+
+/**
+ * Title-only rejections: accessories, parts, fashion, bulky goods, dead listings.
+ * Split out of isJunk so surfaces that should not inherit its price, seller and
+ * tech-age economics — the trending feed, which legitimately surfaces cheap
+ * items — can still reject obvious junk.
+ */
+export function isJunkTitle(title: string): boolean {
+  if (JUNK_TITLE_PATTERNS.test(title)) return true;
+  if (ACCESSORY_PATTERNS.test(title)) return true;
+  if (COMPAT_PREFIX_RE.test(title)) return true;
+  if (MULTI_MODEL_RE.test(title)) return true;
+  if (FASHION_PATTERNS.test(title)) return true;
+  if (BULKY_PATTERNS.test(title)) return true;
+  if (/refurbished/i.test(title)) return true;
+  if (/\bpoor\b/i.test(title)) return true;
+  return false;
+}
+
 export function isJunk(item: EbayItem, prefs?: FilterPrefs): boolean {
   const minPrice    = prefs?.minPrice    ?? MIN_PRICE;
   const maxPrice    = prefs?.maxPrice    ?? MAX_PRICE;
@@ -372,12 +407,7 @@ export function isJunk(item: EbayItem, prefs?: FilterPrefs): boolean {
   const minFeedPct  = prefs?.minSellerFeedbackPct ?? MIN_FEEDBACK_PERCENT;
 
   if (!item.imageUrl) return true;
-  if (JUNK_TITLE_PATTERNS.test(item.title)) return true;
-  if (ACCESSORY_PATTERNS.test(item.title)) return true;
-  if (FASHION_PATTERNS.test(item.title)) return true;
-  if (BULKY_PATTERNS.test(item.title)) return true;
-  if (/refurbished/i.test(item.title)) return true;
-  if (/\bpoor\b/i.test(item.title)) return true;
+  if (isJunkTitle(item.title)) return true;
 
   // Condition: if user specified allowed conditions, check against them; else use defaults
   const allowed = prefs?.allowedConditions;

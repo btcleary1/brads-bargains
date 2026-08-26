@@ -1,5 +1,6 @@
 import { EbayItem } from './ebay';
 import { FlipData } from './notify';
+import { netProfitFrom } from './deal-score';
 
 async function twilioSend(toPhone: string, body: string): Promise<void> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -31,7 +32,7 @@ export async function sendSMSDigest(deals: EbayItem[], toPhone: string, flipMap?
   if (!deals.length) return;
   const lines = deals.slice(0, 5).map((deal, i) => {
     const flip = flipMap?.get(deal.itemId);
-    const profit = flip?.netProfit ?? (deal.marketPrice ? Math.round(deal.marketPrice * 0.87 - deal.price - (deal.shippingCost ?? 0)) : null);
+    const profit = flip?.netProfit ?? (deal.marketPrice ? netProfitFrom(deal.marketPrice, deal.price, deal.shippingCost ?? 0) : null);
     const profitStr = profit && profit > 0 ? ` +$${profit}` : '';
     return `${i + 1}. ${deal.title.split(' ').slice(0, 5).join(' ')} $${deal.price.toFixed(0)}${profitStr}`;
   }).join('\n');
