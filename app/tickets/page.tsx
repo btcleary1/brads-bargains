@@ -150,7 +150,7 @@ export default function TicketsPage() {
 
             <div className="rounded-xl p-4" style={{ background: 'rgba(29,78,216,0.1)', border: '1px solid rgba(29,78,216,0.3)' }}>
               <p className="text-white font-semibold text-sm mb-1">
-                {plan.hasPriceData ? `Target: $${plan.priceBandLow}–$${plan.priceBandHigh} per seat` : 'No price data yet'}
+                {plan.hasPriceData ? `Target: $${plan.priceBandLow}–$${plan.priceBandHigh} per seat` : 'Price data unavailable via API'}
               </p>
               <p className="text-gray-300 text-sm">{plan.reasoning}</p>
             </div>
