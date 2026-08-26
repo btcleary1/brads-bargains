@@ -3,11 +3,12 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Zap, Search, BarChart2, LogOut, Settings } from 'lucide-react';
+import { Zap, Search, BarChart2, LogOut, Settings, Ticket } from 'lucide-react';
 
 const navItems = [
   { href: '/deals',   label: 'Find Deals', icon: Search },
   { href: '/tracker', label: 'Tracker',    icon: BarChart2 },
+  { href: '/tickets', label: 'Tickets',    icon: Ticket },
 ];
 
 export default function Header() {
