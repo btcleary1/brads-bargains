@@ -30,8 +30,10 @@ function hasPriceData(event: TicketEvent): boolean {
   return event.lowestPrice != null || event.averagePrice != null || event.highestPrice != null;
 }
 
-// SeatGeek has no listings tracked for this event yet — common for games far out.
-// Don't fabricate a price band; say so and still hand back a seating split.
+// SeatGeek's free public API tier doesn't return price stats for every event even
+// when real listings exist on seatgeek.com — that pricing comes through a separate,
+// non-public pipeline. Don't claim there's no data; say plainly that we can't see it
+// through this API, and don't fabricate a price band either.
 function noPriceDataPlan(event: TicketEvent, totalRequested: number): TicketPlan {
   const groups = splitIntoGroups(totalRequested, null);
   return {
@@ -41,7 +43,7 @@ function noPriceDataPlan(event: TicketEvent, totalRequested: number): TicketPlan
     priceBandLow: null,
     priceBandHigh: null,
     groups,
-    reasoning: `SeatGeek has no listings tracked for this event yet, so there's no real price data to target — that's normal for a game this far out. Check the marketplaces below directly for current pricing; the seating split below is still a reasonable way to search for ${totalRequested} together.`,
+    reasoning: `Price stats aren't available through the public SeatGeek API for this event — that doesn't mean there are no listings, just that our API access can't see pricing for it. Check the marketplaces below directly for current listings and pricing; the seating split below is still a reasonable way to search for ${totalRequested} together.`,
     marketplaceLinks: buildMarketplaceLinks(event, totalRequested),
   };
 }
