@@ -21,15 +21,16 @@ interface TicketEvent {
 
 interface SeatGroup {
   size: number;
-  targetPricePerSeat: number;
+  targetPricePerSeat: number | null;
   note: string;
 }
 
 interface TicketPlan {
   event: TicketEvent;
   totalRequested: number;
-  priceBandLow: number;
-  priceBandHigh: number;
+  hasPriceData: boolean;
+  priceBandLow: number | null;
+  priceBandHigh: number | null;
   groups: SeatGroup[];
   reasoning: string;
   marketplaceLinks: { name: string; url: string }[];
@@ -68,7 +69,7 @@ export default function TicketsPage() {
   return (
     <div className="min-h-screen" style={{ background: '#0B1120' }}>
       <Header />
-      <main className="max-w-2xl mx-auto px-4 py-6">
+      <main className="max-w-2xl mx-auto px-4 pt-6 pb-24 sm:pb-10">
         <div className="flex items-center gap-2 mb-1">
           <Ticket className="w-5 h-5 text-blue-400" />
           <h1 className="text-white text-xl font-bold">Ticket Finder</h1>
@@ -137,14 +138,14 @@ export default function TicketsPage() {
               <p className="text-gray-400 text-sm mt-0.5">
                 {plan.event.venueName}, {plan.event.venueCity}, {plan.event.venueState} · {new Date(plan.event.dateTimeLocal).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
               </p>
-              {plan.event.listingCount != null && (
+              {plan.event.listingCount != null && plan.event.lowestPrice != null && plan.event.highestPrice != null && (
                 <p className="text-gray-500 text-xs mt-1">{plan.event.listingCount} listings tracked · market range ${plan.event.lowestPrice}–${plan.event.highestPrice}</p>
               )}
             </div>
 
             <div className="rounded-xl p-4" style={{ background: 'rgba(29,78,216,0.1)', border: '1px solid rgba(29,78,216,0.3)' }}>
               <p className="text-white font-semibold text-sm mb-1">
-                Target: ${plan.priceBandLow}–${plan.priceBandHigh} per seat
+                {plan.hasPriceData ? `Target: $${plan.priceBandLow}–$${plan.priceBandHigh} per seat` : 'No price data yet'}
               </p>
               <p className="text-gray-300 text-sm">{plan.reasoning}</p>
             </div>
@@ -158,7 +159,7 @@ export default function TicketsPage() {
                 {plan.groups.map((g, i) => (
                   <div key={i} className="flex items-center justify-between text-sm rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)' }}>
                     <span className="text-gray-300">{g.note}</span>
-                    <span className="text-white font-medium whitespace-nowrap ml-3">{g.size} seats · ~${g.targetPricePerSeat}/ea</span>
+                    <span className="text-white font-medium whitespace-nowrap ml-3">{g.size} seats{g.targetPricePerSeat != null ? ` · ~$${g.targetPricePerSeat}/ea` : ''}</span>
                   </div>
                 ))}
               </div>
