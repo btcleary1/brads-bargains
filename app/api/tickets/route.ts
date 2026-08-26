@@ -8,6 +8,7 @@ export const runtime = 'nodejs';
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   try { await checkRequestLimit(session.userId, 'tickets', 10, 60_000); }
   catch (e: any) { return NextResponse.json({ error: e.message }, { status: 429 }); }

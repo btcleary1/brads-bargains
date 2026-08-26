@@ -45,7 +45,12 @@ export default function TicketsPage() {
   const [plan, setPlan] = useState<TicketPlan | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => { if (r.status === 401) router.replace('/login'); }).catch(() => { /* network error — don't log out */ });
+    fetch('/api/auth/me').then(r => {
+      if (r.status === 401) { router.replace('/login'); return null; }
+      return r.json();
+    }).then(me => {
+      if (me && me.role !== 'admin') router.replace('/deals');
+    }).catch(() => { /* network error — don't log out */ });
   }, [router]);
 
   const search = async () => {

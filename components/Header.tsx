@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Zap, Search, BarChart2, LogOut, Settings, Ticket } from 'lucide-react';
@@ -8,11 +8,17 @@ import { Zap, Search, BarChart2, LogOut, Settings, Ticket } from 'lucide-react';
 const navItems = [
   { href: '/deals',   label: 'Find Deals', icon: Search },
   { href: '/tracker', label: 'Tracker',    icon: BarChart2 },
-  { href: '/tickets', label: 'Tickets',    icon: Ticket },
+  { href: '/tickets', label: 'Tickets',    icon: Ticket, adminOnly: true },
 ];
 
 export default function Header() {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const visibleNavItems = navItems.filter(item => !item.adminOnly || isAdmin);
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(me => setIsAdmin(me?.role === 'admin')).catch(() => { /* stay non-admin */ });
+  }, []);
 
   useEffect(() => {
     // Inject a /deals sentinel into history so pressing back from an external entry
@@ -69,7 +75,7 @@ export default function Header() {
                 className="flex items-center gap-0.5 rounded-xl p-1"
                 style={{ background: 'rgba(255,255,255,0.05)' }}
               >
-                {navItems.map(({ href, label, icon: Icon }) => {
+                {visibleNavItems.map(({ href, label, icon: Icon }) => {
                   const isActive = pathname?.startsWith(href);
                   return (
                     <Link
@@ -128,7 +134,7 @@ export default function Header() {
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {visibleNavItems.map(({ href, label, icon: Icon }) => {
           const isActive = pathname?.startsWith(href);
           return (
             <Link key={href} href={href} className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 relative">
