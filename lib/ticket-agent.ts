@@ -11,18 +11,39 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export interface SeatGroup {
   size: number;
-  targetPricePerSeat: number;
+  targetPricePerSeat: number | null;
   note: string;
 }
 
 export interface TicketPlan {
   event: TicketEvent;
   totalRequested: number;
-  priceBandLow: number;
-  priceBandHigh: number;
+  hasPriceData: boolean;
+  priceBandLow: number | null;
+  priceBandHigh: number | null;
   groups: SeatGroup[];
   reasoning: string;
   marketplaceLinks: { name: string; url: string }[];
+}
+
+function hasPriceData(event: TicketEvent): boolean {
+  return event.lowestPrice != null || event.averagePrice != null || event.highestPrice != null;
+}
+
+// SeatGeek has no listings tracked for this event yet — common for games far out.
+// Don't fabricate a price band; say so and still hand back a seating split.
+function noPriceDataPlan(event: TicketEvent, totalRequested: number): TicketPlan {
+  const groups = splitIntoGroups(totalRequested, null);
+  return {
+    event,
+    totalRequested,
+    hasPriceData: false,
+    priceBandLow: null,
+    priceBandHigh: null,
+    groups,
+    reasoning: `SeatGeek has no listings tracked for this event yet, so there's no real price data to target — that's normal for a game this far out. Check the marketplaces below directly for current pricing; the seating split below is still a reasonable way to search for ${totalRequested} together.`,
+    marketplaceLinks: buildMarketplaceLinks(event, totalRequested),
+  };
 }
 
 // Deterministic fallback used when Claude is unavailable — still a sound plan,
@@ -40,6 +61,7 @@ function fallbackPlan(event: TicketEvent, totalRequested: number): TicketPlan {
   return {
     event,
     totalRequested,
+    hasPriceData: true,
     priceBandLow: bandLow,
     priceBandHigh: bandHigh,
     groups,
@@ -48,7 +70,7 @@ function fallbackPlan(event: TicketEvent, totalRequested: number): TicketPlan {
   };
 }
 
-function splitIntoGroups(total: number, pricePerSeat: number): SeatGroup[] {
+function splitIntoGroups(total: number, pricePerSeat: number | null): SeatGroup[] {
   // Contiguous blocks of 15 are rare inventory; most marketplaces realistically offer
   // runs of 2-8 seats together. Split into the fewest even groups of size <= 8.
   const maxGroupSize = 8;
@@ -77,6 +99,10 @@ export async function planTicketSearch(
   const event = await findEvent(`${awayTeam} at ${homeTeam}`, seasonYear);
   if (!event) return null;
 
+  // Nothing to price — asking the model to invent a band from empty stats would just
+  // produce a confident-looking number with nothing real behind it.
+  if (!hasPriceData(event)) return noPriceDataPlan(event, totalRequested);
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return fallbackPlan(event, totalRequested);
   }
@@ -90,7 +116,7 @@ export async function planTicketSearch(
 
   const prompt = `You are helping a fan find ${totalRequested} tickets to "${event.title}" at ${event.venueName}, ${event.venueCity}, ${event.venueState} on ${event.dateTimeLocal}.
 
-Current market data (SeatGeek aggregate): ${stats || 'no stats available'}.
+Current market data (SeatGeek aggregate): ${stats}.
 
 Goal: seats close together, at a REASONABLE price — explicitly not the cheapest (often obstructed-view or student/visitor-only end zone) and not the most expensive (club/premium sections). Aim for the middle of the market.
 
@@ -130,6 +156,7 @@ Groups must sum to exactly ${totalRequested}.`;
     return {
       event,
       totalRequested,
+      hasPriceData: true,
       priceBandLow: parsed.priceBandLow,
       priceBandHigh: parsed.priceBandHigh,
       groups: parsed.groups,
