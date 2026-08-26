@@ -5,6 +5,7 @@ import { getSessionFromRequest } from '@/lib/session';
 import { getEbayToken } from '@/lib/ebay';
 import { checkRequestLimit } from '@/lib/rate-limit';
 import { r2Get, r2Put } from '@/lib/r2';
+import { isJunkTitle } from '@/lib/deal-score';
 
 export const runtime = 'nodejs';
 export const maxDuration = 90;
@@ -119,7 +120,16 @@ async function searchTrending(query: string, maxResults = 20): Promise<TrendingI
       demandScore: Math.min(100, demandScore),
       trendSignal: signals.slice(0, 2).join(' · ') || 'Newly listed',
     };
-  }).filter((i: TrendingItem | null): i is TrendingItem => i !== null && i.demandScore >= 10);
+  }).filter((i: TrendingItem | null): i is TrendingItem => {
+    if (i === null || i.demandScore < 10) return false;
+    // Trending had no quality filter at all — demandScore was its only gate, which
+    // is how a $17 generic phone case reached the feed. Only the title rules apply
+    // here, not isJunk's $50 floor or tech-age limit: this surface is meant to
+    // surface cheap items that are genuinely moving.
+    if (isJunkTitle(i.title)) return false;
+    if (!i.imageUrl) return false;
+    return true;
+  });
 }
 
 const TRENDING_QUERIES = [
