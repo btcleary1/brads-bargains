@@ -12,6 +12,8 @@ export interface VerdictInput {
   marginPct: number;
   soldCount: number;
   daysToSell: number | null;
+  /** How long the listing has already sat unsold. Optional; omit when unknown. */
+  daysListed?: number | null;
 }
 
 // Below this many sold comps we cannot verify the price at all.
@@ -23,7 +25,14 @@ export const SLOW_SALE_DAYS = 30;
 // Below this the margin does not cover the risk of the estimate being wrong.
 export const MIN_VIABLE_PROFIT = 10;
 
-export function computeVerdict({ netProfit, marginPct, soldCount, daysToSell }: VerdictInput): Verdict {
+// A listing that has sat this long, while the comps claim a large margin, is
+// evidence against its own thesis: if the item were really worth twice what it
+// is listed at, the market had ample time to take it. A Seiko "Diver's Look"
+// went out as AI Pick of the Day at +102% margin having sat unsold for 76 days.
+export const STALE_LISTING_DAYS = 45;
+export const SUSPICIOUS_MARGIN_PCT = 60;
+
+export function computeVerdict({ netProfit, marginPct, soldCount, daysToSell, daysListed }: VerdictInput): Verdict {
   if (soldCount < MIN_SOLD_COMPS) return 'skip';
   if (daysToSell != null && daysToSell > MAX_DAYS_TO_SELL) return 'skip';
   if (netProfit < MIN_VIABLE_PROFIT) return 'skip';
@@ -33,6 +42,13 @@ export function computeVerdict({ netProfit, marginPct, soldCount, daysToSell }: 
 
   // Profitable but slow — real, just not a headline pick.
   if (daysToSell != null && daysToSell > SLOW_SALE_DAYS) return 'maybe';
+
+  // Sat a long time despite an apparently huge margin. Downgraded rather than
+  // dropped: the listing may still be worth a look, but it has not earned the
+  // headline slot, and a margin this good going unclaimed usually means the
+  // comps matched something the item only resembles.
+  if (daysListed != null && daysListed > STALE_LISTING_DAYS && marginPct > SUSPICIOUS_MARGIN_PCT) return 'maybe';
+
   return 'buy';
 }
 
