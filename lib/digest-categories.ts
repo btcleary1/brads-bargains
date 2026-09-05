@@ -21,6 +21,11 @@ export interface DigestCategory {
 //
 // categoryId is a hard filter on the eBay Browse API: a wrong ID returns zero
 // results, so only IDs already validated in production appear here.
+//
+// 3. Every maxPrice must sit ABOVE the $50 MIN_PRICE floor in lib/deal-score.ts.
+//    Ceilings of 45 and 40 were set here for coins, DVDs and vinyl, so every
+//    result those searches returned was rejected on price before it was ever
+//    priced. scripts/check-sourcing.ts fails the build if that recurs.
 export const DIGEST_CATEGORIES: DigestCategory[] = [
   // ── Electronics: deepest comp history, fastest turnover ──────────────────
   { key: 'cell_phones',       label: 'Cell Phones & Accessories',        query: 'iPhone 13 unlocked used',                categoryId: '15032', maxPrice: 220 },
@@ -43,7 +48,7 @@ export const DIGEST_CATEGORIES: DigestCategory[] = [
   { key: 'lego_sealed',       label: 'LEGO Sealed Sets',                 query: 'LEGO sealed set new in box',             categoryId: '220',   maxPrice: 150 },
   { key: 'collectibles',      label: 'Collectibles',                     query: 'Funko Pop vaulted exclusive',            categoryId: '1',     maxPrice: 60  },
   { key: 'books_comics',      label: 'Books & Comics',                   query: 'comic book CGC 9.8 key issue',           categoryId: '267',   maxPrice: 120 },
-  { key: 'coins',             label: 'Coins & Paper Money',              query: 'American Silver Eagle BU coin',          categoryId: '11116', maxPrice: 45  },
+  { key: 'coins',             label: 'Coins & Paper Money',              query: 'American Silver Eagle BU coin',          categoryId: '11116', maxPrice: 120  },
 
   // ── Apparel & tools: liquid brands only ──────────────────────────────────
   { key: 'sporting_goods',    label: 'Sporting Goods',                   query: 'Air Jordan 1 Retro size 10',             categoryId: '888',   maxPrice: 140 },
@@ -53,11 +58,10 @@ export const DIGEST_CATEGORIES: DigestCategory[] = [
   { key: 'jewelry_watches',   label: 'Watches',                          query: 'Seiko automatic dive watch used',        categoryId: '281',   maxPrice: 200 },
 
   // ── Long tail: kept for coverage, ceilings keep them honest ──────────────
-  { key: 'musical_inst',      label: 'Musical Instruments & Gear',       query: 'Fender Squier Stratocaster used',        categoryId: '619',   maxPrice: 200 },
   { key: 'home_garden',       label: 'Home & Garden',                    query: 'KitchenAid stand mixer used',            categoryId: '11700', maxPrice: 200 },
   { key: 'health_beauty',     label: 'Health & Beauty',                  query: 'Dyson Airwrap styler',                   categoryId: '26395', maxPrice: 350 },
   { key: 'crafts',            label: 'Crafts',                           query: 'Cricut Maker cutting machine used',      categoryId: '14339', maxPrice: 200 },
   { key: 'baby',              label: 'Baby',                             query: 'UPPAbaby Vista stroller used',           categoryId: '2984',  maxPrice: 300 },
-  { key: 'dvds_movies',       label: 'DVDs & Movies',                    query: '4K UHD Blu-ray steelbook sealed',        categoryId: '11232', maxPrice: 40  },
-  { key: 'music',             label: 'Music',                            query: 'vinyl LP record sealed reissue',         categoryId: '11233', maxPrice: 40  },
+  { key: 'dvds_movies',       label: 'DVDs & Movies',                    query: '4K UHD Blu-ray steelbook boxset sealed', categoryId: '11232', maxPrice: 90  },
+  { key: 'music',             label: 'Music',                            query: 'vinyl LP box set sealed',                categoryId: '11233', maxPrice: 90  },
 ];

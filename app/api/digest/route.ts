@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { searchDeals, EbayItem, filterLiveItems } from '@/lib/ebay';
 import { MOCK_DEALS } from '@/lib/mock-deals';
-import { topDeals, sellabilityScore } from '@/lib/deal-score';
+import { topDeals, sellabilityScore, MAX_TECH_AGE_YEARS } from '@/lib/deal-score';
 import { sendDailyDigest, FlipData, buildSpotlightUrl } from '@/lib/notify';
 import { sendSMSDigest } from '@/lib/sms';
 import { r2Get, r2Put } from '@/lib/r2';
@@ -485,7 +485,8 @@ export async function GET(req: NextRequest) {
 
         // Build a large candidate pool for this user — pass prefs so maxTechAge etc. are respected
         const userFilterPrefs = {
-          maxTechAgeYears: prefs.filterPrefs?.maxTechAgeYears ?? 2,
+          // Was `?? 2`, which in 2026 rejected every electronics category outright.
+          maxTechAgeYears: prefs.filterPrefs?.maxTechAgeYears ?? MAX_TECH_AGE_YEARS,
           minPrice: prefs.defaultPriceMin,
           maxPrice: prefs.defaultPriceMax,
           showLocalPickup: prefs.showLocalPickup ?? false,
