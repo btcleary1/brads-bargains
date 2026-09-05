@@ -10,6 +10,14 @@ export function netProfitFrom(salePrice: number, buyPrice: number, shipping = 0)
   return Math.round(salePrice * NET_MULTIPLIER - buyPrice - shipping);
 }
 
+// How old a device may be before it stops being worth flipping. This is a moving
+// target and the old defaults (5 here, 2 at the per-user stage) were written when
+// they meant 2021 and 2024 hardware. In 2026 a 2-year limit rejects EVERY device
+// this app sources — iPhone 15, MacBook M2, Switch OLED, PS5, AirPods Pro were all
+// classed as junk, leaving only watches and graded cards, which is why digests
+// collapsed to a single item. 8 years keeps 2018+ hardware, which still sells well.
+export const MAX_TECH_AGE_YEARS = 8;
+
 // Maximum shipping cost to exclude heavy/bulky items
 const MAX_SHIPPING = 30;
 
@@ -25,7 +33,7 @@ export interface FilterPrefs {
   minPrice?: number;            // default 50
   maxPrice?: number;            // default 2000
   maxShipping?: number;         // default 30
-  maxTechAgeYears?: number;     // 0 = no limit, default 2
+  maxTechAgeYears?: number;     // 0 = no limit, default 8 (see MAX_TECH_AGE_YEARS)
   minSellerFeedbackPct?: number; // default 97
   minDiscountPct?: number;      // starting hot deal threshold, default 60
   allowedConditions?: string[]; // empty = use default (excludes Acceptable/For Parts/etc.)
@@ -37,6 +45,11 @@ const JUNK_TITLE_PATTERNS = /for parts|not working|broken|cracked screen|read de
 
 // Accessories and low-value add-ons not worth flipping
 const ACCESSORY_PATTERNS = /\bstrap\b|watch band|\bcase\b|\bcover\b|screen protector|tempered glass|charger cable|\bcord\b|\badapter\b|car mount|phone mount|stand holder|game holder|card holder|lamp attachment|searchlight|burst light|\blight\b.*drone|drone.*\blight\b|\bskin\b.*phone|phone.*\bskin\b|keycap|wrist rest|\bposter\b/i;
+
+// Sneaker brands worth flipping. Checked before FASHION_PATTERNS so that
+// "Air Jordan 4 Retro Sneakers" survives while "Versace dress" does not.
+const SNEAKER_BRANDS = /\b(jordan|nike|adidas|yeezy|new\s+balance|asics|puma|reebok|converse|vans|dunk)\b/i;
+const LUXURY_FASHION = /\bversace\b|\bgucci\b|\bprada\b|\blouis\s*vuitton\b|\bchanel\b|\bhermes\b|\bburberry\b/i;
 
 // Clothing and fashion — not a category we cover
 const FASHION_PATTERNS = /\bshoes?\b|\bheels?\b|\bsneakers?\b|\bboots?\b|\bsandals?\b|\bloafers?\b|\bflats?\b|\bpumps?\b|\bdress\b|\bblouse\b|\bjacket\b|\bcoat\b|\bsuit\b|\bjeans?\b|\bpants?\b|\bskirt\b|\bversace\b|\bgucci\b|\bprada\b|\blouisvuitton\b|\bchanel\b|\bhermes\b|\bburberry\b|\bbag\b.*leather|\bhandbag\b|\bpurse\b|\btote\b/i;
@@ -392,7 +405,8 @@ export function isJunkTitle(title: string): boolean {
   if (ACCESSORY_PATTERNS.test(title)) return true;
   if (COMPAT_PREFIX_RE.test(title)) return true;
   if (MULTI_MODEL_RE.test(title)) return true;
-  if (FASHION_PATTERNS.test(title)) return true;
+  // Branded sneakers are sourced on purpose; generic apparel and luxury fashion are not.
+  if (FASHION_PATTERNS.test(title) && !(SNEAKER_BRANDS.test(title) && !LUXURY_FASHION.test(title))) return true;
   if (BULKY_PATTERNS.test(title)) return true;
   if (/refurbished/i.test(title)) return true;
   if (/\bpoor\b/i.test(title)) return true;
@@ -403,7 +417,7 @@ export function isJunk(item: EbayItem, prefs?: FilterPrefs): boolean {
   const minPrice    = prefs?.minPrice    ?? MIN_PRICE;
   const maxPrice    = prefs?.maxPrice    ?? MAX_PRICE;
   const maxShipping = prefs?.maxShipping ?? MAX_SHIPPING;
-  const maxTechAge  = prefs?.maxTechAgeYears ?? 5;
+  const maxTechAge  = prefs?.maxTechAgeYears ?? MAX_TECH_AGE_YEARS;
   const minFeedPct  = prefs?.minSellerFeedbackPct ?? MIN_FEEDBACK_PERCENT;
 
   if (!item.imageUrl) return true;

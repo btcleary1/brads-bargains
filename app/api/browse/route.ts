@@ -65,7 +65,6 @@ const INTEREST_CATEGORY_MAP: Record<string, string> = {
   sporting_goods:   'sporting_goods',
   collectibles:     'collectibles',
   coins:            'coins',
-  musical_inst:     'musical_inst',
   home_garden:      'home_garden',
   books_comics:     'books_comics',
   music:            'music',
