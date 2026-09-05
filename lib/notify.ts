@@ -267,6 +267,19 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const rows = top5.map((d, i) => dealRow(d, i + 1, top5, flipMap?.get(d.itemId), userId)).join('');
 
+  // Promise what is actually inside. The heading and subject both hardcoded
+  // "Top 5", so a one-item digest still announced five and read as broken.
+  const headline = top5.length === 1
+    ? "Today's Top Deal"
+    : `Today's Top ${top5.length} Deals`;
+
+  // Name the categories actually present. This read "Electronics & Collectibles"
+  // above an email containing one wristwatch.
+  const catNames = [...new Set(top5.map(d => categoryLabel(d.category)).filter(c => c !== 'Deal'))];
+  const categoryLine = catNames.length === 0 ? ''
+    : catNames.length <= 3 ? catNames.join(' &middot; ')
+    : `${catNames.slice(0, 3).join(' &middot; ')} +${catNames.length - 3} more`;
+
   const aiPickHtml = aiPick ? `
   <!-- AI Pick -->
   <tr><td style="padding-bottom:18px;">
@@ -298,8 +311,8 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
       <span style="font-family:'Courier New',Courier,monospace;font-size:9px;letter-spacing:0.28em;color:rgba(255,255,255,0.42);text-transform:uppercase;display:block;line-height:1;margin-bottom:3px;">AI</span>
       <span style="font-family:Impact,'Arial Narrow',Haettenschweiler,sans-serif;font-size:22px;color:#FFFFFF;letter-spacing:-0.01em;line-height:0.9;display:block;">FLIP</span>
     </a>
-    <h1 style="margin:0 0 5px;font-size:24px;font-weight:800;color:#0F172A;letter-spacing:-0.5px;">Today's Top 5 Deals</h1>
-    <p style="margin:0;font-size:13px;color:#64748B;">${today} &middot; Electronics &amp; Collectibles &middot; Best deals today</p>
+    <h1 style="margin:0 0 5px;font-size:24px;font-weight:800;color:#0F172A;letter-spacing:-0.5px;">${headline}</h1>
+    <p style="margin:0;font-size:13px;color:#64748B;">${today}${categoryLine ? ` &middot; ${categoryLine}` : ''}</p>
   </td></tr>
 
   <!-- AI Pick -->
@@ -347,7 +360,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
       body: JSON.stringify({
         from: `AI FLIP <${fromEmail}>`,
         to: [toEmail],
-        subject: "Today's Top 5 Deals - " + today,
+        subject: headline + " - " + today,
         html: htmlBody,
       }),
     });
@@ -358,7 +371,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
       body: JSON.stringify({
         personalizations: [{ to: [{ email: toEmail }] }],
         from: { email: fromEmail, name: "AI FLIP" },
-        subject: "Today's Top 5 Deals - " + today,
+        subject: headline + " - " + today,
         content: [{ type: 'text/html', value: htmlBody }],
       }),
     });

@@ -32,12 +32,26 @@ const INCOMPLETE_RE = new RegExp([
   String.raw`\bnot\s+complete\b`,
 ].join('|'), 'i');
 
+/**
+ * Listings that describe a resemblance rather than the thing itself. "Vintage
+ * Seiko Diver's LOOK" means it resembles a diver — but the comps query strips to
+ * "Seiko Diver Automatic" and matches genuine 6309 divers at $340, inventing
+ * $146 of profit on a $143 buy. Same failure family as the bare guitar body
+ * comping against whole guitars, and the gilded coin comping against bullion.
+ */
+const REPLICA_RE = /\b(?:homage|tribute|replica|reproduction|inspired\s+by|in\s+the\s+style\s+of|not\s+genuine|unbranded)\b|\b(?:diver|divers|submariner|daytona|watch|rolex|seiko|omega|speedmaster|nautilus|royal\s+oak)['\u2019s]*\s+(?:look|style)\b/i;
+
+export function isReplicaStyled(title: string): boolean {
+  return REPLICA_RE.test(title);
+}
+
 export function isIncompleteItem(title: string): boolean {
   return INCOMPLETE_RE.test(title);
 }
 
 export function isFlippableItem(title: string): boolean {
   if (isIncompleteItem(title)) return false;
+  if (isReplicaStyled(title)) return false;
   return FLIPPABLE_RE.test(title);
 }
 

@@ -45,6 +45,12 @@ const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
 // toward listings below resale. Dropping it here silently disabled every ceiling.
 const SEARCH_QUERIES = DIGEST_CATEGORIES.map(c => ({ query: c.query, categoryId: c.categoryId, maxPrice: c.maxPrice }));
 
+
+// Listing age is a check on the comps: an item that has sat unsold for months
+// while the comps claim a huge margin is usually a comps error, not a bargain.
+const daysListedOf = (item: EbayItem): number | null =>
+  item.listingDate ? Math.floor((Date.now() - new Date(item.listingDate).getTime()) / 86400000) : null;
+
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 }
@@ -254,7 +260,7 @@ export async function GET(req: NextRequest) {
       const netProfit = Math.round(refPrice * 0.85 - item.price - (item.shippingCost ?? 0));
       const marginPct = Math.round((netProfit / item.price) * 100);
       const days = r.value.estDaysToSell;
-      const verdict = computeVerdict({ netProfit, marginPct, soldCount: ebayCount, daysToSell: days });
+      const verdict = computeVerdict({ netProfit, marginPct, soldCount: ebayCount, daysToSell: days, daysListed: daysListedOf(item) });
       if (verdict !== 'skip' && netProfit > 0) profitableIds.add(item.itemId);
       flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: days, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, fbMarketplaceAvg: null, macbidAvg: r.value.macbidAvg ?? null, vistaAvg: r.value.vistaAvg ?? null });
     });
@@ -585,7 +591,7 @@ export async function GET(req: NextRequest) {
       const netProfit = Math.round(refPrice * 0.85 - item.price - (item.shippingCost ?? 0));
       const marginPct = Math.round((netProfit / item.price) * 100);
       const daysU = r.value.estDaysToSell;
-      const verdict = computeVerdict({ netProfit, marginPct, soldCount: ebayCount, daysToSell: daysU });
+      const verdict = computeVerdict({ netProfit, marginPct, soldCount: ebayCount, daysToSell: daysU, daysListed: daysListedOf(item) });
       flipMap.set(item.itemId, { verdict, netProfit, avgSoldPrice: refPrice, soldCount: ebayCount, marginPct, estDaysToSell: daysU, sourcesCount: r.value.sourcesUsed.length, stockxLastSale: r.value.stockxLastSale ?? null, mercariAvgSold: r.value.mercariAvg ?? null, amazonPrice: r.value.amazonPrice ?? null, macbidAvg: r.value.macbidAvg ?? null, vistaAvg: r.value.vistaAvg ?? null });
     });
 
