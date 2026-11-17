@@ -24,7 +24,7 @@ export async function sendSMSPriceDrop(
   if (!drops.length) return;
   const d = drops[0];
   const extra = drops.length > 1 ? ` (+${drops.length - 1} more)` : '';
-  const body = `AI FLIP price drop${extra}:\n${d.title.slice(0, 70)}\n$${d.oldPrice.toFixed(0)} → $${d.newPrice.toFixed(0)}\n${d.url}`;
+  const body = `Cleary eTrading price drop${extra}:\n${d.title.slice(0, 70)}\n$${d.oldPrice.toFixed(0)} → $${d.newPrice.toFixed(0)}\n${d.url}`;
   await twilioSend(toPhone, body);
 }
 
@@ -36,5 +36,5 @@ export async function sendSMSDigest(deals: EbayItem[], toPhone: string, flipMap?
     const profitStr = profit && profit > 0 ? ` +$${profit}` : '';
     return `${i + 1}. ${deal.title.split(' ').slice(0, 5).join(' ')} $${deal.price.toFixed(0)}${profitStr}`;
   }).join('\n');
-  await twilioSend(toPhone, `AI FLIP Top Deals:\n${lines}\nhttps://brads-bargains.vercel.app/deals`);
+  await twilioSend(toPhone, `Cleary eTrading Top Deals:\n${lines}\nhttps://brads-bargains.vercel.app/deals`);
 }

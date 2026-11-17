@@ -57,7 +57,7 @@ async function sendWatchlistAlert(
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: "AI FLIP <onboarding@resend.dev>",
+      from: "Cleary eTrading <onboarding@resend.dev>",
       to: toEmail,
       subject: `Watchlist Alert — ${totalDeals} new deal${totalDeals > 1 ? 's' : ''} found`,
       html: `<!DOCTYPE html><html>
@@ -178,7 +178,7 @@ export async function GET(req: NextRequest) {
         const body = topDeal
           ? `${topDeal.title.slice(0, 60)} — $${topDeal.price} (${topDeal.discountPct ?? 0}% off)`
           : 'New watchlist deals found.';
-        await sendPushToSubscriptions(subs, "AI FLIP — Watchlist Alert", body, '/deals').catch(() => {});
+        await sendPushToSubscriptions(subs, "Cleary eTrading — Watchlist Alert", body, '/deals').catch(() => {});
       }
       summary.push({ userId: user.userId, alerts: alerts.reduce((n, a) => n + a.deals.length, 0) });
     }

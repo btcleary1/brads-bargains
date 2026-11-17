@@ -38,7 +38,7 @@ async function sendPriceDropEmail(toEmail: string, drops: { title: string; oldPr
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: "AI FLIP <onboarding@resend.dev>",
+      from: "Cleary eTrading <onboarding@resend.dev>",
       to: toEmail,
       subject: `Price Drop Alert — ${drops.length} deal${drops.length > 1 ? 's' : ''} got cheaper!`,
       html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">

@@ -222,7 +222,7 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
                 </td>
                 <td width="34%" style="padding:0 2px;">
                   <a href="${buildSpotlightUrl(deal, flip, netProfit)}"
-                    style="display:block;text-align:center;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">AI FLIP</a>
+                    style="display:block;text-align:center;background:#6366F1;color:#FFFFFF;font-size:11px;font-weight:600;text-decoration:none;padding:7px 4px;border-radius:7px;">Cleary eTrading</a>
                 </td>
                 <td width="33%" style="padding-left:3px;">
                   <a href="${buildTrackUrl(deal)}"
@@ -358,7 +358,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + resendKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: `AI FLIP <${fromEmail}>`,
+        from: `Cleary eTrading <${fromEmail}>`,
         to: [toEmail],
         subject: headline + " - " + today,
         html: htmlBody,
@@ -370,7 +370,7 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
       headers: { 'Authorization': 'Bearer ' + sgKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         personalizations: [{ to: [{ email: toEmail }] }],
-        from: { email: fromEmail, name: "AI FLIP" },
+        from: { email: fromEmail, name: "Cleary eTrading" },
         subject: headline + " - " + today,
         content: [{ type: 'text/html', value: htmlBody }],
       }),

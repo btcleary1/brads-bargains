@@ -1,5 +1,6 @@
 'use client';
 
+import SuiteMark from '@/components/SuiteMark';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Zap, Loader2, Eye, EyeOff, CheckCircle2, Circle } from 'lucide-react';
@@ -43,18 +44,8 @@ export default function RegisterPage() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl mb-3" style={{ background: '#0D1B2A', boxShadow: '0 4px 20px rgba(13,27,42,0.7)' }}>
-            <svg width="28" height="28" viewBox="0 0 18 18" aria-hidden="true">
-              <defs>
-                <linearGradient id="aif-reg" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="50%" stopColor="#10B981"/>
-                  <stop offset="50%" stopColor="#1D4ED8"/>
-                </linearGradient>
-              </defs>
-              <polygon points="9,2 4.5,7.4 6.85,7.4 6.85,15.5 11.15,15.5 11.15,7.4 13.5,7.4" fill="url(#aif-reg)"/>
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white">AI FLIP</h1>
+          <span className="mb-3" style={{ display: "inline-flex" }}><SuiteMark size={56} /></span>
+          <h1 className="text-2xl font-bold text-white">Cleary eTrading</h1>
           <p className="text-sm mt-1" style={{ color: '#6B7280' }}>Create your account — find the best eBay deals</p>
         </div>
 
@@ -154,7 +145,7 @@ export default function RegisterPage() {
                 style={{ minHeight: 'unset', accentColor: '#3B82F6' }}
               />
               <span className="text-[11px] text-gray-400 leading-relaxed">
-                I will use AI FLIP for personal, lawful purposes only. I understand it uses eBay listing data for price comparison and is{' '}
+                I will use Cleary eTrading for personal, lawful purposes only. I understand it uses eBay listing data for price comparison and is{' '}
                 <strong className="text-gray-300">not affiliated with eBay</strong>. I agree to the{' '}
                 <a href="/terms" target="_blank" className="text-blue-400 hover:underline">Terms</a>
                 {' '}and{' '}
