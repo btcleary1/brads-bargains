@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserByEmail, createUser, userCount, markGoogleAuth, incrementLoginCount } from '@/lib/users';
 import { setSessionCookie } from '@/lib/session';
 import { logAudit, getClientIp } from '@/lib/audit';
+import { TERMS_OK_COOKIE } from '@/lib/legal';
 
 export const runtime = 'nodejs';
 
@@ -52,7 +53,11 @@ export async function GET(req: NextRequest) {
     let user = await getUserByEmail(googleUser.email);
 
     if (!user) {
-      // New user — create account automatically (no password needed)
+      // New user: only create the account if they ticked the Terms/Privacy box on the sign-up page.
+      if (req.cookies.get(TERMS_OK_COOKIE)?.value !== '1') {
+        return NextResponse.redirect(`${APP_URL}/register?error=agree_first`);
+      }
+      // Create account automatically (no password needed)
       const count = await userCount();
       const role = count === 0 ? 'admin' : 'user';
       // Use a random placeholder password — they'll never use it (Google auth only)
@@ -74,6 +79,7 @@ export async function GET(req: NextRequest) {
       ? `${APP_URL}/login?setup-passkey=1&redirect=${encodeURIComponent(safeRedirect)}`
       : `${APP_URL}/login?setup-passkey=1`;
     const res = NextResponse.redirect(loginDest);
+    res.cookies.set(TERMS_OK_COOKIE, '', { httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth/google', maxAge: 0 });
     setSessionCookie(res, {
       userId: user.userId,
       email: user.email,

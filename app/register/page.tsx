@@ -1,7 +1,7 @@
 'use client';
 
 import SuiteMark from '@/components/SuiteMark';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import HumanCheck, { humanCheckOn, type HumanCheckHandle } from '@/components/HumanCheck';
 import { useRouter } from 'next/navigation';
 import { Zap, Loader2, Eye, EyeOff, CheckCircle2, Circle } from 'lucide-react';
@@ -19,6 +19,13 @@ export default function RegisterPage() {
   const [humanToken, setHuman] = useState('');
   const human = useRef<HumanCheckHandle>(null);
   const [loading, setLoading] = useState(false);
+
+  // Google sign-in sends new people back here if they skipped the agreement box.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('error') === 'agree_first') {
+      setError('To sign up with Google, first tick the box agreeing to the Terms and Privacy Policy below.');
+    }
+  }, []);
 
   const allChecksPassed = PASSWORD_REQUIREMENTS.every(r => r.test(password));
   const canSubmit = agreed && allChecksPassed && !loading;
@@ -57,8 +64,10 @@ export default function RegisterPage() {
         {/* Google button */}
         <div className="mb-5">
           <a
-            href="/api/auth/google"
-            className="w-full py-3.5 font-semibold text-sm flex items-center justify-center gap-2.5 rounded-2xl transition-all"
+            href={agreed ? '/api/auth/google?agreed=1' : undefined}
+            aria-disabled={!agreed}
+            onClick={e => { if (!agreed) { e.preventDefault(); setError('Tick the box agreeing to the Terms and Privacy Policy below first.'); } }}
+            className={`w-full py-3.5 font-semibold text-sm flex items-center justify-center gap-2.5 rounded-2xl transition-all ${agreed ? '' : 'opacity-50 cursor-not-allowed'}`}
             style={{ background: 'rgba(255,255,255,0.09)', border: '1px solid rgba(255,255,255,0.13)', color: 'white', textDecoration: 'none' }}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -69,6 +78,7 @@ export default function RegisterPage() {
             </svg>
             Continue with Google
           </a>
+          {!agreed && <p className="text-[11px] text-center mt-2" style={{ color: '#6B7280' }}>Tick the agreement box below to continue with Google.</p>}
         </div>
 
         <div className="flex items-center gap-3 mb-5">
