@@ -11,11 +11,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: { default: "AI FLIP", template: "%s | AI FLIP" },
+  title: { default: "Cleary eTrading", template: "%s | Cleary eTrading" },
   description: "Find the best eBay deals and track your flips.",
-  applicationName: "AI FLIP",
+  applicationName: "Cleary eTrading",
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, title: "AI FLIP", statusBarStyle: 'black-translucent' },
+  appleWebApp: { capable: true, title: "Cleary eTrading", statusBarStyle: 'black-translucent' },
   other: { 'mobile-web-app-capable': 'yes' },
 };
 

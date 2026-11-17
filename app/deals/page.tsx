@@ -397,7 +397,7 @@ function PwaBanner({ onDismiss }: { onDismiss: () => void }) {
         </button>
       </div>
       <p className="text-xs mb-3" style={{ color: '#93C5FD' }}>
-        Install AI FLIP as an app for instant access and deal notifications — no App Store needed.
+        Install Cleary eTrading as an app for instant access and deal notifications — no App Store needed.
       </p>
       {os === 'ios' && (
         <div className="text-xs space-y-1" style={{ color: '#CBD5E1' }}>
@@ -1793,7 +1793,7 @@ function DealsPageContent() {
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5" style={{ color: '#818CF8' }} />
-                <h3 className="font-bold text-white text-[15px]">Welcome to AI FLIP!</h3>
+                <h3 className="font-bold text-white text-[15px]">Welcome to Cleary eTrading!</h3>
               </div>
               <button onClick={dismissOnboarding} className="text-xs px-2 py-1 rounded-lg transition-colors" style={{ color: '#6B7280' }}>Skip</button>
             </div>
@@ -2327,7 +2327,7 @@ function DealsPageContent() {
             <a href="https://developer.ebay.com" target="_blank" rel="noopener noreferrer" style={{ color: '#6B7280' }}>
               eBay Browse API
             </a>
-            . AI FLIP is not affiliated with or endorsed by eBay Inc.
+            . Cleary eTrading is not affiliated with or endorsed by eBay Inc.
           </p>
           <div className="flex items-center justify-center gap-4 text-xs" style={{ color: '#4B5563' }}>
             <a href="/terms" style={{ color: '#6B7280' }} className="hover:underline">Terms of Service</a>

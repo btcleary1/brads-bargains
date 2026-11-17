@@ -131,7 +131,7 @@ export async function orchestrateDigestSelection(
     .map(([k]) => k);
 
   const system = [
-    `You are the deal-selection orchestrator for AI FLIP, a daily eBay flip advisory email.`,
+    `You are the deal-selection orchestrator for Cleary eTrading, a daily eBay flip advisory email.`,
     `Your task: choose the best ${maxItems} deals from the candidate list for today's digest.`,
     ``,
     `Rules:`,

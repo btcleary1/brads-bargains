@@ -38,14 +38,14 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: "AI FLIP <onboarding@resend.dev>",
+          from: "Cleary eTrading <onboarding@resend.dev>",
           to: email,
-          subject: "Welcome to AI FLIP - Start finding flips",
+          subject: "Welcome to Cleary eTrading - Start finding flips",
           html: `<div style="font-family:-apple-system,sans-serif;max-width:520px;margin:0 auto;padding:32px 16px;background:#050814;">
   <div style="background:#0B1120;border-radius:20px;border:1px solid rgba(255,255,255,0.1);padding:36px;">
     <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#F9FAFB;">Welcome, ${firstName}!</h2>
     <p style="margin:0 0 20px;font-size:15px;color:#9CA3AF;line-height:1.6;">
-      Your AI FLIP account is ready. Find the best eBay deals, track your flips, and get daily alerts on the best opportunities.
+      Your Cleary eTrading account is ready. Find the best eBay deals, track your flips, and get daily alerts on the best opportunities.
     </p>
     <a href="${appUrl}/deals"
       style="display:inline-block;background:linear-gradient(135deg,#3B82F6,#6366F1);color:#fff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:12px;">
