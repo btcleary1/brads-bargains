@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { TERMS_OK_COOKIE } from '@/lib/legal';
 
 export const runtime = 'nodejs';
 
@@ -24,5 +25,11 @@ export async function GET(req: NextRequest) {
     ...(safeRedirect ? { state: safeRedirect } : {}),
   });
 
-  return NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  const res = NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  // Sign-up page sends agreed=1 only after the person ticks the Terms/Privacy box. The callback
+  // refuses to create a new account without this short-lived cookie (existing users are unaffected).
+  if (req.nextUrl.searchParams.get('agreed') === '1') {
+    res.cookies.set(TERMS_OK_COOKIE, '1', { httpOnly: true, secure: true, sameSite: 'lax', path: '/api/auth/google', maxAge: 600 });
+  }
+  return res;
 }
