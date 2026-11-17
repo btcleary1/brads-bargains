@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import HumanCheck, { humanCheckOn, type HumanCheckHandle } from '@/components/HumanCheck';
 import { useRouter } from 'next/navigation';
 import { Zap, Loader2, Mail } from 'lucide-react';
 import Link from 'next/link';
@@ -10,18 +11,22 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [humanToken, setHuman] = useState('');
+  const human = useRef<HumanCheckHandle>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trap = ((e.currentTarget as HTMLFormElement).elements.namedItem('website') as HTMLInputElement | null)?.value || '';
     setLoading(true);
     setMessage(null);
     try {
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstile: humanToken, website: trap }),
       });
       const data = await res.json();
+      human.current?.reset();
       if (res.ok || data.success) {
         setMessage({ type: 'success', text: 'If that email has an account, a 6-digit code was sent. Check your inbox.' });
       } else {
@@ -82,9 +87,10 @@ export default function ForgotPasswordPage() {
               </div>
             </div>
 
+            <HumanCheck ref={human} onToken={setHuman} action="reset" />
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (humanCheckOn && !humanToken)}
               className="w-full py-3 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all disabled:opacity-60"
               style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: loading ? 'none' : '0 4px 16px rgba(99,102,241,0.35)' }}
             >

@@ -1,3 +1,4 @@
+import { HUMAN_CHECK_FAILED, isBotTrap, verifyHuman } from '@/lib/turnstile';
 import { NextRequest, NextResponse } from 'next/server';
 import { createUser, userCount } from '@/lib/users';
 import { validatePassword } from '@/lib/password-rules';
@@ -11,7 +12,10 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
   try {
     await checkRateLimit(ip);
-    const { email, name, password } = await req.json();
+    const { email, name, password, agreed, turnstile, website } = await req.json();
+    if (isBotTrap(website)) return NextResponse.json({ error: 'Could not create your account.' }, { status: 400 });
+    if (!(await verifyHuman(turnstile, ip))) return NextResponse.json({ error: HUMAN_CHECK_FAILED }, { status: 400 });
+    if (agreed !== true) return NextResponse.json({ error: 'You must agree to the Terms and Privacy Policy.' }, { status: 400 });
     if (!email || !name || !password)
       return NextResponse.json({ error: 'Email, name, and password are required.' }, { status: 400 });
 
