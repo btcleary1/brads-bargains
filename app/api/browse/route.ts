@@ -1,3 +1,4 @@
+import { hasSecret, isVercelCron } from '@/lib/cron-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { searchDeals, EbayItem } from '@/lib/ebay';
@@ -250,9 +251,7 @@ export async function GET(req: NextRequest) {
   // Must fail closed. With `?? ''` and an unset BROWSE_SECRET, `?warm=` sends an
   // empty string that compares equal, letting anyone skip the session check below
   // and run the full eBay + comps warm path that writes the shared cache.
-  const BROWSE_SECRET = process.env.BROWSE_SECRET ?? '';
-  const warmParam = req.nextUrl.searchParams.get('warm');
-  const warmMode = !!BROWSE_SECRET && warmParam === BROWSE_SECRET;
+  const warmMode = req.nextUrl.searchParams.has('warm') && (isVercelCron(req) || hasSecret(req, 'BROWSE_SECRET', 'warm'));
 
   // Cache-warm mode: called from cron, no user session needed. Runs searches + comps and saves cache.
   if (warmMode) {

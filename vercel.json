@@ -1,19 +1,19 @@
 {
   "crons": [
     {
-      "path": "/api/scrape-auctions?secret=scrape-2026",
+      "path": "/api/scrape-auctions",
       "schedule": "0 8 * * *"
     },
     {
-      "path": "/api/browse?warm=browse-2026",
+      "path": "/api/browse?warm=1",
       "schedule": "0 11 * * *"
     },
     {
-      "path": "/api/digest?secret=digest-2026",
+      "path": "/api/digest",
       "schedule": "0 13 * * *"
     },
     {
-      "path": "/api/watchlist-check?secret=digest-2026",
+      "path": "/api/watchlist-check",
       "schedule": "0 13 * * *"
     }
   ]

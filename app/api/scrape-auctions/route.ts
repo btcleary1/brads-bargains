@@ -1,3 +1,4 @@
+import { hasSecret, isVercelCron } from '@/lib/cron-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchMacBidDeals } from '@/lib/macbid';
 import { fetchVistaAuctionDeals } from '@/lib/vista-auction';
@@ -36,8 +37,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get('secret');
-  if (!(process.env.SCRAPE_SECRET ?? '') || secret !== (process.env.SCRAPE_SECRET ?? '')) {
+  if (!isVercelCron(req) && !hasSecret(req, 'SCRAPE_SECRET')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
