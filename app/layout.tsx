@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import LegalFooter from '@/components/LegalFooter';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>{children}<LegalFooter /></body>
     </html>
   );
 }

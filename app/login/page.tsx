@@ -1,7 +1,8 @@
 'use client';
 
 import SuiteMark from '@/components/SuiteMark';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import HumanCheck, { humanCheckOn, type HumanCheckHandle } from '@/components/HumanCheck';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Zap, Loader2, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { startAuthentication, startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
@@ -20,6 +21,8 @@ function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [humanToken, setHuman] = useState('');
+  const human = useRef<HumanCheckHandle>(null);
   const [loading, setLoading] = useState(false);
   const [supportsWebAuthn, setSupportsWebAuthn] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('Sign in with Biometrics');
@@ -57,15 +60,17 @@ function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trap = ((e.currentTarget as HTMLFormElement).elements.namedItem('website') as HTMLInputElement | null)?.value || '';
     setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, turnstile: humanToken, website: trap }),
       });
       const data = await res.json();
+      human.current?.reset();
       if (res.ok) {
         const statusRes = await fetch('/api/auth/webauthn/status');
         const statusData = await statusRes.json();
@@ -298,9 +303,10 @@ function LoginPage() {
               </p>
             )}
 
+            <HumanCheck ref={human} onToken={setHuman} action="login" />
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (humanCheckOn && !humanToken)}
               className="w-full py-3 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all disabled:opacity-60"
               style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)', boxShadow: loading ? 'none' : '0 4px 16px rgba(99,102,241,0.35)' }}
             >

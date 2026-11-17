@@ -1,9 +1,11 @@
+import { LEGAL_NAME, TERMS_UPDATED } from '@/lib/legal';
+
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(160deg,#050814 0%,#0B1120 60%,#0f172a 100%)' }}>
       <div className="max-w-2xl mx-auto px-4 py-12 pb-24">
         <h1 className="text-2xl font-bold text-white mb-2">Privacy Policy</h1>
-        <p className="text-xs mb-8" style={{ color: '#6B7280' }}>Last updated: April 2026</p>
+        <p className="text-xs mb-8" style={{ color: '#6B7280' }}>Last updated: {TERMS_UPDATED} · Operated by {LEGAL_NAME}</p>
 
         {[
           ['1. What We Collect', "We collect your email address (used for account login and optional deal alerts), your tracked deals, and your watchlist keywords. We do not collect payment information, location data, or browsing history outside of this app."],
@@ -14,7 +16,8 @@ export default function PrivacyPage() {
           ['6. We Do Not Sell Your Data', "We do not sell, rent, or share your personal data with advertisers or third parties for marketing purposes."],
           ['7. Cookies & Sessions', "We use a single session cookie to keep you logged in for up to 7 days. No third-party tracking cookies are used."],
           ['8. Data Deletion', "You may request deletion of your account and all associated data by emailing us. We will fulfill deletion requests within 30 days. If eBay notifies us of a deletion request for a user who purchased through eBay, we honor that request per eBay's Marketplace Account Deletion policy."],
-          ['9. Children', "Cleary eTrading is not directed at children under 13. We do not knowingly collect personal information from children."],
+          ['9. Adults Only', "Cleary eTrading is for people 18 and older. We do not knowingly collect personal information from anyone younger."],
+          ['9a. Login Protection', "To stop bots, sign-in, sign-up and password reset use Cloudflare Turnstile, which checks your browser for signs of automation. Cloudflare processes that check under its own privacy policy."],
           ['10. Changes', "We may update this Privacy Policy at any time. Continued use of the service constitutes acceptance of the updated policy. Material changes will be noted on this page."],
           ['11. Contact', "For privacy questions or data deletion requests, contact us at brads.bargains.app@gmail.com."],
         ].map(([title, body]) => (

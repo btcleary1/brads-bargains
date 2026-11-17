@@ -1,7 +1,8 @@
+import { HUMAN_CHECK_FAILED, isBotTrap, verifyHuman } from '@/lib/turnstile';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserByEmail, verifyPassword, upgradePasswordHash, incrementLoginCount } from '@/lib/users';
 import { setSessionCookie } from '@/lib/session';
-import { checkRateLimit, recordFailure, clearFailures } from '@/lib/rate-limit';
+import { checkRateLimit, checkRequestLimit, recordFailure, clearFailures } from '@/lib/rate-limit';
 import { logAudit, getClientIp } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -12,7 +13,12 @@ export async function POST(req: NextRequest) {
   try {
     await checkRateLimit(ip);
 
-    const { email, password } = await req.json();
+    const { email, password, turnstile, website } = await req.json();
+    // Bots: the hidden trap field, then Cloudflare's human check (Cleary suite baseline).
+    if (isBotTrap(website)) return NextResponse.json({ error: 'Incorrect email or password.' }, { status: 401 });
+    if (!(await verifyHuman(turnstile, ip))) return NextResponse.json({ error: HUMAN_CHECK_FAILED }, { status: 400 });
+    // Per-account limit too, so one account can't be guessed at from many addresses.
+    if (email) await checkRequestLimit(String(email).trim().toLowerCase(), 'login_acct', 10, 30 * 60 * 1000);
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
@@ -44,7 +50,7 @@ export async function POST(req: NextRequest) {
     return res;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const status = msg.startsWith('Too many') ? 429 : 500;
+    const status = msg.startsWith('Too many') || msg.startsWith('Rate limit') ? 429 : 500;
     return NextResponse.json({ error: msg }, { status });
   }
 }

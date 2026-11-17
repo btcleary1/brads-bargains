@@ -1,7 +1,8 @@
 'use client';
 
 import SuiteMark from '@/components/SuiteMark';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import HumanCheck, { humanCheckOn, type HumanCheckHandle } from '@/components/HumanCheck';
 import { useRouter } from 'next/navigation';
 import { Zap, Loader2, Eye, EyeOff, CheckCircle2, Circle } from 'lucide-react';
 import Link from 'next/link';
@@ -15,6 +16,8 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
+  const [humanToken, setHuman] = useState('');
+  const human = useRef<HumanCheckHandle>(null);
   const [loading, setLoading] = useState(false);
 
   const allChecksPassed = PASSWORD_REQUIREMENTS.every(r => r.test(password));
@@ -22,15 +25,17 @@ export default function RegisterPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trap = ((e.currentTarget as HTMLFormElement).elements.namedItem('website') as HTMLInputElement | null)?.value || '';
     if (!agreed) { setError('You must agree to the Terms and Privacy Policy.'); return; }
     setLoading(true);
     setError('');
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name, password }),
+      body: JSON.stringify({ email, name, password, agreed, turnstile: humanToken, website: trap }),
     });
     const data = await res.json();
+    human.current?.reset();
     if (res.ok) {
       window.location.href = '/deals';
     } else {
@@ -155,9 +160,10 @@ export default function RegisterPage() {
 
             {error && <p className="text-xs text-center py-2 px-3 rounded-xl" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#F87171' }}>{error}</p>}
 
+            <HumanCheck ref={human} onToken={setHuman} action="signup" />
             <button
               type="submit"
-              disabled={!canSubmit}
+              disabled={!canSubmit || (humanCheckOn && !humanToken)}
               className="w-full py-3 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: canSubmit ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(59,130,246,0.5)', boxShadow: canSubmit ? '0 4px 16px rgba(99,102,241,0.35)' : 'none' }}
             >
