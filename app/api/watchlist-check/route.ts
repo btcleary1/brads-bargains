@@ -1,3 +1,4 @@
+import { hasSecret, isVercelCron } from '@/lib/cron-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { searchDeals, EbayItem } from '@/lib/ebay';
 import { topDeals, sellabilityScore, modelYear } from '@/lib/deal-score';
@@ -9,7 +10,6 @@ import { getSessionFromRequest as _unused } from '@/lib/session'; // eslint-disa
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const SECRET = process.env.DIGEST_SECRET ?? '';
 
 function escHtml(s: string): string {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -94,8 +94,7 @@ async function sendWatchlistAlert(
 }
 
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get('secret');
-  if (!SECRET || secret !== SECRET) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isVercelCron(req) && !hasSecret(req, 'DIGEST_SECRET')) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!process.env.EBAY_CLIENT_ID) {
     return NextResponse.json({ skipped: true, reason: 'eBay not configured' });

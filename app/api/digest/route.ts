@@ -1,3 +1,4 @@
+import { hasSecret, isVercelCron } from '@/lib/cron-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
@@ -38,7 +39,6 @@ const MIN_NET_PROFIT = 15;
 // Max slots one product type may take in a 5-item digest. Three of five went out
 // as wristwatches before this existed.
 const MAX_PER_DIGEST_CATEGORY = 2;
-const DIGEST_SECRET = process.env.DIGEST_SECRET ?? 'digest-2026';
 
 // Categories to search when live eBay API is available
 // maxPrice must be carried through — it is the only thing biasing eBay results
@@ -56,10 +56,9 @@ function todayKey(): string {
 }
 
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get('secret');
   const force  = req.nextUrl.searchParams.get('force') === '1';
 
-  if (secret !== DIGEST_SECRET) {
+  if (!isVercelCron(req) && !hasSecret(req, 'DIGEST_SECRET')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
