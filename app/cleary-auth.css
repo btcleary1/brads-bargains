@@ -1,6 +1,12 @@
 /* Cleary suite sign-in look, shared by every Cleary app (copied from Cleary Trading's "Mission control"
    auth styles). Everything is scoped under .cl-auth so it never touches the rest of the app.
    Keep this file identical in every app that uses it. */
+@font-face {
+  font-family: "Cleary Inter Tight";
+  src: url("./fonts/InterTight-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
 .cl-auth {
   --cl-bg: #0e0f11;
   --cl-surface: #16181b;
@@ -24,7 +30,7 @@
   padding: 24px 16px;
   background: var(--cl-bg);
   color: var(--cl-text);
-  font-family: "Inter Tight", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Cleary Inter Tight", "Inter Tight", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 .cl-auth * { box-sizing: border-box; }
 .cl-card {
@@ -60,7 +66,7 @@
 .cl-btn.google { background: var(--cl-text); border-color: var(--cl-text); color: #16181b; }
 .cl-btn.google:hover { background: #ffffff; }
 .cl-btn.ghost { background: transparent; border-color: transparent; color: var(--cl-muted); }
-.cl-passkey { display: grid; gap: 6px; justify-items: center; }
+.cl-passkey { display: grid; gap: 6px; }
 .cl-divider { display: flex; align-items: center; gap: 10px; color: var(--cl-muted); font-size: 12px; margin: 4px 0; }
 .cl-divider::before, .cl-divider::after { content: ""; flex: 1; height: 1px; background: var(--cl-border); }
 .cl-links { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
@@ -70,3 +76,6 @@
 .cl-check a { color: var(--cl-signal); }
 @keyframes cl-spin { to { transform: rotate(360deg); } }
 .cl-spin { animation: cl-spin 1s linear infinite; }
+/* Login pages: the footer matches the page, as in Cleary Trading. */
+body:has(.cl-auth) { background: #0e0f11; }
+body:has(.cl-auth) footer { background: #0e0f11 !important; border-top: 1px solid #2a2d32; font-family: "Cleary Inter Tight", "Inter Tight", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }

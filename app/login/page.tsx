@@ -5,8 +5,9 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import HumanCheck, { humanCheckOn, type HumanCheckHandle } from '@/components/HumanCheck';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GOOGLE_ERRORS } from '@/lib/google-config';
-import { Loader2, Fingerprint } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import '../cleary-auth.css';
+import { unlockName } from '@/lib/biometric';
 import { startAuthentication, startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import Link from 'next/link';
 
@@ -27,6 +28,8 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [supportsWebAuthn, setSupportsWebAuthn] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('Sign in with Biometrics');
+  const [bio, setBio] = useState('fingerprint, face, or screen lock');
+  useEffect(() => setBio(unlockName()), []);
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [biometricError, setBiometricError] = useState('');
   const [stage, setStage] = useState<Stage>('login');
@@ -144,18 +147,17 @@ function LoginPage() {
     setBiometricLoading(false);
   };
 
-  const bio = biometricLabel.replace(/^Sign in with /, '');
 
   if (stage === 'register-passkey') {
     return (
       <div className="cl-auth">
         <div className="cl-card">
-          <div className="cl-icon-tile"><Fingerprint className="w-6 h-6" /></div>
+          <div className="cl-icon-tile"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden><path d="M15 7a4 4 0 1 1-3.9 5H3v3h3v3h3v-3h2.1A4 4 0 0 1 15 7zm1 3h.01" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
           <h1>Create a passkey?</h1>
           <p className="cl-muted">Next time, log in with your {bio} on this device. No password to remember.</p>
           {error && <p role="alert" className="cl-error">{error}</p>}
           <button className="cl-btn primary" onClick={handleRegisterPasskey} disabled={loading}>
-            {loading ? <Loader2 className="w-4 h-4 cl-spin" /> : <Fingerprint className="w-4 h-4" />}
+            {loading ? <Loader2 className="w-4 h-4 cl-spin" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden><path d="M15 7a4 4 0 1 1-3.9 5H3v3h3v3h3v-3h2.1A4 4 0 0 1 15 7zm1 3h.01" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
             {loading ? 'Waiting for your device…' : 'Create a passkey'}
           </button>
           <button className="cl-btn ghost" onClick={() => router.push(redirectTo)}>
@@ -178,7 +180,7 @@ function LoginPage() {
         {supportsWebAuthn && (
           <div className="cl-passkey">
             <button className="cl-btn primary" onClick={handleBiometricLogin} disabled={biometricLoading}>
-              {biometricLoading ? <Loader2 className="w-4 h-4 cl-spin" /> : <Fingerprint className="w-4 h-4" />}
+              {biometricLoading ? <Loader2 className="w-4 h-4 cl-spin" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden><path d="M15 7a4 4 0 1 1-3.9 5H3v3h3v3h3v-3h2.1A4 4 0 0 1 15 7zm1 3h.01" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
               {biometricLoading ? 'Waiting for your device…' : 'Log in with a passkey'}
             </button>
             <span className="cl-muted cl-small">Use your {bio}</span>
