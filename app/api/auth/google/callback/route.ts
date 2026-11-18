@@ -3,10 +3,18 @@ import { getUserByEmail, createUser, userCount, markGoogleAuth, incrementLoginCo
 import { setSessionCookie } from '@/lib/session';
 import { logAudit, getClientIp } from '@/lib/audit';
 import { TERMS_OK_COOKIE } from '@/lib/legal';
+import { googleConfig, tokenErrorCode } from '@/lib/google-config';
 
 export const runtime = 'nodejs';
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app';
+const CFG = googleConfig();
+const APP_URL = CFG.ok ? CFG.appUrl : 'https://brads-bargains.vercel.app';
+
+class GoogleTokenError extends Error {
+  constructor(public code: string, body: string) {
+    super(`Google token exchange failed: ${body}`);
+  }
+}
 
 async function exchangeCodeForTokens(code: string): Promise<{ access_token: string; id_token: string }> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -14,15 +22,15 @@ async function exchangeCodeForTokens(code: string): Promise<{ access_token: stri
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: CFG.ok ? CFG.clientId : '',
+      client_secret: CFG.ok ? CFG.secret : '',
       redirect_uri: `${APP_URL}/api/auth/google/callback`,
       grant_type: 'authorization_code',
     }),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Google token exchange failed: ${text}`);
+    throw new GoogleTokenError(tokenErrorCode(text), text);
   }
   return res.json();
 }
@@ -44,6 +52,7 @@ export async function GET(req: NextRequest) {
   if (error || !code) {
     return NextResponse.redirect(`${APP_URL}/login?error=google_cancelled`);
   }
+  if (!CFG.ok) return NextResponse.redirect(`${APP_URL}/login?error=${CFG.error}`);
 
   try {
     const { access_token } = await exchangeCodeForTokens(code);
@@ -89,6 +98,6 @@ export async function GET(req: NextRequest) {
     return res;
   } catch (err) {
     console.error('Google OAuth error:', err);
-    return NextResponse.redirect(`${APP_URL}/login?error=google_failed`);
+    return NextResponse.redirect(`${APP_URL}/login?error=${err instanceof GoogleTokenError ? err.code : 'google_failed'}`);
   }
 }
