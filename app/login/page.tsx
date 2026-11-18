@@ -118,11 +118,7 @@ function LoginPage() {
     setBiometricLoading(true);
     setBiometricError('');
     try {
-      const optRes = await fetch('/api/auth/webauthn/auth-options', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() || undefined }),
-      });
+      const optRes = await fetch('/api/auth/webauthn/auth-options', { method: 'POST' });
       const options = await optRes.json();
       if (!optRes.ok) { setBiometricError(options.error); setBiometricLoading(false); return; }
       const assertion = await startAuthentication({ optionsJSON: options, useBrowserAutofill: false });
@@ -140,7 +136,7 @@ function LoginPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('NotAllowedError') || msg.includes('cancelled') || msg.includes('not allowed')) {
-        setBiometricError('No passkey found. Sign in with email, then enable Touch ID in Settings.');
+        setBiometricError("No passkey for this app on this phone yet, or it was cancelled. Log in with Google or email once, and we'll offer to set up Face ID.");
       } else {
         setBiometricError(msg);
       }
