@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import AccountCard from '@/components/AccountCard';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus, SlidersHorizontal, Filter, ShoppingBag, Link2Off, MessageSquarePlus } from 'lucide-react';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
@@ -536,6 +537,8 @@ function SettingsContent() {
             <p className="text-xs" style={{ color: '#6B7280' }}>Manage your account</p>
           </div>
         </div>
+
+        <AccountCard theme="dark" />
 
         {/* Biometrics */}
         {supportsWebAuthn && (

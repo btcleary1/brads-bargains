@@ -4,7 +4,7 @@ import SuiteMark from '@/components/SuiteMark';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Zap, Search, BarChart2, LogOut, Settings, Ticket } from 'lucide-react';
+import { Zap, Search, BarChart2, Settings, Ticket } from 'lucide-react';
 
 const navItems = [
   { href: '/deals',   label: 'Find Deals', icon: Search },
@@ -35,10 +35,6 @@ export default function Header() {
     }
   }, []);
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    window.location.href = '/login';
-  };
 
   return (
     <>
@@ -89,13 +85,6 @@ export default function Header() {
               >
                 <Settings className="w-4 h-4" />
               </Link>
-              <button
-                onClick={handleLogout}
-                className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-200 transition-all"
-                style={{ minHeight: 'unset' }}
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
             </div>
 
             {/* Mobile top-right */}
@@ -103,9 +92,6 @@ export default function Header() {
               <Link href="/settings" className="flex items-center justify-center w-9 h-9 rounded-xl text-white" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)' }}>
                 <Settings className="w-5 h-5" />
               </Link>
-              <button onClick={handleLogout} className="flex items-center justify-center w-9 h-9 rounded-xl text-white" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', minHeight: 'unset' }}>
-                <LogOut className="w-5 h-5" />
-              </button>
             </div>
           </div>
         </div>
