@@ -2,6 +2,10 @@
 const nextConfig = {
   devIndicators: false,
   poweredByHeader: false,
+  // Ticket Finder is hidden: its page sends people to Find Deals (temporary, so it can come back).
+  async redirects() {
+    return [{ source: '/tickets', destination: '/deals', permanent: false }];
+  },
   async headers() {
     return [
       {

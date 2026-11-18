@@ -4,12 +4,13 @@ import SuiteMark from '@/components/SuiteMark';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Zap, Search, BarChart2, Settings, Ticket } from 'lucide-react';
+import { Zap, Search, BarChart2, Settings } from 'lucide-react';
 
-const navItems = [
+const navItems: { href: string; label: string; icon: typeof Search; adminOnly?: boolean }[] = [
   { href: '/deals',   label: 'Find Deals', icon: Search },
   { href: '/tracker', label: 'Tracker',    icon: BarChart2 },
-  { href: '/tickets', label: 'Tickets',    icon: Ticket, adminOnly: true },
+  // Ticket Finder is hidden (Brad, Nov 2026). Its page redirects to /deals in next.config.js; the code
+  // stays in app/tickets and lib/tickets.ts. To bring it back: restore this line and remove the redirect.
 ];
 
 export default function Header() {
