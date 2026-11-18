@@ -4,6 +4,7 @@ import SuiteMark from '@/components/SuiteMark';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import HumanCheck, { humanCheckOn, type HumanCheckHandle } from '@/components/HumanCheck';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { GOOGLE_ERRORS } from '@/lib/google-config';
 import { Zap, Loader2, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { startAuthentication, startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import Link from 'next/link';
@@ -42,6 +43,10 @@ function LoginPage() {
     else if (/Mac/.test(ua) && !/CrOS/.test(ua)) setBiometricLabel('Sign in with Touch ID');
     else if (/CrOS/.test(ua)) setBiometricLabel('Sign in with Screen Lock');
     else if (/Win/.test(ua)) setBiometricLabel('Sign in with Windows Hello');
+
+    // A Google sign-in that failed comes back with ?error=; say why.
+    const gErr = searchParams.get('error') ?? '';
+    if (GOOGLE_ERRORS[gErr]) setError(GOOGLE_ERRORS[gErr]);
 
     // After Google OAuth, check if passkey is already set up — offer setup if not
     if (searchParams.get('setup-passkey') === '1') {

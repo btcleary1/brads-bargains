@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TERMS_OK_COOKIE } from '@/lib/legal';
+import { googleConfig } from '@/lib/google-config';
 
 export const runtime = 'nodejs';
 
 // Redirects the user to Google's OAuth consent screen
 export async function GET(req: NextRequest) {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    return NextResponse.json({ error: 'Google login not configured.' }, { status: 500 });
-  }
-
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://brads-bargains.vercel.app'}/api/auth/google/callback`;
+  const cfg = googleConfig();
+  if (!cfg.ok) return NextResponse.redirect(new URL(`/login?error=${cfg.error}`, req.url));
+  const clientId = cfg.clientId;
+  const redirectUri = `${cfg.appUrl}/api/auth/google/callback`;
 
   const redirect = req.nextUrl.searchParams.get('redirect') ?? '';
   const safeRedirect = redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '';
