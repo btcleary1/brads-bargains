@@ -2,14 +2,14 @@ import { getEbayToken, parsePrice } from './ebay';
 
 const EBAY_API_BASE = 'https://api.ebay.com';
 
-export interface SoldComp {
+interface SoldComp {
   title: string;
   soldPrice: number;
   condition: string;
   soldDate: string | null;
 }
 
-export interface CompsResult {
+interface CompsResult {
   comps: SoldComp[];
   avgSoldPrice: number;
   medianSoldPrice: number;

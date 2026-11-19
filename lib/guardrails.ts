@@ -9,9 +9,9 @@
 // "Ford Escort", "Zuni fetish", "pussy willow". Judge the meaning, not the words.
 // Every new field where someone can type and save text goes through screenSaved() in the same change.
 
-export type Flag = 'crisis' | 'minors' | 'sensitive' | 'violence' | 'illegal' | 'drugs' | 'hacking' | 'sexual' | 'hate' | 'foul' | 'counterfeit' | 'marketplace';
+type Flag = 'crisis' | 'minors' | 'sensitive' | 'violence' | 'illegal' | 'drugs' | 'hacking' | 'sexual' | 'hate' | 'foul' | 'counterfeit' | 'marketplace';
 
-export const CANT_SAVE = "I can't save that here.";
+const CANT_SAVE = "I can't save that here.";
 const SENSITIVE = "Don't share that here. The app doesn't need it.";
 
 // Regexes with lookbehind are built from strings so the ES2017 compile target accepts them.
@@ -163,7 +163,7 @@ export function screen(text: string): { flag: Flag } | null {
   return null;
 }
 
-export type SavedCheck = { ok: true } | { ok: false; error: string };
+type SavedCheck = { ok: true } | { ok: false; error: string };
 
 // Screen only (fast, no AI). `ok` lists flags that are fine in this field (a bug report may describe a
 // counterfeit listing the app showed, for example).

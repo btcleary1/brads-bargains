@@ -1,4 +1,4 @@
-export interface PasswordValidation {
+interface PasswordValidation {
   valid: boolean;
   errors: string[];
 }

@@ -18,7 +18,7 @@
  * a selector that spreads picks across it.
  */
 
-export interface DiversityItem {
+interface DiversityItem {
   itemId: string;
   title: string;
   category?: string;
@@ -57,7 +57,7 @@ const DIVERSITY_PATTERNS: { pattern: RegExp; key: string }[] = [
  * either cap unrelated items against each other or, if exempted, let an entire
  * unclassified product type take every slot — which is the failure being fixed.
  */
-export function diversityCategory(item: DiversityItem): string {
+function diversityCategory(item: DiversityItem): string {
   const text = `${item.title} ${item.category ?? ''}`;
   for (const { pattern, key } of DIVERSITY_PATTERNS) {
     if (pattern.test(text)) return key;
@@ -77,7 +77,7 @@ const STOPWORDS = new Set([
   'condition', 'excellent', 'vintage', 'rare', 'original', 'genuine', 'authentic',
 ]);
 
-export interface DiversifyOptions<T> {
+interface DiversifyOptions<T> {
   /** How many to return. */
   limit: number;
   /** Ranking signal; higher is better. Ties keep input order. */

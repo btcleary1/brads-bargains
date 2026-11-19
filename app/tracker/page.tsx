@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import {
-  BarChart2, Loader2, ShoppingCart, Tag, TrendingUp, DollarSign,
+  BarChart2, Loader2, ShoppingCart, Tag, TrendingUp,
   ClipboardCopy, Check, ExternalLink, X, ChevronDown, AlertCircle, Lightbulb, FlaskConical,
 } from 'lucide-react';
 
@@ -124,7 +124,6 @@ function DealCard({
   const [expanded, setExpanded] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [localDeal, setLocalDeal] = useState(deal);
   const [coachLoading, setCoachLoading] = useState(false);
@@ -160,7 +159,6 @@ function DealCard({
   const updateField = async (patch: Partial<TrackerDeal>) => {
     const updated = { ...localDeal, ...patch };
     setLocalDeal(updated);
-    setSaving(true);
     setSaveError('');
     const res = await fetch('/api/tracker', {
       method: 'POST',
@@ -173,7 +171,6 @@ function DealCard({
       const d = await res.json().catch(() => ({}));
       setSaveError(d.error || "Couldn't save. Try again.");
     }
-    setSaving(false);
   };
 
   const generateDraft = async () => {

@@ -10,7 +10,7 @@ import { extractModelQuery } from './extract-model';
 import { searchMacBidSold } from './macbid';
 import { searchVistaAuctionSold } from './vista-auction';
 
-export interface MultiSourceCompsResult {
+interface MultiSourceCompsResult {
   weightedAvgSoldPrice: number;
   ebayAvg: number | null;
   ebayCount: number;

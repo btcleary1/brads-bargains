@@ -1,6 +1,6 @@
 import { r2Put } from './r2';
 
-export type AuditAction =
+type AuditAction =
   | 'login_success'
   | 'login_failure'
   | 'logout'
@@ -12,7 +12,7 @@ export type AuditAction =
   | 'admin_password_reset'
   | 'admin_user_deleted';
 
-export interface AuditEntry {
+interface AuditEntry {
   timestamp: string;
   userId: string;
   email: string;

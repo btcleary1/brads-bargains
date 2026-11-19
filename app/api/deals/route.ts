@@ -54,7 +54,8 @@ export async function GET(req: NextRequest) {
       } catch (e) {
         const msg = String(e);
         if (msg.includes('Too many requests') || msg.includes('2001')) ebayRateLimited = true;
-        raw = MOCK_DEALS.filter(i => i.title.toLowerCase().includes(query.toLowerCase()) || query === '*' || query === '');
+        // Never show sample listings as real deals when eBay is down.
+        raw = [];
       }
     }
 

@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 // labelled "Log out" button. Logging out isn't destructive (Face ID or Google gets you back in),
 // so no red and no confirm; it ends the session, clears this tab's cached data and fully reloads
 // to the login page so nothing from this session stays in memory.
-export async function logOut() {
+async function logOut() {
   await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
   try {
     sessionStorage.clear();

@@ -1,6 +1,6 @@
 import { r2Get, r2Put, r2Del } from './r2';
 
-export interface StoredCredential {
+interface StoredCredential {
   id: string;
   publicKey: string; // base64
   counter: number;

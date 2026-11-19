@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { getDeals, saveDeals } from '@/lib/tracker-data';
-import { getItemDetail } from '@/lib/ebay';
 
 export const runtime = 'nodejs';
 
@@ -17,13 +16,6 @@ export async function POST(req: NextRequest) {
   const deal = deals.find(d => d.id === dealId);
   if (!deal) return NextResponse.json({ error: 'Deal not found.' }, { status: 404 });
 
-  // Fetch fresh eBay details for richer description
-  let ebayDetail = null;
-  try {
-    ebayDetail = await getItemDetail(deal.ebayItemId);
-  } catch { /* use tracker data as fallback */ }
-
-  const item = ebayDetail ?? deal;
   const sellPrice = deal.sellTargetPrice ?? (deal.marketPrice ? Math.round(deal.marketPrice * 0.85) : Math.round(deal.ebayPrice * 1.3));
   const condition = deal.condition || 'Good';
 

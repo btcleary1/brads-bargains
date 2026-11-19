@@ -4,7 +4,7 @@
 // Skipped until both NEXT_PUBLIC_TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY are set, then enforced.
 const env = (n: string) => (process.env[n] || "").trim() || undefined;
 
-export function turnstileOn(): boolean {
+function turnstileOn(): boolean {
   return Boolean(env("TURNSTILE_SECRET_KEY") && env("NEXT_PUBLIC_TURNSTILE_SITE_KEY"));
 }
 

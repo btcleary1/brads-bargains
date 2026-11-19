@@ -10,7 +10,7 @@ import { diversifySelection } from './digest-diversity';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-export interface OrchestratorResult {
+interface OrchestratorResult {
   rankedItemIds: string[];   // ordered best-first, up to maxItems
   reasoning: string;
 }

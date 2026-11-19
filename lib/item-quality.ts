@@ -41,11 +41,11 @@ const INCOMPLETE_RE = new RegExp([
  */
 const REPLICA_RE = /\b(?:homage|tribute|replica|reproduction|inspired\s+by|in\s+the\s+style\s+of|not\s+genuine|unbranded)\b|\b(?:diver|divers|submariner|daytona|watch|rolex|seiko|omega|speedmaster|nautilus|royal\s+oak)['\u2019s]*\s+(?:look|style)\b/i;
 
-export function isReplicaStyled(title: string): boolean {
+function isReplicaStyled(title: string): boolean {
   return REPLICA_RE.test(title);
 }
 
-export function isIncompleteItem(title: string): boolean {
+function isIncompleteItem(title: string): boolean {
   return INCOMPLETE_RE.test(title);
 }
 
@@ -81,7 +81,7 @@ async function fetchItemDescription(itemId: string): Promise<string | null> {
   }
 }
 
-export interface QualityResult {
+interface QualityResult {
   broken: boolean;
   reason: string | null;
 }
