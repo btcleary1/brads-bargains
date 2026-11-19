@@ -125,6 +125,7 @@ function DealCard({
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [localDeal, setLocalDeal] = useState(deal);
   const [coachLoading, setCoachLoading] = useState(false);
   const [coach, setCoach] = useState<CoachResult | null>(null);
@@ -160,14 +161,17 @@ function DealCard({
     const updated = { ...localDeal, ...patch };
     setLocalDeal(updated);
     setSaving(true);
+    setSaveError('');
     const res = await fetch('/api/tracker', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     });
     if (res.ok) {
-      const data = await res.json();
       onUpdate(updated);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setSaveError(d.error || "Couldn't save. Try again.");
     }
     setSaving(false);
   };
@@ -463,6 +467,7 @@ function DealCard({
                 className="w-full px-3 py-2 rounded-xl text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
               />
+              {saveError && <p className="text-xs mt-1.5" style={{ color: '#F87171' }}>{saveError}</p>}
             </div>
 
             {/* Listing draft */}

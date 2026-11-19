@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { r2Get, r2Put } from '@/lib/r2';
+import { checkSaved } from '@/lib/guardrails';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +26,10 @@ export async function POST(req: NextRequest) {
   if (!type || !title?.trim() || !description?.trim()) {
     return NextResponse.json({ error: 'Type, title, and description are required.' }, { status: 400 });
   }
+
+  // A bug report may describe a counterfeit or stolen listing the app showed, so those topics are fine here.
+  const saved = await checkSaved([title, description], 'feedback', ['counterfeit', 'marketplace']);
+  if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: 400 });
 
   const entries = (await r2Get<FeedbackEntry[]>(FEEDBACK_PATH)) ?? [];
   const entry: FeedbackEntry = {

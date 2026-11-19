@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { getDeals, saveDeals, TrackerDeal } from '@/lib/tracker-data';
 import { randomBytes } from 'crypto';
+import { checkSaved } from '@/lib/guardrails';
 
 export const runtime = 'nodejs';
 
@@ -26,12 +27,21 @@ export async function POST(req: NextRequest) {
     }
     // Cap notes length
     if (body.notes && typeof body.notes === 'string') body.notes = body.notes.slice(0, 5000);
+    const before = deals.find(d => d.id === body.id);
+    if (typeof body.notes === 'string' && body.notes !== before?.notes) {
+      const saved = await checkSaved([body.notes], 'tracker-notes');
+      if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: 400 });
+    }
     const updated = deals.map(d => d.id === body.id ? { ...d, ...body } : d);
     await saveDeals(session.userId, updated);
     return NextResponse.json({ success: true, deals: updated });
   }
 
   // Add new
+  if (typeof body.notes === 'string' && body.notes.trim()) {
+    const saved = await checkSaved([body.notes], 'tracker-notes');
+    if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: 400 });
+  }
   const newDeal: TrackerDeal = {
     id: randomBytes(8).toString('hex'),
     ebayItemId: body.ebayItemId ?? '',

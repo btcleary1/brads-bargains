@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { getSavedSearches, saveSavedSearches, SavedSearch } from '@/lib/tracker-data';
 import { randomUUID } from 'crypto';
+import { screenSaved } from '@/lib/guardrails';
 
 export const runtime = 'nodejs';
 
@@ -20,6 +21,9 @@ export async function POST(req: NextRequest) {
   const { query } = body;
   const minDiscount = Math.max(0, Math.min(100, Number(body.minDiscount ?? 60) || 60));
   if (!query?.trim()) return NextResponse.json({ error: 'query required' }, { status: 400 });
+
+  const saved = screenSaved(query);
+  if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: 400 });
 
   const searches = await getSavedSearches(session.userId);
   if (searches.some(s => s.query.toLowerCase() === query.trim().toLowerCase())) {
