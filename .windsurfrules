@@ -39,3 +39,7 @@ After completing any code task, always run these steps before saying you're done
 - eBay user-level OAuth: `lib/ebay-user.ts` (authorization code, for purchase history)
 - Deal filtering logic lives in `lib/deal-score.ts` — `FilterPrefs` controls all configurable thresholds
 - User preferences saved as `deal-wiz/{userId}/prefs.json`
+
+## Guardrails on every typed field
+
+Any new field where a user can type and save text, or chat, must run the text through `screenSaved()` / `checkSaved()` from `lib/guardrails.ts` in the same change, with tests in `scripts/test-guardrails.mts`. See CLAUDE.md.

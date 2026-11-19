@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { getUserPrefs, saveUserPrefs } from '@/lib/tracker-data';
+import { newStrings, screenSaved } from '@/lib/guardrails';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +25,9 @@ export async function POST(req: NextRequest) {
       body.notificationEmail = email || undefined;
     }
     const current = await getUserPrefs(session.userId);
+    // Keywords people exclude ("fake rolex") name the very things they want to avoid, so those topics are fine here.
+    const refused = newStrings(body, current).map((t) => screenSaved(t, ['counterfeit', 'marketplace'])).find((r) => !r.ok);
+    if (refused && !refused.ok) return NextResponse.json({ error: refused.error }, { status: 400 });
     const updated = { ...current, ...body };
     await saveUserPrefs(session.userId, updated);
     return NextResponse.json({ success: true, prefs: updated });

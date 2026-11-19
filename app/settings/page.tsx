@@ -90,12 +90,12 @@ function SettingsContent() {
     setFbMessage(null);
     try {
       const res = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: fbType, title: fbTitle, description: fbDesc }) });
-      if (!res.ok) throw new Error('Failed to submit');
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to submit feedback. Please try again.');
       setFbMessage({ type: 'success', text: 'Feedback submitted — thank you!' });
       setFbTitle('');
       setFbDesc('');
-    } catch {
-      setFbMessage({ type: 'error', text: 'Failed to submit feedback. Please try again.' });
+    } catch (e) {
+      setFbMessage({ type: 'error', text: (e as Error).message || 'Failed to submit feedback. Please try again.' });
     } finally {
       setFbLoading(false);
     }

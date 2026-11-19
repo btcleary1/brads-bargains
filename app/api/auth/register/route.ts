@@ -1,6 +1,7 @@
 import { HUMAN_CHECK_FAILED, isBotTrap, verifyHuman } from '@/lib/turnstile';
 import { NextRequest, NextResponse } from 'next/server';
 import { createUser, userCount } from '@/lib/users';
+import { screenSaved } from '@/lib/guardrails';
 import { validatePassword } from '@/lib/password-rules';
 import { setSessionCookie } from '@/lib/session';
 import { checkRateLimit, recordFailure } from '@/lib/rate-limit';
@@ -18,6 +19,8 @@ export async function POST(req: NextRequest) {
     if (agreed !== true) return NextResponse.json({ error: 'You must agree to the Terms and Privacy Policy.' }, { status: 400 });
     if (!email || !name || !password)
       return NextResponse.json({ error: 'Email, name, and password are required.' }, { status: 400 });
+    const savedName = screenSaved(String(name).slice(0, 80));
+    if (!savedName.ok) return NextResponse.json({ error: savedName.error }, { status: 400 });
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email))
