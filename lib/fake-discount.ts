@@ -1,6 +1,6 @@
 import { EbayItem } from './ebay';
 
-export interface DiscountQuality {
+interface DiscountQuality {
   quality: 'verified' | 'suspicious' | 'inflated' | 'unknown';
   reason: string | null;
 }

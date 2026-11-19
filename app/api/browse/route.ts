@@ -477,11 +477,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ items: [], generatedAt: new Date().toISOString(), fromCache: false });
     }
 
-    // Track personalized candidates before comps so we can pass them through even if 'skip'
-    const personalizedCandidateIds = new Set([
-      ...savedSearchItems.map(i => i.itemId),
-      ...interestItems.map(i => i.itemId),
-    ]);
 
     // Run sold comps on all candidates in parallel
     const flipResults = await Promise.allSettled(candidates.map(item => quickFlipVerdict(item)));

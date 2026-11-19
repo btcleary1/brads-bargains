@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import AccountCard from '@/components/AccountCard';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Settings, Fingerprint, Loader2, Eye, EyeOff, Trash2, KeyRound, Bell, BookmarkPlus, X, Plus, SlidersHorizontal, Filter, ShoppingBag, Link2Off, MessageSquarePlus } from 'lucide-react';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
 import { startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
@@ -10,7 +10,6 @@ import Header from '@/components/Header';
 
 function SettingsContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [registered, setRegistered] = useState<boolean | null>(null);
   const [authLoading, setAuthLoading] = useState(false);

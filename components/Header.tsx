@@ -4,7 +4,7 @@ import SuiteMark from '@/components/SuiteMark';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Zap, Search, BarChart2, Settings } from 'lucide-react';
+import { Search, BarChart2, Settings } from 'lucide-react';
 
 const navItems: { href: string; label: string; icon: typeof Search; adminOnly?: boolean }[] = [
   { href: '/deals',   label: 'Find Deals', icon: Search },

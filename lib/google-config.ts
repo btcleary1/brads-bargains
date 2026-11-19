@@ -8,7 +8,7 @@ function clean(name: string): string {
   return v.replace(/^["']|["']$/g, '').trim();
 }
 
-export type GoogleError = 'google_not_configured' | 'google_bad_client_id' | 'google_bad_app_url';
+type GoogleError = 'google_not_configured' | 'google_bad_client_id' | 'google_bad_app_url';
 
 export function googleConfig(): { ok: true; clientId: string; secret: string; appUrl: string } | { ok: false; error: GoogleError } {
   const clientId = clean('GOOGLE_CLIENT_ID');

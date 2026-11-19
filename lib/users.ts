@@ -4,7 +4,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 const PREFIX = 'deal-wiz/users/';
 const INDEX_PATH = 'deal-wiz/users-index.json';
 
-export interface User {
+interface User {
   userId: string;
   email: string;
   name: string;
@@ -18,7 +18,7 @@ export interface User {
   lastLoginAt?: string;
 }
 
-export type PublicUser = Omit<User, 'passwordHash'>;
+type PublicUser = Omit<User, 'passwordHash'>;
 
 // Legacy SHA256 hash — only used for migration verification
 function sha256Hash(password: string): string {
@@ -27,7 +27,7 @@ function sha256Hash(password: string): string {
 }
 
 // Current secure hash — scrypt with per-user random salt
-export function hashPassword(password: string): { hash: string; salt: string } {
+function hashPassword(password: string): { hash: string; salt: string } {
   const salt = randomBytes(32).toString('hex');
   const hash = scryptSync(password, salt, 64).toString('hex');
   return { hash, salt };

@@ -332,7 +332,6 @@ function StatsCluster({
   if (mercariAvgSold) sources.push({ name: 'Mercari', price: mercariAvgSold });
   if (amazonPrice) sources.push({ name: 'Amazon', price: amazonPrice });
   if (fbMarketplaceAvg) sources.push({ name: 'FB Mkt', price: fbMarketplaceAvg });
-  const siteCount = sourcesCount ?? (sources.length > 0 ? sources.length : null);
 
   const multiSource = sources.length > 1;
 
@@ -987,7 +986,6 @@ function DealsPageContent() {
   const [recommendation, setRecommendation] = useState<string | null>(null);
   const [pickedItemId, setPickedItemId] = useState<string | null>(null);
   const [pickedFlip, setPickedFlip] = useState<CompsVerdict | null>(null);
-  const [pickedFlipLoading, setPickedFlipLoading] = useState(false);
   const [recLoading, setRecLoading] = useState(false);
   const [trending, setTrending] = useState<TrendingItem[]>([]);
   const [trendingSummary, setTrendingSummary] = useState('');
@@ -1302,7 +1300,6 @@ function DealsPageContent() {
               // Exhausted — show original pick without flip badge
               setRecommendation(originalRec);
               setPickedItemId(pid);
-              setPickedFlipLoading(false);
               return;
             }
             const item = candidates[idx];
@@ -1318,7 +1315,6 @@ function DealsPageContent() {
                 setPickedItemId(null);
                 setPickedFlip(null);
                 setRecommendation('No strong flip found in current results — comps suggest low resale margin on top items.');
-                setPickedFlipLoading(false);
                 setRecLoading(false);
               } else {
                 setPickedItemId(item.itemId);
@@ -1329,22 +1325,19 @@ function DealsPageContent() {
                 } else {
                   setRecommendation(originalRec);
                 }
-                setPickedFlipLoading(false);
                 setRecLoading(false);
               }
             }).catch(() => {
               setRecommendation(originalRec);
               setPickedItemId(pid);
-              setPickedFlipLoading(false);
               setRecLoading(false);
             });
           };
 
-          setPickedFlipLoading(true);
           const startIdx = pid ? Math.max(0, sortedForAI.findIndex(i => i.itemId === pid || pid.includes(i.itemId) || i.itemId.includes(pid))) : 0;
           tryFlip(sortedForAI.slice(startIdx), 0, recText);
 
-        }).catch(() => { setPickedFlipLoading(false); setRecLoading(false); });
+        }).catch(() => { setRecLoading(false); });
       }
     } catch (e: any) {
       setError(e.message);
@@ -1459,7 +1452,6 @@ function DealsPageContent() {
     const quantityScore = qty <= 1 ? 30 : qty <= 3 ? 20 : qty <= 10 ? 10 : 0;
     const pct = item.discountPct ?? 0;
     const discountScore = pct >= 80 ? 25 : pct >= 70 ? 20 : pct >= 60 ? 14 : pct >= 50 ? 8 : 3;
-    const liquidityMap: Record<string, number> = { phone: 100, laptop: 95, gaming: 90, tablet: 85, audio: 80, watch: 80, camera: 70, cards: 75, lego: 65, comic: 50, vintage: 40 };
     const text = `${item.title} ${item.category}`.toLowerCase();
     let liq = 55;
     if (/iphone|samsung.*phone|pixel/.test(text)) liq = 100;

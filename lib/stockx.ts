@@ -9,7 +9,7 @@ const ALGOLIA_APP_ID = 'XW7SBCT9V6';
 const ALGOLIA_SEARCH_KEY = '6b5e76b8de8bf9f8d7f4c09a726c1c5f';
 const ALGOLIA_URL = `https://${ALGOLIA_APP_ID}-dsn.algolia.net/1/indexes/products/query`;
 
-export interface StockXResult {
+interface StockXResult {
   name: string;
   lastSalePrice: number;
   lowestAsk: number | null;

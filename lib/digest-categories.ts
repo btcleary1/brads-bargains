@@ -1,4 +1,4 @@
-export interface DigestCategory {
+interface DigestCategory {
   key: string;
   label: string;
   query: string;

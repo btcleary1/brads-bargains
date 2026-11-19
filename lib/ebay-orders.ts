@@ -1,13 +1,13 @@
 import { getEbayUserTokens, saveEbayUserTokens } from './tracker-data';
 import { refreshEbayUserToken, getEbayPurchaseHistory, getEbaySavedSearches } from './ebay-user';
 
-export interface OrderLineItem {
+interface OrderLineItem {
   title: string;
   quantity: number;
   price: number | null;
 }
 
-export interface Order {
+interface Order {
   orderId: string;
   date: string;
   items: OrderLineItem[];
@@ -36,7 +36,7 @@ async function getToken(userId: string): Promise<string | null> {
   return tokens.accessToken;
 }
 
-export async function fetchEbayOrders(userId: string): Promise<Order[]> {
+async function fetchEbayOrders(userId: string): Promise<Order[]> {
   const token = await getToken(userId);
   if (!token) return [];
 

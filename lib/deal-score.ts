@@ -1,9 +1,9 @@
 import { EbayItem } from './ebay';
 
 // eBay final value fee + payment processing (~15% total)
-export const EBAY_FEE_RATE = 0.15;
+const EBAY_FEE_RATE = 0.15;
 /** Share of sale price left after eBay fees. Import this instead of writing 0.85 inline. */
-export const NET_MULTIPLIER = 1 - EBAY_FEE_RATE;
+const NET_MULTIPLIER = 1 - EBAY_FEE_RATE;
 
 /** Net profit on a resale, after fees, purchase price and inbound shipping. */
 export function netProfitFrom(salePrice: number, buyPrice: number, shipping = 0): number {
@@ -505,7 +505,7 @@ export function sellabilityLabel(score: number): { label: string; color: string;
 /**
  * Score a deal 0-100 for buy-low-sell-high flipping.
  */
-export function scoreDeal(item: EbayItem): number {
+function scoreDeal(item: EbayItem): number {
   if (!item.discountPct || !item.marketPrice) return 0;
 
   const profitComponent    = profitScore(item)               * 0.45;

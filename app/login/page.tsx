@@ -27,7 +27,6 @@ function LoginPage() {
   const human = useRef<HumanCheckHandle>(null);
   const [loading, setLoading] = useState(false);
   const [supportsWebAuthn, setSupportsWebAuthn] = useState(false);
-  const [biometricLabel, setBiometricLabel] = useState('Sign in with Biometrics');
   const [bio, setBio] = useState('fingerprint, face, or screen lock');
   useEffect(() => setBio(unlockName()), []);
   const [biometricLoading, setBiometricLoading] = useState(false);
@@ -36,11 +35,6 @@ function LoginPage() {
 
   useEffect(() => {
     setSupportsWebAuthn(browserSupportsWebAuthn());
-    const ua = navigator.userAgent;
-    if (/iPhone|iPad|iPod/.test(ua)) setBiometricLabel('Sign in with Face ID');
-    else if (/Mac/.test(ua) && !/CrOS/.test(ua)) setBiometricLabel('Sign in with Touch ID');
-    else if (/CrOS/.test(ua)) setBiometricLabel('Sign in with Screen Lock');
-    else if (/Win/.test(ua)) setBiometricLabel('Sign in with Windows Hello');
 
     // A Google sign-in that failed comes back with ?error=; say why.
     const gErr = searchParams.get('error') ?? '';

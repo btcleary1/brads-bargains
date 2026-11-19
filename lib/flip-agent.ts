@@ -11,7 +11,7 @@ import { r2Get, r2Put } from './r2';
 import { computeVerdict, MIN_SOLD_COMPS, MAX_DAYS_TO_SELL, SLOW_SALE_DAYS } from './flip-verdict';
 import { createHash } from 'crypto';
 
-export interface CompsVerdict {
+interface CompsVerdict {
   verdict: 'buy' | 'skip' | 'maybe';
   avgSoldPrice: number;
   soldCount: number;
@@ -34,7 +34,7 @@ export interface CompsVerdict {
 
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
 
-export function flipCacheKey(title: string, price: number): string {
+function flipCacheKey(title: string, price: number): string {
   const hash = createHash('sha256').update(`${title.toLowerCase().trim()}:${Math.round(price)}`).digest('hex').slice(0, 16);
   return `deal-wiz/comps-cache/${hash}.json`;
 }

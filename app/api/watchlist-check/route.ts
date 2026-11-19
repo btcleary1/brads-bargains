@@ -5,7 +5,6 @@ import { topDeals, sellabilityScore, modelYear } from '@/lib/deal-score';
 import { getAllUsers } from '@/lib/users';
 import { getSavedSearches, saveSavedSearches, getUserPrefs } from '@/lib/tracker-data';
 import { sendPushToSubscriptions } from '@/lib/push-notify';
-import { getSessionFromRequest as _unused } from '@/lib/session'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;

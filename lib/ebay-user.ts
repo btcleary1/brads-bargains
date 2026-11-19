@@ -62,7 +62,7 @@ export function getEbayUserAuthUrl(redirectUri: string, state: string): string {
 
 // ── Token exchange ────────────────────────────────────────────────────────────
 
-export interface EbayTokenResponse {
+interface EbayTokenResponse {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
@@ -136,7 +136,7 @@ export async function refreshEbayUserToken(refreshToken: string): Promise<{ acce
 
 // ── Purchase history via Trading API (SOAP) ───────────────────────────────────
 
-export interface PurchasedEbayItem {
+interface PurchasedEbayItem {
   itemId: string;
   title: string;
   categoryName: string;

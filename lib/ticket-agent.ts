@@ -9,13 +9,13 @@ import { findEvent, buildMarketplaceLinks, TicketEvent } from './tickets';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-export interface SeatGroup {
+interface SeatGroup {
   size: number;
   targetPricePerSeat: number | null;
   note: string;
 }
 
-export interface TicketPlan {
+interface TicketPlan {
   event: TicketEvent;
   totalRequested: number;
   hasPriceData: boolean;

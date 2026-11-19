@@ -5,9 +5,9 @@
 // selection stage used the loosest set and the display stage used the strictest,
 // so items were picked as "buy" and then rendered as "skip" in the same email.
 
-export type Verdict = 'buy' | 'maybe' | 'skip';
+type Verdict = 'buy' | 'maybe' | 'skip';
 
-export interface VerdictInput {
+interface VerdictInput {
   netProfit: number;
   marginPct: number;
   soldCount: number;
@@ -23,14 +23,14 @@ export const MAX_DAYS_TO_SELL = 60;
 // Slower than this is still viable but never a "buy".
 export const SLOW_SALE_DAYS = 30;
 // Below this the margin does not cover the risk of the estimate being wrong.
-export const MIN_VIABLE_PROFIT = 10;
+const MIN_VIABLE_PROFIT = 10;
 
 // A listing that has sat this long, while the comps claim a large margin, is
 // evidence against its own thesis: if the item were really worth twice what it
 // is listed at, the market had ample time to take it. A Seiko "Diver's Look"
 // went out as AI Pick of the Day at +102% margin having sat unsold for 76 days.
-export const STALE_LISTING_DAYS = 45;
-export const SUSPICIOUS_MARGIN_PCT = 60;
+const STALE_LISTING_DAYS = 45;
+const SUSPICIOUS_MARGIN_PCT = 60;
 
 export function computeVerdict({ netProfit, marginPct, soldCount, daysToSell, daysListed }: VerdictInput): Verdict {
   if (soldCount < MIN_SOLD_COMPS) return 'skip';

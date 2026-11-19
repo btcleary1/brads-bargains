@@ -61,7 +61,7 @@ async function callTradingApi(token: string, xmlBody: string): Promise<string | 
   } catch (e) { console.error('[ebay-watchlist] Trading API error:', e); return null; }
 }
 
-export interface EbayBuyingActivity {
+interface EbayBuyingActivity {
   watchedTitles: string[];
   wonTitles: string[];
   rawXml?: string;

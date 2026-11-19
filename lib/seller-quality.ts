@@ -13,9 +13,9 @@ function tradingUrl() {
   return process.env.EBAY_SANDBOX === 'true' ? TRADING_SBX_URL : TRADING_URL;
 }
 
-export type SellerVerdict = 'ok' | 'warning' | 'flag';
+type SellerVerdict = 'ok' | 'warning' | 'flag';
 
-export interface SellerQualityResult {
+interface SellerQualityResult {
   verdict: SellerVerdict;
   reason: string | null;
   recentNegativeCount: number;

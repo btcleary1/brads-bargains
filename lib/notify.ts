@@ -143,7 +143,6 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
   const title    = safe(deal.title);
   const location = safe(deal.location);
   const condition = safe(deal.condition);
-  const savings = deal.marketPrice ? deal.marketPrice - deal.price : 0;
   // Use sold-comps net profit first (more accurate), fall back to marketPrice estimate
   const netProfit = flip?.netProfit != null
     ? flip.netProfit
@@ -262,7 +261,6 @@ function dealRow(deal: EbayItem, rank: number, allDeals: EbayItem[], flip?: Flip
 export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick?: string, flipMap?: Map<string, FlipData>, userId?: string): Promise<void> {
   if (deals.length === 0 || !toEmail) return;
 
-  const apiKey = (process.env.SENDGRID_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
   const top5 = deals.slice(0, 5);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const rows = top5.map((d, i) => dealRow(d, i + 1, top5, flipMap?.get(d.itemId), userId)).join('');

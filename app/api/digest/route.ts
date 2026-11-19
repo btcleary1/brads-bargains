@@ -97,8 +97,7 @@ export async function GET(req: NextRequest) {
   if (smsTest) {
     try {
       const { sendSMSDigest: sendSMS } = await import('@/lib/sms');
-      const { MOCK_DEALS: mockDeals } = await import('@/lib/mock-deals');
-      await sendSMS(mockDeals.slice(0, 5), smsTest);
+      await sendSMS(MOCK_DEALS.slice(0, 5), smsTest);
       return NextResponse.json({ sent: true, sms: smsTest });
     } catch (err) {
       return NextResponse.json({ sent: false, sms: smsTest, error: String(err) }, { status: 500 });
@@ -198,11 +197,12 @@ export async function GET(req: NextRequest) {
 
     // Pull a large candidate pool — eBay Browse API rarely includes seller-claimed original prices,
     // so we can't pre-filter by discountPct. Instead take the top 40 by sellability score and let
-    // multi-source comps determine actual flip value. Fall back to mock only if eBay is fully down.
+    // multi-source comps determine actual flip value. With nothing real to send, skip today rather
+    // than email sample listings as if they were live deals.
     let candidates = topDeals(itemPool, 40, 0);
     if (candidates.length === 0) {
-      console.warn('[digest] No qualifying deals from eBay — falling back to MOCK_DEALS');
-      candidates = topDeals(MOCK_DEALS, 40, 40);
+      console.warn('[digest] No qualifying deals from eBay — skipping today');
+      return NextResponse.json({ sent: false, reason: 'No qualifying deals today' });
     }
 
     // Remove sold/expired listings — non-blocking: if verification throws, keep unfiltered candidates
@@ -453,8 +453,6 @@ export async function GET(req: NextRequest) {
         // Only send to users who opted in via Settings and haven't paused digest emails
         const recipientEmail = prefs.notificationEmail;
         if (!recipientEmail || prefs.digestEmailEnabled === false) continue;
-
-        const count = prefs.digestCount ?? 5;
 
         // Use explicit categories; if none set, infer from tracker history
         const dr = dealsResults[i];
