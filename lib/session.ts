@@ -1,7 +1,7 @@
 import { createHmac } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
-const COOKIE_NAME = 'health_session';
+export const COOKIE_NAME = 'health_session';
 const SESSION_TTL = 60 * 60 * 24 * 30; // 30 days
 
 function getSecret(): string {
@@ -39,13 +39,13 @@ function createSessionToken(payload: Omit<SessionPayload, 'iat' | 'exp'>): strin
 }
 
 // Uses Web Crypto API — works in both Edge (middleware) and Node.js (API routes)
-async function verifySessionToken(token: string): Promise<SessionPayload | null> {
+export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
     const lastDot = token.lastIndexOf('.');
     if (lastDot === -1) return null;
     const data = token.slice(0, lastDot);
     const sig = token.slice(lastDot + 1);
-    if (!data || !sig) return null;
+    if (!data || !/^[0-9a-f]{64}$/.test(sig)) return null;
 
     const secret = getSecret();
     const enc = new TextEncoder();
