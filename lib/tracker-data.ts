@@ -59,25 +59,6 @@ export async function saveDeals(userId: string, deals: TrackerDeal[]): Promise<v
   await writeBlob(`${PREFIX}/${userId}/deals.json`, deals);
 }
 
-// ── Saved searches ───────────────────────────────────────────────────────────
-
-export interface SavedSearch {
-  id: string;
-  query: string;
-  minDiscount: number;
-  createdAt: string;
-  lastRunAt: string | null;
-  lastNotifiedIds?: string[]; // itemIds already emailed — prevents repeat alerts
-}
-
-export async function getSavedSearches(userId: string): Promise<SavedSearch[]> {
-  return (await readBlob<SavedSearch[]>(`${PREFIX}/${userId}/searches.json`)) ?? [];
-}
-
-export async function saveSavedSearches(userId: string, searches: SavedSearch[]): Promise<void> {
-  await writeBlob(`${PREFIX}/${userId}/searches.json`, searches);
-}
-
 // ── User preferences ─────────────────────────────────────────────────────────
 
 export type { FilterPrefs };
