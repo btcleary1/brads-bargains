@@ -13,6 +13,7 @@ async function twilioSend(toPhone: string, body: string): Promise<void> {
     method: 'POST',
     headers: { Authorization: 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ To: e164, From: fromNumber, Body: body }).toString(),
+    signal: AbortSignal.timeout(10000),
   });
   if (!res.ok) { const err = await res.text(); throw new Error(`Twilio SMS error ${res.status}: ${err}`); }
 }

@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/price-check",
+      "schedule": "0 15 * * *"
+    },
+    {
       "path": "/api/scrape-auctions",
       "schedule": "0 8 * * *"
     },
