@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'crypto';
 import type { NextRequest } from 'next/server';
 
-// Who may run the scheduled jobs (scrape, cache warm, digest, watchlist).
+// Who may run the scheduled jobs (scrape, cache warm, digest, watchlist, price check).
 // Vercel Cron sends "Authorization: Bearer <CRON_SECRET>" when CRON_SECRET is set in the project,
 // so no password ever has to sit in vercel.json (which is public on GitHub).
 // GitHub Actions and manual runs can still pass ?secret=<DIGEST_SECRET>.

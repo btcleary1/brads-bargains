@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { hasSecret, isVercelCron } from '@/lib/cron-auth';
 import { getItemDetail } from '@/lib/ebay';
 import { getAllUsers } from '@/lib/users';
-import { getDeals, saveDeals } from '@/lib/tracker-data';
-import { getUserPrefs } from '@/lib/tracker-data';
+import { getDeals, saveDeals, getUserPrefs } from '@/lib/tracker-data';
 import { sendSMSPriceDrop } from '@/lib/sms';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-
-const PRICE_CHECK_SECRET = process.env.DIGEST_SECRET ?? '';
 
 function escHtml(s: string): string {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -34,8 +32,9 @@ async function sendPriceDropEmail(toEmail: string, drops: { title: string; oldPr
       </table>
     </td></tr>`).join('');
 
-  await fetch('https://api.resend.com/emails', {
+  const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
+    signal: AbortSignal.timeout(10000),
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: "Cleary eTrading <onboarding@resend.dev>",
@@ -60,13 +59,11 @@ async function sendPriceDropEmail(toEmail: string, drops: { title: string; oldPr
 </body></html>`,
     }),
   });
+  if (!res.ok) throw new Error(`Resend ${res.status}`);
 }
 
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get('secret');
-  if (!PRICE_CHECK_SECRET || secret !== PRICE_CHECK_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isVercelCron(req) && !hasSecret(req, 'DIGEST_SECRET')) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!process.env.EBAY_CLIENT_ID) {
     return NextResponse.json({ skipped: true, reason: 'eBay not configured' });
@@ -125,8 +122,8 @@ export async function GET(req: NextRequest) {
     if (drops.length > 0) {
       const prefs = await getUserPrefs(user.userId);
       const email = prefs.notificationEmail || process.env.NOTIFICATION_EMAIL;
-      if (email) await sendPriceDropEmail(email, drops).catch(() => {});
-      if (prefs.notificationPhone) await sendSMSPriceDrop(drops, prefs.notificationPhone).catch(() => {});
+      if (email) await sendPriceDropEmail(email, drops).catch(err => console.error(`[price-check] email failed for user ${user.userId}:`, err));
+      if (prefs.notificationPhone) await sendSMSPriceDrop(drops, prefs.notificationPhone).catch(err => console.error(`[price-check] SMS failed for user ${user.userId}:`, err));
       summary.push({ userId: user.userId, drops: drops.length });
     }
   }

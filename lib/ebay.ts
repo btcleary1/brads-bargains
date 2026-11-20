@@ -180,6 +180,7 @@ export async function getItemDetail(itemId: string): Promise<EbayItem | null> {
       'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
     },
     cache: 'no-store',
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!res.ok) return null;
