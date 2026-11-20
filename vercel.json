@@ -11,10 +11,6 @@
     {
       "path": "/api/digest",
       "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/watchlist-check",
-      "schedule": "0 13 * * *"
     }
   ]
 }
