@@ -97,7 +97,6 @@ export async function GET(req: NextRequest) {
 
     for (let i = 0; i < priced.length; i += BATCH_SIZE) {
       const batch = priced.slice(i, i + BATCH_SIZE);
-      console.log(`[scrape-auctions] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(priced.length / BATCH_SIZE)} (items ${i + 1}-${Math.min(i + BATCH_SIZE, priced.length)})`);
 
       const batchResults = await Promise.allSettled(
         batch.map(item => getMultiSourceComps(item.title, 12, item.condition))
@@ -106,7 +105,6 @@ export async function GET(req: NextRequest) {
       batchResults.forEach((result, idx) => {
         const item = batch[idx];
         if (result.status !== 'fulfilled' || !result.value) {
-          console.log(`[scrape-auctions] No comps for: ${item.title.slice(0, 60)}`);
           return;
         }
 
@@ -114,7 +112,6 @@ export async function GET(req: NextRequest) {
         // These verdicts are seeded straight into the digest without re-running comps,
         // so they must clear the same comp-count bar as everything else.
         if (compResult.ebayCount < MIN_SOLD_COMPS) {
-          console.log(`[scrape-auctions] Insufficient comps (${compResult.ebayCount}) for: ${item.title.slice(0, 60)}`);
           return;
         }
 
@@ -125,25 +122,20 @@ export async function GET(req: NextRequest) {
 
         // Filter: netProfit must be >= 15
         if (netProfit < 15) {
-          console.log(`[scrape-auctions] Low profit ($${netProfit}) skipping: ${item.title.slice(0, 60)}`);
           return;
         }
 
         // Filter: estDaysToSell must be <= 20 (null passes through)
         const days = compResult.estDaysToSell;
         if (days != null && days > 20) {
-          console.log(`[scrape-auctions] Too slow to sell (${days}d) skipping: ${item.title.slice(0, 60)}`);
           return;
         }
 
         const verdict = computeVerdict({ netProfit, marginPct, soldCount: compResult.ebayCount, daysToSell: days });
         if (verdict === 'skip') {
-          console.log(`[scrape-auctions] Verdict skip, dropping: ${item.title.slice(0, 60)}`);
           return;
         }
         const flipVerdict: 'buy' | 'maybe' = verdict;
-
-        console.log(`[scrape-auctions] Qualified: ${item.title.slice(0, 60)} — $${netProfit} profit, ${flipVerdict}`);
 
         qualifiedItems.push({
           ...item,

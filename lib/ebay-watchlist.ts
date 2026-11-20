@@ -55,8 +55,7 @@ async function callTradingApi(token: string, xmlBody: string): Promise<string | 
       signal: AbortSignal.timeout(8000),
     });
     const text = await res.text();
-    console.log('[ebay-watchlist] Trading API status:', res.status, text.slice(0, 300));
-    if (!res.ok) return null;
+    if (!res.ok) { console.error('[ebay-watchlist] Trading API status:', res.status); return null; }
     return text;
   } catch (e) { console.error('[ebay-watchlist] Trading API error:', e); return null; }
 }

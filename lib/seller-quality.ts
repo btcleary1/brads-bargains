@@ -93,7 +93,6 @@ async function fetchRecentNegativeFeedback(sellerUsername: string): Promise<Feed
       }
     }
 
-    console.log(`[seller-quality] ${sellerUsername}: ${comments.length} negative/neutral comments fetched`);
     return comments;
   } catch (err) {
     console.log(`[seller-quality] fetch error for ${sellerUsername}: ${String(err).slice(0, 100)}`);

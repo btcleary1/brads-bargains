@@ -646,7 +646,7 @@ export async function GET(req: NextRequest) {
     );
 
     // Log pre-filter state for diagnostics — visible in Vercel function logs
-    console.log(`[digest] pre-send summary: ${userDigests.map(d => `${d.email}(${d.deals.length} deals, minProfit=$${d.minNetProfit})`).join(', ')}`);
+    console.log(`[digest] pre-send summary: ${userDigests.map(d => `${d.userId}(${d.deals.length} deals, minProfit=$${d.minNetProfit})`).join(', ')}`);
 
     // Drop users with no qualifying deals — better to send nothing than junk
     userDigests = userDigests.filter(d => d.deals.length > 0);
@@ -655,7 +655,6 @@ export async function GET(req: NextRequest) {
     const generateAiPick = async (deals: typeof best5): Promise<{ text: string; itemId: string | null }> => {
       const eligible = deals.filter(i => { const f = flipMap.get(i.itemId); return !f || f.verdict !== 'skip'; });
       const pool = eligible.length > 0 ? eligible : deals;
-      console.log(`[digest] generateAiPick: ${deals.length} deals, ${eligible.length} eligible, hasApiKey=${!!process.env.ANTHROPIC_API_KEY}`);
 
       // Match AI text to the pool item whose title shares the most words
       const matchItemId = (text: string): string | null => {
@@ -696,7 +695,6 @@ export async function GET(req: NextRequest) {
         try {
           const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: prompt }] });
           const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
-          console.log(`[digest] AI pick attempt ${attempt} result: "${text.slice(0, 80)}"`);
           const isRefusal = /nothing.*recommend|cannot.*recommend|no.*recommend|skip all|no item|not recommend|unable to recommend/i.test(text);
           if (text && !isRefusal) return { text, itemId: matchItemId(text) };
         } catch (e) { console.error('[digest] AI pick attempt failed:', e); }
@@ -711,7 +709,6 @@ export async function GET(req: NextRequest) {
     const aiPickResults = await Promise.allSettled(userDigests.map(d => generateAiPick(d.deals)));
     aiPickResults.forEach((r, i) => {
       if (r.status === 'rejected') console.error(`[digest] AI pick ${i} rejected:`, r.reason);
-      else console.log(`[digest] AI pick ${i}: "${r.value?.text?.slice(0, 80)}" itemId=${r.value?.itemId}`);
     });
     userDigests = userDigests.map((d, i) => ({
       ...d,
@@ -735,8 +732,7 @@ export async function GET(req: NextRequest) {
         () => ({ status: 'fulfilled' as const, value: undefined }),
         (reason) => ({ status: 'rejected' as const, reason })
       );
-      if (result.status === 'rejected') console.error(`[digest] send FAILED to ${email}:`, result.reason);
-      else console.log(`[digest] send OK to ${email}`);
+      if (result.status === 'rejected') console.error(`[digest] send FAILED for user ${userId}:`, result.reason);
       sendResults.push(result);
       await new Promise(r => setTimeout(r, 250)); // 250ms between sends = ~4 req/s
     }
