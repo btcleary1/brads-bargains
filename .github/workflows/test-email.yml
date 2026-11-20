@@ -8,14 +8,25 @@ on:
         required: false
         default: 'btcleary1@gmail.com'
 
+permissions:
+  contents: read
+  id-token: write   # lets the job get a GitHub-signed token the app checks (no shared password)
+
 jobs:
   send-test:
     runs-on: ubuntu-latest
     steps:
       - name: Send test digest email
+        env:
+          TO: ${{ github.event.inputs.to }}
         run: |
-          STATUS=$(curl -s -o /tmp/body.txt -w "%{http_code}" --max-time 300 \
-            "https://brads-bargains.vercel.app/api/digest?secret=${{ secrets.DIGEST_SECRET }}&force=1&mock=1&to=${{ github.event.inputs.to }}")
+          TOKEN=$(curl -sf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=cleary-etrading-jobs" | jq -r .value)
+          echo "::add-mask::$TOKEN"
+          STATUS=$(curl -s -G -o /tmp/body.txt -w "%{http_code}" --max-time 300 \
+            -H "Authorization: Bearer $TOKEN" \
+            --data-urlencode "force=1" --data-urlencode "mock=1" --data-urlencode "to=$TO" \
+            "https://brads-bargains.vercel.app/api/digest")
           echo "HTTP Status: $STATUS"
           cat /tmp/body.txt
           if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
