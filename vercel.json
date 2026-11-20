@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/price-check",
+      "schedule": "0 15 * * *"
+    },
+    {
       "path": "/api/scrape-auctions",
       "schedule": "0 8 * * *"
     },
@@ -15,10 +19,6 @@
     {
       "path": "/api/watchlist-check",
       "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/price-check",
-      "schedule": "0 15 * * *"
     }
   ]
 }
