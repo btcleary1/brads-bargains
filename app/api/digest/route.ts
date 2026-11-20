@@ -1,4 +1,4 @@
-import { hasSecret, isVercelCron } from '@/lib/cron-auth';
+import { hasSecret, isGitHubWorkflow, isVercelCron } from '@/lib/cron-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { DIGEST_CATEGORIES } from '@/lib/digest-categories';
@@ -58,7 +58,11 @@ function todayKey(): string {
 export async function GET(req: NextRequest) {
   const force  = req.nextUrl.searchParams.get('force') === '1';
 
-  if (!isVercelCron(req) && !hasSecret(req, 'DIGEST_SECRET')) {
+  const allowed = isVercelCron(req)
+    || hasSecret(req, 'DIGEST_SECRET')
+    || await isGitHubWorkflow(req, 'daily-digest.yml')
+    || await isGitHubWorkflow(req, 'test-email.yml');
+  if (!allowed) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
