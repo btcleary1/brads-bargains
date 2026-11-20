@@ -66,16 +66,6 @@ export async function findEvent(query: string, seasonYear: number): Promise<Tick
   return mapEvent(events[0]);
 }
 
-export async function getEventById(eventId: number): Promise<TicketEvent | null> {
-  const params = new URLSearchParams({ client_id: clientId() });
-  const res = await fetch(`${SEATGEEK_BASE}/events/${eventId}?${params}`, {
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return mapEvent(data);
-}
-
 // Deep links to marketplace search results for this event, pre-filtered by quantity
 // where the platform supports it via query params. These point at real listing pages —
 // we don't fabricate individual seat/row data we don't have a licensed feed for.
