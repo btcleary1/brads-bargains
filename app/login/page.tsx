@@ -1,9 +1,9 @@
 'use client';
 
 import SuiteMark from '@/components/SuiteMark';
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import HumanCheck, { humanCheckOn, type HumanCheckHandle } from '@/components/HumanCheck';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { GOOGLE_ERRORS } from '@/lib/google-config';
 import { Loader2 } from 'lucide-react';
 import '../cleary-auth.css';
@@ -15,11 +15,8 @@ type Stage = 'login' | 'register-passkey';
 
 function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirectTo = (() => {
-    const r = searchParams.get('redirect') ?? '';
-    return r.startsWith('/') && !r.startsWith('//') ? r : '/deals';
-  })();
+  // Read the URL on the client only, so the login form (with its bot trap) is in the page's first HTML.
+  const [redirectTo, setRedirectTo] = useState('/deals');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -35,6 +32,10 @@ function LoginPage() {
 
   useEffect(() => {
     setSupportsWebAuthn(browserSupportsWebAuthn());
+    const searchParams = new URLSearchParams(window.location.search);
+    const r = searchParams.get('redirect') ?? '';
+    const redirectTo = r.startsWith('/') && !r.startsWith('//') ? r : '/deals';
+    setRedirectTo(redirectTo);
 
     // A Google sign-in that failed comes back with ?error=; say why.
     const gErr = searchParams.get('error') ?? '';
@@ -231,10 +232,4 @@ function LoginPage() {
   );
 }
 
-export default function LoginPageWrapper() {
-  return (
-    <Suspense>
-      <LoginPage />
-    </Suspense>
-  );
-}
+export default LoginPage;
