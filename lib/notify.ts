@@ -345,40 +345,25 @@ export async function sendDailyDigest(deals: EbayItem[], toEmail: string, aiPick
 </body>
 </html>`;
 
-  // Use Resend if key is available, fall back to SendGrid
+  // Email goes through Resend. (SendGrid was a fallback that never ran while Resend was set; removed.)
+  // The from address still reads SENDGRID_FROM_EMAIL first so it doesn't change.
   const resendKey = process.env.RESEND_API_KEY;
-  const sgKey = (process.env.SENDGRID_API_KEY ?? '').replace(/[^\x00-\xFF]/g, '');
   const fromEmail = process.env.SENDGRID_FROM_EMAIL ?? process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev';
+  if (!resendKey) throw new Error('No email provider configured — set RESEND_API_KEY');
 
-  let emailRes: Response;
-  if (resendKey) {
-    emailRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + resendKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: `Cleary eTrading <${fromEmail}>`,
-        to: [toEmail],
-        subject: headline + " - " + today,
-        html: htmlBody,
-      }),
-    });
-  } else if (sgKey) {
-    emailRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + sgKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: toEmail }] }],
-        from: { email: fromEmail, name: "Cleary eTrading" },
-        subject: headline + " - " + today,
-        content: [{ type: 'text/html', value: htmlBody }],
-      }),
-    });
-  } else {
-    throw new Error('No email provider configured — set RESEND_API_KEY or SENDGRID_API_KEY');
-  }
+  const emailRes: Response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + resendKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: `Cleary eTrading <${fromEmail}>`,
+      to: [toEmail],
+      subject: headline + " - " + today,
+      html: htmlBody,
+    }),
+  });
   if (emailRes.status >= 300) {
     const errText = await emailRes.text();
-    throw new Error(`${resendKey ? 'Resend' : 'SendGrid'} error ${emailRes.status}: ${errText}`);
+    throw new Error(`Resend error ${emailRes.status}: ${errText}`);
   }
 }
 

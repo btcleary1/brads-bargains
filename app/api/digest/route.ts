@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       userCount: users.length,
       recipientCount,
       digestSecretSet: !!process.env.DIGEST_SECRET,
-      sendgridKeySet: !!process.env.SENDGRID_API_KEY,
+      resendKeySet: !!process.env.RESEND_API_KEY,
       sessionSecretSet: !!process.env.SESSION_SECRET,
       ebayClientIdSet: !!process.env.EBAY_CLIENT_ID,
     });
