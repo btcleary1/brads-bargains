@@ -1,5 +1,6 @@
 import { r2Get, r2Put, r2Del } from './r2';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { legacySalt } from './legacy-salt';
 
 const PREFIX = 'deal-wiz/users/';
 const INDEX_PATH = 'deal-wiz/users-index.json';
@@ -21,8 +22,8 @@ interface User {
 type PublicUser = Omit<User, 'passwordHash'>;
 
 // Legacy SHA256 hash — only used for migration verification
-function sha256Hash(password: string): string {
-  const salt = process.env.SESSION_SECRET ?? 'deal-wiz-salt';
+async function sha256Hash(password: string): Promise<string> {
+  const salt = await legacySalt();
   return createHash('sha256').update(salt + password).digest('hex');
 }
 
@@ -34,7 +35,7 @@ function hashPassword(password: string): { hash: string; salt: string } {
 }
 
 // Verify password against a user record, handling both legacy sha256 and current scrypt
-export function verifyPassword(password: string, user: User): boolean {
+export async function verifyPassword(password: string, user: User): Promise<boolean> {
   if (user.hashVersion === 'scrypt' && user.passwordSalt) {
     try {
       const derived = scryptSync(password, user.passwordSalt, 64);
@@ -46,7 +47,9 @@ export function verifyPassword(password: string, user: User): boolean {
     }
   }
   // Legacy SHA256 path
-  return user.passwordHash === sha256Hash(password);
+  const legacy = Buffer.from(await sha256Hash(password), 'hex');
+  const stored = Buffer.from(user.passwordHash || '', 'hex');
+  return legacy.length === stored.length && timingSafeEqual(legacy, stored);
 }
 
 async function readIndex(): Promise<{ email: string; userId: string }[]> {

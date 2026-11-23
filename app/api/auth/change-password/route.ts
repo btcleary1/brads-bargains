@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const user = await getUserById(session.userId);
     if (!user) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
 
-    if (!verifyPassword(currentPassword, user))
+    if (!(await verifyPassword(currentPassword, user)))
       return NextResponse.json({ error: 'Current password is incorrect.' }, { status: 401 });
 
     const { valid, errors } = validatePassword(newPassword);
