@@ -89,6 +89,7 @@ export async function exchangeEbayCode(code: string, redirectUri: string): Promi
       redirect_uri: redirectUri,
     }).toString(),
     cache: 'no-store',
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!res.ok) {
@@ -120,6 +121,7 @@ export async function refreshEbayUserToken(refreshToken: string): Promise<{ acce
       scope: USER_SCOPES,
     }).toString(),
     cache: 'no-store',
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!res.ok) {
@@ -212,6 +214,7 @@ export async function getEbayPurchaseHistory(accessToken: string): Promise<Purch
     },
     body: soapBody,
     cache: 'no-store',
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!res.ok) {
@@ -288,6 +291,7 @@ export async function getEbaySavedSearches(accessToken: string): Promise<string[
       },
       body: soapBody,
       cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!res.ok) return [];
