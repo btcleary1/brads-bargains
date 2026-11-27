@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
-import { getEbayUserTokens } from '@/lib/tracker-data';
+import { getEbayUserTokens, saveEbayUserTokens } from '@/lib/tracker-data';
 import { getEbayPurchaseHistory, refreshEbayUserToken } from '@/lib/ebay-user';
 
 export const runtime = 'nodejs';
@@ -20,12 +20,12 @@ export async function GET(req: NextRequest) {
     try {
       const refreshed = await refreshEbayUserToken(tokens.refreshToken);
       token = refreshed.accessToken;
+      // Keep the new token so the next visit doesn't have to refresh again.
+      await saveEbayUserTokens(session.userId, { ...tokens, ...refreshed }).catch(() => {});
     } catch (e) {
       return NextResponse.json({ error: `Token refresh failed: ${String(e)}`, orders: [] });
     }
   }
-
-  const debug: Record<string, unknown> = {};
 
   // Try REST Buy Order API first
   try {
@@ -35,9 +35,9 @@ export async function GET(req: NextRequest) {
         'Content-Type': 'application/json',
         'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
       },
+      signal: AbortSignal.timeout(8000),
     });
     const data = await res.json();
-    debug.restStatus = res.status;
     if (res.ok && (data.purchaseOrders?.length ?? 0) > 0) {
       const orders = data.purchaseOrders.map((o: Record<string, unknown>) => {
         const lineItems = (o.lineItems as Record<string, unknown>[] ?? []);
@@ -51,52 +51,21 @@ export async function GET(req: NextRequest) {
       });
       return NextResponse.json({ orders, source: 'rest' });
     }
-  } catch (e) {
-    debug.restError = String(e);
+  } catch {
+    // Fall through to the Trading API below.
   }
 
   // Fallback: Trading API (GetMyeBayBuying)
   try {
-    const soapBody = `<?xml version="1.0" encoding="utf-8"?>
-<GetMyeBayBuyingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <WonList>
-    <Include>true</Include>
-    <NumberOfDays>180</NumberOfDays>
-    <Sort>EndTimeDescending</Sort>
-    <Pagination><EntriesPerPage>50</EntriesPerPage><PageNumber>1</PageNumber></Pagination>
-  </WonList>
-  <ErrorLanguage>en_US</ErrorLanguage>
-  <WarningLevel>High</WarningLevel>
-</GetMyeBayBuyingRequest>`;
-
-    const tradingRes = await fetch('https://api.ebay.com/ws/api.dll', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/xml',
-        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-        'X-EBAY-API-CALL-NAME': 'GetMyeBayBuying',
-        'X-EBAY-API-SITEID': '0',
-        'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID!,
-        'X-EBAY-API-IAF-TOKEN': token,
-      },
-      body: soapBody,
-      cache: 'no-store',
-    });
-    const xml = await tradingRes.text();
-    debug.tradingStatus = tradingRes.status;
-    debug.tradingXmlSnippet = xml.slice(0, 1200);
-
     const purchased = await getEbayPurchaseHistory(token);
-    debug.tradingCount = purchased.length;
     const orders = purchased.map(item => ({
       orderId: item.itemId,
       date: item.endTime,
       items: [{ title: item.title, quantity: 1, price: item.price || null }],
       total: item.price || null,
     }));
-    return NextResponse.json({ orders, source: 'trading', debug });
+    return NextResponse.json({ orders, source: 'trading' });
   } catch (e) {
-    debug.tradingError = String(e);
-    return NextResponse.json({ error: `Trading API failed: ${String(e)}`, orders: [], debug });
+    return NextResponse.json({ error: `Trading API failed: ${String(e)}`, orders: [] });
   }
 }

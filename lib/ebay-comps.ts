@@ -48,6 +48,7 @@ export async function searchSoldComps(query: string, maxResults = 20): Promise<C
       'X-EBAY-C-ENDUSERCTX': 'contextualLocation=country%3DUS',
     },
     cache: 'no-store',
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!res.ok) {
